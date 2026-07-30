@@ -18,7 +18,7 @@ class ProjectController extends Controller
 
         $query = Project::with(['customFields', 'users', 'category'])->where('is_deleted', false);
 
-        if ($user->role && $user->role->name !== 'مدير') {
+        if (!$user->role || $user->role->name !== 'مدير') {
             $query->whereHas('users', function ($uq) use ($user) {
                 $uq->where('users.id', $user->id);
             });

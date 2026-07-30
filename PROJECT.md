@@ -25,10 +25,10 @@
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
 | 1 | Codebase Exploration | Exploration of backend, frontend, build/infra | None | DONE |
-| 2 | Test Infra & Suite Creation | Setup Vitest, build PHPUnit & JS unit test suites, publish TEST_READY.md | M1 | IN_PROGRESS |
-| 3 | Backend & Frontend Bug Fixing | Fix API route protection, store.js errors, memory leaks, data corruption | M2 | IN_PROGRESS |
-| 4 | Test Hardening & Review | Reviewer & Challenger verification, 100% test pass rate | M3 | PLANNED |
-| 5 | Forensic Audit & Final Build | Forensic Integrity Audit, `npm run build` verification, report to Sentinel | M4 | PLANNED |
+| 2 | Test Infra & Suite Creation | Setup Vitest, build PHPUnit & JS unit test suites, publish TEST_READY.md | M1 | DONE |
+| 3 | Backend & Frontend Bug Fixing | Fix API route protection, store.js errors, memory leaks, data corruption | M2 | DONE |
+| 4 | Test Hardening & Review | Reviewer & Challenger verification, 100% test pass rate | M3 | DONE |
+| 5 | Forensic Audit & Final Build | Forensic Integrity Audit, `npm run build` verification, report to Sentinel | M4 | DONE |
 
 ## Interface Contracts
 ### Laravel API ↔ Vue Frontend

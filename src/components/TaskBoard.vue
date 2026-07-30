@@ -1,6 +1,6 @@
 <script setup>
 import { store } from '../store'
-import { computed, ref } from 'vue'
+import { computed, ref, onUnmounted } from 'vue'
 import MentionInput from './MentionInput.vue'
 import MentionText from './MentionText.vue'
 
@@ -199,11 +199,14 @@ const triggerCelebration = () => {
   }, 4000)
 }
 
+let activeAudioContexts = []
+
 const playSuccessSound = () => {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext
   if (!AudioContextClass) return
   try {
     const ctx = new AudioContextClass()
+    activeAudioContexts.push(ctx)
     const now = ctx.currentTime
     
     // 1. Massive Stadium Cheer & Applause Noise
@@ -305,13 +308,25 @@ const playSuccessSound = () => {
     playBell(2093.00, chordTime + 0.1, 0.8) // C7 bell
 
     setTimeout(() => {
-      ctx.close().catch(() => {})
+      if (ctx.state !== 'closed') {
+        ctx.close().catch(() => {})
+      }
+      activeAudioContexts = activeAudioContexts.filter(c => c !== ctx)
     }, 3000)
     
   } catch (e) {
     console.error("Audio Context initialization failed or user interaction required:", e)
   }
 }
+
+onUnmounted(() => {
+  activeAudioContexts.forEach(ctx => {
+    if (ctx && ctx.state !== 'closed') {
+      ctx.close().catch(() => {})
+    }
+  })
+  activeAudioContexts = []
+})
 
 const toggleTaskCompletion = async (task, event) => {
   const isChecked = event.target.checked
@@ -352,7 +367,7 @@ const handleDrop = async (statusName) => {
   // If the dragged task is part of the selected tasks group, move all of them together
   if (selectedTaskIds.value.includes(draggedTaskId.value)) {
     for (const id of selectedTaskIds.value) {
-      const task = store.tasks.find(t => t.id === id)
+      const task = store.tasks.find(t => String(t.id) === String(id))
       if (task && task.status !== statusName) {
         await store.updateTask(task.id, {
           title: task.title,
@@ -366,7 +381,7 @@ const handleDrop = async (statusName) => {
     selectedTaskIds.value = []
   } else {
     // Single card drag
-    const task = store.tasks.find(t => t.id === draggedTaskId.value)
+    const task = store.tasks.find(t => String(t.id) === String(draggedTaskId.value))
     if (task && task.status !== statusName) {
       await store.updateTask(task.id, {
         title: task.title,
@@ -470,7 +485,7 @@ const bulkChangeStatus = async (newStatus) => {
   if (!newStatus) return
   try {
     for (const id of selectedTaskIds.value) {
-      const task = projectTasks.value.find(t => t.id === id)
+      const task = projectTasks.value.find(t => String(t.id) === String(id))
       if (task) {
         await store.updateTask(id, {
           title: task.title,
@@ -496,7 +511,7 @@ const bulkMoveToProject = async (targetProjId) => {
 
   try {
     for (const id of selectedTaskIds.value) {
-      const task = projectTasks.value.find(t => t.id === id)
+      const task = projectTasks.value.find(t => String(t.id) === String(id))
       if (task) {
         await store.updateTask(id, {
           title: task.title,

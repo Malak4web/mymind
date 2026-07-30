@@ -130,7 +130,7 @@ export const store = reactive({
 
     try {
       const res = await fetch(`${this.apiBase}/profile`, {
-        headers: { 'Authorization': `Bearer ${this.token}` }
+        headers: this.getAuthHeaders()
       })
 
       if (res.ok) {
@@ -170,7 +170,7 @@ export const store = reactive({
   async loadProjectCategories() {
     try {
       const res = await fetch(`${this.apiBase}/project-categories`, {
-        headers: { 'Authorization': `Bearer ${this.token}` }
+        headers: this.getAuthHeaders()
       })
       if (res.ok) {
         this.projectCategories = await res.json()
@@ -189,10 +189,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/project-categories`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.token}`
-        },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ name, description, color, icon })
       })
       if (res.ok) {
@@ -209,10 +206,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/project-categories/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.token}`
-        },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data)
       })
       if (res.ok) {
@@ -228,7 +222,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/project-categories/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${this.token}` }
+        headers: this.getAuthHeaders()
       })
       if (res.ok) {
         if (this.activeCategoryId === id) this.activeCategoryId = null
@@ -245,7 +239,7 @@ export const store = reactive({
   async loadProjects() {
     try {
       const res = await fetch(`${this.apiBase}/projects`, {
-        headers: { 'Authorization': `Bearer ${this.token}` }
+        headers: this.getAuthHeaders()
       })
       if (res.ok) {
         const rawProjects = await res.json()
@@ -462,7 +456,7 @@ export const store = reactive({
   async loadUsers() {
     try {
       const res = await fetch(`${this.apiBase}/users`, {
-        headers: { 'Authorization': `Bearer ${this.token}` }
+        headers: this.getAuthHeaders()
       })
       if (res.ok) {
         const rawUsers = await res.json()
@@ -498,10 +492,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/projects`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.token}`
-        },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           name,
           description,
@@ -537,10 +528,7 @@ export const store = reactive({
       }
       const res = await fetch(`${this.apiBase}/projects/${id}`, {
         method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.token}`
-        },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(body)
       })
 
@@ -644,12 +632,12 @@ export const store = reactive({
     }
 
     try {
-      const existingTask = this.tasks.find(t => t.id === taskId)
+      const existingTask = this.tasks.find(t => String(t.id) === String(taskId))
       const body = {
         title: updates.title !== undefined ? updates.title : existingTask?.title,
         description: updates.description !== undefined ? updates.description : existingTask?.description,
         status: updates.status !== undefined ? updates.status : existingTask?.status,
-        start_date: updates.startDate !== undefined ? updates.startDate : existingTask?.startDate,
+        start_date: updates.startDate !== undefined ? updates.startDate : (updates.start_date !== undefined ? updates.start_date : existingTask?.startDate),
         deadline: updates.deadline !== undefined ? updates.deadline : existingTask?.deadline,
         project_id: updates.projectId !== undefined ? updates.projectId : existingTask?.projectId
       }
@@ -688,7 +676,7 @@ export const store = reactive({
     }
 
     try {
-      const task = this.tasks.find(t => t.id === taskId)
+      const task = this.tasks.find(t => String(t.id) === String(taskId))
       const res = await fetch(`${this.apiBase}/tasks/${taskId}`, {
         method: 'DELETE',
         headers: this.getAuthHeaders()
@@ -757,7 +745,7 @@ export const store = reactive({
 
     let interval = null
     // Set temp local preview for responsive progress feedback
-    const task = this.tasks.find(t => t.id === taskId)
+    const task = this.tasks.find(t => String(t.id) === String(taskId))
     if (task) {
       const tempFile = { name, size, progress: 0, status: 'uploading' }
       task.attachments.push(tempFile)
@@ -976,7 +964,8 @@ export const store = reactive({
   async sendBatchedEmail() {
     try {
       const res = await fetch(`${this.apiBase}/digest/send`, {
-        method: 'POST'
+        method: 'POST',
+        headers: this.getAuthHeaders()
       })
 
       if (res.ok) {
@@ -992,7 +981,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/notifications`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ title, text })
       })
 
@@ -1226,10 +1215,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/task-templates/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.token}`
-        },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           name,
           is_default: isDefault,
@@ -1257,7 +1243,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/task-templates/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${this.token}` }
+        headers: this.getAuthHeaders()
       })
       if (res.ok) {
         await this.loadTaskTemplates()
@@ -1272,7 +1258,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/task-templates/${id}/set-default`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${this.token}` }
+        headers: this.getAuthHeaders()
       })
       if (res.ok) {
         await this.loadTaskTemplates()
@@ -1309,12 +1295,12 @@ export const store = reactive({
 
 
   deleteHabit(id) {
-    this.habits = this.habits.filter(h => h.id !== id)
+    this.habits = this.habits.filter(h => String(h.id) !== String(id))
     this.saveHabits()
   },
 
   toggleHabitLog(habitId, dateStr, value = null, note = null) {
-    const habitIndex = this.habits.findIndex(h => h.id === habitId)
+    const habitIndex = this.habits.findIndex(h => String(h.id) === String(habitId))
     if (habitIndex === -1) return
 
     const habit = this.habits[habitIndex]
@@ -1351,7 +1337,7 @@ export const store = reactive({
 
 
   updateHabitNote(habitId, dateStr, note) {
-    const habit = this.habits.find(h => h.id === habitId)
+    const habit = this.habits.find(h => String(h.id) === String(habitId))
     if (!habit) return
     if (!habit.logs) habit.logs = {}
     if (!habit.logs[dateStr]) {
@@ -1359,11 +1345,12 @@ export const store = reactive({
     } else {
       habit.logs[dateStr].note = note
     }
+    this.habits = [...this.habits]
     this.saveHabits()
   },
 
   addHabitNote(habitId, content, dateStr = null) {
-    const habit = this.habits.find(h => h.id === Number(habitId))
+    const habit = this.habits.find(h => String(h.id) === String(habitId))
     if (!habit) return
     if (!habit.notesList) habit.notesList = []
     
@@ -1374,19 +1361,21 @@ export const store = reactive({
       createdAt: new Date().toISOString()
     }
     habit.notesList.unshift(newNote)
+    this.habits = [...this.habits]
     this.saveHabits()
     return newNote
   },
 
   deleteHabitNote(habitId, noteId) {
-    const habit = this.habits.find(h => h.id === Number(habitId))
+    const habit = this.habits.find(h => String(h.id) === String(habitId))
     if (!habit || !habit.notesList) return
-    habit.notesList = habit.notesList.filter(n => n.id !== Number(noteId))
+    habit.notesList = habit.notesList.filter(n => String(n.id) !== String(noteId))
+    this.habits = [...this.habits]
     this.saveHabits()
   },
 
   addHabitChecklistItem(habitId, title) {
-    const habit = this.habits.find(h => h.id === Number(habitId))
+    const habit = this.habits.find(h => String(h.id) === String(habitId))
     if (!habit) return
     if (!habit.checklist) habit.checklist = []
     
@@ -1396,24 +1385,27 @@ export const store = reactive({
       completed: false
     }
     habit.checklist.push(newItem)
+    this.habits = [...this.habits]
     this.saveHabits()
     return newItem
   },
 
   toggleHabitChecklistItem(habitId, itemId) {
-    const habit = this.habits.find(h => h.id === Number(habitId))
+    const habit = this.habits.find(h => String(h.id) === String(habitId))
     if (!habit || !habit.checklist) return
-    const item = habit.checklist.find(i => i.id === Number(itemId))
+    const item = habit.checklist.find(i => String(i.id) === String(itemId))
     if (item) {
       item.completed = !item.completed
+      this.habits = [...this.habits]
       this.saveHabits()
     }
   },
 
   deleteHabitChecklistItem(habitId, itemId) {
-    const habit = this.habits.find(h => h.id === Number(habitId))
+    const habit = this.habits.find(h => String(h.id) === String(habitId))
     if (!habit || !habit.checklist) return
-    habit.checklist = habit.checklist.filter(i => i.id !== Number(itemId))
+    habit.checklist = habit.checklist.filter(i => String(i.id) !== String(itemId))
+    this.habits = [...this.habits]
     this.saveHabits()
   }
 })

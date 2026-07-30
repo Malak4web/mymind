@@ -125,6 +125,39 @@ class ProjectTest extends TestCase
         $this->assertNotContains('تحت المراجعة', $response->json('statuses'));
     }
 
+    public function test_unauthenticated_requests_to_projects_return_401()
+    {
+        $this->app['auth']->forgetGuards();
+
+        $this->getJson('/api/projects')->assertStatus(401);
+        $this->postJson('/api/projects', ['name' => 'Unauth'])->assertStatus(401);
+        $this->getJson('/api/projects/1')->assertStatus(401);
+        $this->putJson('/api/projects/1', ['name' => 'Unauth'])->assertStatus(401);
+        $this->deleteJson('/api/projects/1')->assertStatus(401);
+    }
+
+    public function test_user_without_role_only_sees_assigned_projects()
+    {
+        $userNoRole = \App\Models\User::create([
+            'name' => 'No Role User',
+            'email' => 'norole@mymind.com',
+            'password' => bcrypt('password123'),
+            'role_id' => null,
+        ]);
+
+        $project1 = \App\Models\Project::create(['name' => 'Project 1', 'statuses' => ['Open']]);
+        $project2 = \App\Models\Project::create(['name' => 'Project 2', 'statuses' => ['Open']]);
+
+        $project1->users()->attach($userNoRole->id);
+
+        \Laravel\Sanctum\Sanctum::actingAs($userNoRole);
+
+        $response = $this->getJson('/api/projects');
+        $response->assertStatus(200);
+        $response->assertJsonCount(1);
+        $this->assertEquals($project1->id, $response->json('0.id'));
+    }
+
     private function createProjectHelper()
     {
         $data = [

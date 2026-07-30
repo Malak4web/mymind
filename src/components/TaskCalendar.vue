@@ -109,7 +109,7 @@ const handleDragLeave = () => {
 
 const handleDrop = (dateString) => {
   if (!draggedTaskId.value || !dateString) return
-  const task = store.tasks.find(t => t.id === draggedTaskId.value)
+  const task = store.tasks.find(t => String(t.id) === String(draggedTaskId.value))
   if (task) {
     // Preserve existing title, description, status, startDate, and projectId when updating deadline
     store.updateTask(task.id, {

@@ -285,4 +285,71 @@ describe('store.js State & Actions Unit Tests', () => {
       expect(store.theme).toBe('light')
     })
   })
+
+  describe('7. Standardized Auth Headers & Coercion Edge Cases', () => {
+    it('getAuthHeaders() returns Authorization Bearer when token is present and omits it when empty', () => {
+      store.token = ''
+      expect(store.getAuthHeaders({ 'Content-Type': 'application/json' })).toEqual({ 'Content-Type': 'application/json' })
+
+      store.token = 'abc-123'
+      expect(store.getAuthHeaders({ 'Content-Type': 'application/json' })).toEqual({
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer abc-123'
+      })
+    })
+
+    it('updateTask() matches string taskId against numeric task.id and preserves existing fields', async () => {
+      store.currentUser = { role: { name: 'مدير' } }
+      store.tasks = [
+        { id: 88, projectId: 1, title: 'عنوان قديم', description: 'وصف قديم', status: 'بانتظار البدء', deadline: '2026-08-01' }
+      ]
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+
+      await store.updateTask('88', { status: 'مكتمل' })
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${store.apiBase}/tasks/88`,
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            title: 'عنوان قديم',
+            description: 'وصف قديم',
+            status: 'مكتمل',
+            start_date: undefined,
+            deadline: '2026-08-01',
+            project_id: 1
+          })
+        })
+      )
+    })
+
+    it('nested habit mutations reassign store.habits array to trigger Vue reactivity', () => {
+      const habit = store.addHabit({ title: 'عادة باختبار التفرع' })
+      const originalHabitsRef = store.habits
+
+      const note = store.addHabitNote(String(habit.id), 'ملاحظة جديدة')
+      expect(store.habits).not.toBe(originalHabitsRef) // Reference changed for reactivity
+      expect(habit.notesList.length).toBe(1)
+
+      const habitsRef2 = store.habits
+      const item = store.addHabitChecklistItem(String(habit.id), 'عنصر في القائمة')
+      expect(store.habits).not.toBe(habitsRef2)
+      expect(habit.checklist.length).toBe(1)
+
+      const habitsRef3 = store.habits
+      store.toggleHabitChecklistItem(String(habit.id), String(item.id))
+      expect(store.habits).not.toBe(habitsRef3)
+      expect(item.completed).toBe(true)
+
+      const habitsRef4 = store.habits
+      store.deleteHabitChecklistItem(String(habit.id), String(item.id))
+      expect(store.habits).not.toBe(habitsRef4)
+      expect(habit.checklist.length).toBe(0)
+
+      const habitsRef5 = store.habits
+      store.deleteHabitNote(String(habit.id), String(note.id))
+      expect(store.habits).not.toBe(habitsRef5)
+      expect(habit.notesList.length).toBe(0)
+    })
+  })
 })

@@ -76,4 +76,67 @@ describe('TaskBoard.vue Component Tests', () => {
       expect(store.selectedTaskIdForModal).toBe(101)
     }
   })
+
+  it('cleans up AudioContext on unmount', async () => {
+    store.currentUser = { role: { name: 'مدير' } }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    if (!Element.prototype.animate) {
+      Element.prototype.animate = vi.fn().mockReturnValue({ finished: Promise.resolve() })
+    }
+
+    const closeSpy = vi.fn().mockResolvedValue()
+    class MockAudioContext {
+      constructor() {
+        this.currentTime = 0
+        this.sampleRate = 44100
+        this.destination = {}
+        this.state = 'running'
+      }
+      createBuffer() {
+        return { getChannelData: () => new Float32Array(100) }
+      }
+      createBufferSource() {
+        return { buffer: null, connect: vi.fn(), start: vi.fn() }
+      }
+      createBiquadFilter() {
+        return {
+          type: '',
+          frequency: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+          Q: { setValueAtTime: vi.fn() },
+          connect: vi.fn()
+        }
+      }
+      createGain() {
+        return {
+          gain: { setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+          connect: vi.fn()
+        }
+      }
+      createOscillator() {
+        return {
+          type: '',
+          frequency: { setValueAtTime: vi.fn() },
+          connect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn()
+        }
+      }
+      close() {
+        return closeSpy()
+      }
+    }
+    window.AudioContext = MockAudioContext
+
+    const wrapper = mount(TaskBoard)
+    const checkbox = wrapper.find('input[type="checkbox"][title="تحديد المهمة كمكتملة"]')
+    if (checkbox.exists()) {
+      await checkbox.setValue(true)
+      await new Promise(r => setTimeout(r, 50))
+      expect(closeSpy).not.toHaveBeenCalled()
+      wrapper.unmount()
+      expect(closeSpy).toHaveBeenCalled()
+    } else {
+      wrapper.unmount()
+    }
+  })
 })
