@@ -2,7 +2,6 @@
 import { store } from './store'
 import { computed, onMounted, onUnmounted, watch, ref } from 'vue'
 
-
 // Import components
 import ProjectPanel from './components/ProjectPanel.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
@@ -16,9 +15,50 @@ import Settings from './components/Settings.vue'
 import DailyRoutines from './components/DailyRoutines.vue'
 import HabitDetail from './components/HabitDetail.vue'
 import MobileBottomNav from './components/MobileBottomNav.vue'
+import QuickInspector from './components/QuickInspector.vue'
+
 const activeHabitId = ref(null)
 const showMobileProjectsSheet = ref(false)
 const showMobileMoreSheet = ref(false)
+
+// Quick Search Modal state (Ctrl+K)
+const isQuickSearchOpen = ref(false)
+const quickSearchQuery = ref('')
+
+const handleGlobalKeyDown = (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault()
+    isQuickSearchOpen.value = !isQuickSearchOpen.value
+  } else if (e.key === 'Escape' && isQuickSearchOpen.value) {
+    isQuickSearchOpen.value = false
+  }
+}
+
+const quickSearchResults = computed(() => {
+  const q = quickSearchQuery.value.trim().toLowerCase()
+  if (!q) return { tasks: [], projects: [] }
+
+  const matchedProjects = store.projects.filter(p => !p.isDeleted && p.name.toLowerCase().includes(q))
+  const matchedTasks = store.tasks.filter(t => t.title.toLowerCase().includes(q) || (t.description && t.description.toLowerCase().includes(q)))
+
+  return { projects: matchedProjects.slice(0, 5), tasks: matchedTasks.slice(0, 8) }
+})
+
+const selectSearchResult = (item, type) => {
+  isQuickSearchOpen.value = false
+  quickSearchQuery.value = ''
+  if (type === 'project') {
+    store.activeProjectId = item.id
+  } else if (type === 'task') {
+    if (item.projectId) store.activeProjectId = item.projectId
+    store.openTaskInspector(item.id)
+  }
+}
+
+const triggerQuickCreate = () => {
+  store.selectedTaskIdForModal = null
+  store.isTaskModalOpen = true
+}
 
 // Touch swipe gesture handlers for bottom sheets
 const touchStartY = ref(0)
@@ -44,7 +84,6 @@ const handleTouchEnd = (closeFn) => {
 
 const activeProject = computed(() => store.projects.find(p => p.id === store.activeProjectId))
 const unreadNotificationsCount = computed(() => store.notifications.filter(n => !n.isRead).length)
-
 
 const handleLogout = () => {
   store.logout()
@@ -124,11 +163,13 @@ const handleHashChange = () => {
 
 onMounted(() => {
   window.addEventListener('hashchange', handleHashChange)
+  window.addEventListener('keydown', handleGlobalKeyDown)
   handleHashChange()
 })
 
 onUnmounted(() => {
   window.removeEventListener('hashchange', handleHashChange)
+  window.removeEventListener('keydown', handleGlobalKeyDown)
 })
 
 // Watch when projects list finishes loading, to select the project based on hash
@@ -174,31 +215,68 @@ watch(() => store.projects, (newProjects) => {
       class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/80 z-30 shadow-sm sticky top-0 md:relative"
     >
       <!-- Desktop Navigation Header (hidden on mobile) -->
-      <div class="hidden md:flex max-w-full w-full px-6 md:px-12 py-3.5 items-center justify-between gap-4">
+      <div class="hidden md:flex max-w-full w-full px-6 md:px-8 py-3 items-center justify-between gap-4 flex-wrap">
         
-        <!-- Left Brand info (in RTL, it will render on the right) -->
-        <div class="flex items-center gap-5">
-          <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-650 flex items-center justify-center shadow-lg shadow-violet-500/15 hover:scale-[1.03] transition-transform duration-300">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-            </svg>
-          </div>
-          <div class="text-right">
-            <h1 class="text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-50 flex items-center gap-2">
-              عقلي
-              <span class="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-600 to-indigo-650 text-[10px] font-extrabold text-white tracking-wider">برو</span>
-            </h1>
-            <p class="text-xs text-slate-400 font-semibold tracking-wide mt-1">بيئة تخطيط المشاريع والتعاون الجماعي البسيطة</p>
-          </div>
+        <!-- Left Brand info & Sidebar Collapse Toggle & Breadcrumbs -->
+        <div class="flex items-center gap-3">
+          <!-- Sidebar Toggle Button (<< / >>) -->
+          <button 
+            @click="store.toggleSidebar()"
+            class="p-2 rounded-xl border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-955/40 hover:text-violet-600 dark:hover:text-violet-400 transition cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center font-bold text-xs shadow-sm"
+            :title="store.isSidebarCollapsed ? 'توسيع القائمة الجانبية (>>)' : 'طَي القائمة الجانبية (<<)'"
+          >
+            <span>{{ store.isSidebarCollapsed ? '>>' : '<<' }}</span>
+          </button>
+
+          <!-- Breadcrumb trail: (المشروع > [اسم مشروع] or view name) -->
+          <nav class="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
+            <span class="text-slate-800 dark:text-slate-100 font-extrabold flex items-center gap-1.5">
+              <span class="w-6 h-6 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-650 text-white flex items-center justify-center text-[10px]">🧠</span>
+              <span>عقلي</span>
+            </span>
+            <span class="text-slate-300 dark:text-slate-700">></span>
+            <span v-if="store.activeView === 'settings'" class="text-violet-600 dark:text-violet-400">الإعدادات</span>
+            <span v-else-if="store.activeView === 'routines'" class="text-violet-600 dark:text-violet-400">يومياتي والعادات</span>
+            <template v-else-if="activeProject">
+              <span>المشروع</span>
+              <span class="text-slate-300 dark:text-slate-700">></span>
+              <span class="text-violet-600 dark:text-violet-400 truncate max-w-[180px]">{{ activeProject.name }}</span>
+            </template>
+          </nav>
         </div>
 
-        <!-- Middle View Navigator: Arabic View Tabs -->
-        <div class="flex items-center">
+        <!-- Middle Action Bar: Quick Search, Quick Create & View Navigator -->
+        <div class="flex items-center gap-3 flex-wrap">
+
+          <!-- Quick Search trigger input button (Ctrl+K) -->
+          <button 
+            @click="isQuickSearchOpen = true"
+            class="bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/80 dark:hover:bg-slate-750 border border-slate-200/70 dark:border-slate-700/60 rounded-2xl px-3.5 py-2 text-xs text-slate-400 dark:text-slate-400 flex items-center gap-3 transition cursor-pointer shadow-inner min-w-[200px] justify-between"
+          >
+            <div class="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span>بحث سريع...</span>
+            </div>
+            <kbd class="px-2 py-0.5 text-[10px] font-mono font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500 shadow-sm">Ctrl+K</kbd>
+          </button>
+
+          <!-- Quick Create Button (+ إضافة جديدة) -->
+          <button 
+            @click="triggerQuickCreate"
+            class="bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-700 hover:to-indigo-700 text-white font-extrabold text-xs px-3.5 py-2 rounded-2xl shadow-md shadow-violet-500/20 transition cursor-pointer flex items-center gap-1.5 min-h-[40px]"
+          >
+            <span>+</span>
+            <span>إضافة جديدة</span>
+          </button>
+
+          <!-- View Tabs Navigator -->
           <div class="bg-slate-100/80 dark:bg-slate-955/80 border border-slate-200/50 dark:border-slate-855 p-1 rounded-2xl flex gap-1">
             <button 
               @click="setView('kanban')" 
               :class="[
-                'px-4 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 cursor-pointer flex items-center space-x-1.5 space-x-reverse min-h-[44px] min-w-[44px]',
+                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px]',
                 store.activeView === 'kanban' 
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200/40 dark:ring-slate-800' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-350'
@@ -212,7 +290,7 @@ watch(() => store.projects, (newProjects) => {
             <button 
               @click="setView('list')" 
               :class="[
-                'px-4 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 cursor-pointer flex items-center space-x-1.5 space-x-reverse min-h-[44px] min-w-[44px]',
+                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px]',
                 store.activeView === 'list' 
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200/40 dark:ring-slate-800' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-350'
@@ -226,7 +304,7 @@ watch(() => store.projects, (newProjects) => {
             <button 
               @click="setView('calendar')" 
               :class="[
-                'px-4 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 cursor-pointer flex items-center space-x-1.5 space-x-reverse min-h-[44px] min-w-[44px]',
+                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px]',
                 store.activeView === 'calendar' 
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200/40 dark:ring-slate-800' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-350'
@@ -240,7 +318,7 @@ watch(() => store.projects, (newProjects) => {
             <button 
               @click="setView('routines')" 
               :class="[
-                'px-4 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 cursor-pointer flex items-center space-x-1.5 space-x-reverse min-h-[44px] min-w-[44px]',
+                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px]',
                 store.activeView === 'routines' 
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200/40 dark:ring-slate-800 text-violet-600 dark:text-violet-400 font-extrabold' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-350'
@@ -254,7 +332,7 @@ watch(() => store.projects, (newProjects) => {
             <button 
               @click="goToSettings" 
               :class="[
-                'px-4 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 cursor-pointer flex items-center space-x-1.5 space-x-reverse min-h-[44px] min-w-[44px]',
+                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px]',
                 store.activeView === 'settings' 
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200/40 dark:ring-slate-800' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-350'
@@ -270,7 +348,7 @@ watch(() => store.projects, (newProjects) => {
         </div>
 
         <!-- Right Side actions (User Profile, Theme, Notifications) -->
-        <div class="flex items-center gap-3.5">
+        <div class="flex items-center gap-3">
           <!-- Active User Badge -->
           <div class="hidden sm:flex flex-col text-right justify-center">
             <span class="text-xs font-extrabold text-slate-850 dark:text-slate-205">{{ store.currentUser?.name }}</span>
@@ -280,7 +358,7 @@ watch(() => store.projects, (newProjects) => {
           <!-- Zen Focus Mode Trigger -->
           <button 
             @click="store.isFocusMode = true"
-            class="p-2 border border-slate-200 dark:border-slate-805 hover:border-slate-350 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-xl transition cursor-pointer hover:shadow-sm min-h-[44px] min-w-[44px] flex items-center justify-center"
+            class="p-2 border border-slate-200 dark:border-slate-805 hover:border-slate-350 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-xl transition cursor-pointer hover:shadow-sm min-h-[40px] min-w-[40px] flex items-center justify-center"
             title="تفعيل وضع التركيز (Zen Mode)"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -291,7 +369,7 @@ watch(() => store.projects, (newProjects) => {
           <!-- Logout Button -->
           <button 
             @click="handleLogout"
-            class="p-2 border border-slate-200 dark:border-slate-805 hover:border-slate-350 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-rose-500 rounded-xl transition cursor-pointer hover:shadow-sm min-h-[44px] min-w-[44px] flex items-center justify-center"
+            class="p-2 border border-slate-200 dark:border-slate-805 hover:border-slate-350 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-rose-500 rounded-xl transition cursor-pointer hover:shadow-sm min-h-[40px] min-w-[40px] flex items-center justify-center"
             title="تسجيل الخروج"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -302,7 +380,7 @@ watch(() => store.projects, (newProjects) => {
           <!-- Notification Bell Toggle -->
           <button 
             @click="store.toggleNotificationDrawer()"
-            class="p-2 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-xl transition cursor-pointer hover:shadow-sm relative min-h-[44px] min-w-[44px] flex items-center justify-center"
+            class="p-2 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-xl transition cursor-pointer hover:shadow-sm relative min-h-[40px] min-w-[40px] flex items-center justify-center"
             title="مركز الإشعارات"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -316,7 +394,7 @@ watch(() => store.projects, (newProjects) => {
           <!-- Theming Toggle -->
           <button 
             @click="store.toggleTheme()" 
-            class="p-2 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-xl transition cursor-pointer hover:shadow-sm min-h-[44px] min-w-[44px] flex items-center justify-center"
+            class="p-2 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-xl transition cursor-pointer hover:shadow-sm min-h-[40px] min-w-[40px] flex items-center justify-center"
             title="تبديل مظهر النظام"
           >
             <svg v-if="store.theme === 'light'" xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -335,7 +413,7 @@ watch(() => store.projects, (newProjects) => {
         <div class="flex items-center gap-2 shrink-0">
           <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-650 flex items-center justify-center shadow-md shadow-violet-500/20">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012 2h2a2 2 0 012 2m-6 9l2 2 4-4" />
             </svg>
           </div>
           <div class="flex flex-col">
@@ -388,7 +466,7 @@ watch(() => store.projects, (newProjects) => {
     </header>
 
     <!-- Main Workspace Area -->
-    <main class="max-w-full w-full px-4 md:px-12 py-6 pb-28 md:pb-8 transition-all duration-500 relative z-10">
+    <main class="max-w-full w-full px-4 md:px-8 py-6 pb-28 md:pb-8 transition-all duration-500 relative z-10">
       <!-- Floating Exit Focus Mode Panel at the top -->
       <div v-if="store.isFocusMode" class="flex justify-center mb-8 animate-fade-in">
         <button 
@@ -402,19 +480,35 @@ watch(() => store.projects, (newProjects) => {
         </button>
       </div>
 
-      <!-- Workspace Layout Grid -->
+      <!-- Dynamic 3-Column Responsive Desktop Grid (xl:grid-cols-12) -->
       <div :class="[
-        store.isFocusMode ? 'max-w-full w-full space-y-8' : 'grid grid-cols-1 md:grid-cols-12 gap-8 items-start'
+        store.isFocusMode ? 'max-w-full w-full space-y-8' : 'grid grid-cols-1 md:grid-cols-12 gap-6 items-start xl:grid-cols-12'
       ]">
         
-        <!-- Left Sidebar: Project Settings (3 cols) - Hidden in Focus Mode / Settings / Routines, Hidden on Mobile (< md) -->
-        <div v-if="!store.isFocusMode && store.activeView !== 'settings' && store.activeView !== 'routines'" class="hidden md:block md:col-span-4 lg:col-span-3 space-y-6">
+        <!-- Left Sidebar: Project Settings (1 or 3 cols on xl) -->
+        <div 
+          v-if="!store.isFocusMode && store.activeView !== 'settings' && store.activeView !== 'routines'" 
+          :class="[
+            'hidden md:block transition-all duration-300',
+            store.isSidebarCollapsed ? 'xl:col-span-1 md:col-span-2' : 'xl:col-span-3 md:col-span-4'
+          ]"
+        >
           <ProjectPanel />
         </div>
 
-        <!-- Center Stage (Takes full 12 cols when Focus/Settings/Routines or Mobile, else 9 cols on lg / 8 cols on md) -->
+        <!-- Main Workspace Canvas: Dynamic 6 to 11 Columns -->
         <div :class="[
-          store.isFocusMode ? 'w-full space-y-8' : (store.activeView === 'settings' || store.activeView === 'routines') ? 'md:col-span-12' : 'md:col-span-8 lg:col-span-9', 
+          store.isFocusMode 
+            ? 'w-full space-y-8' 
+            : (store.activeView === 'settings' || store.activeView === 'routines') 
+              ? 'md:col-span-12' 
+              : (store.isSidebarCollapsed && !store.isInspectorOpen) 
+                ? 'xl:col-span-11 md:col-span-10' 
+                : (!store.isSidebarCollapsed && store.isInspectorOpen) 
+                  ? 'xl:col-span-6 md:col-span-8' 
+                  : (store.isSidebarCollapsed && store.isInspectorOpen) 
+                    ? 'xl:col-span-8 md:col-span-10' 
+                    : 'xl:col-span-9 md:col-span-8', 
           'space-y-8 transition-all duration-500'
         ]">
           
@@ -450,8 +544,77 @@ watch(() => store.projects, (newProjects) => {
 
         </div>
 
+        <!-- Quick Inspector Panel (<QuickInspector />): Docked Right Column (3 cols on xl) -->
+        <div 
+          v-if="!store.isFocusMode && store.activeView !== 'settings' && store.activeView !== 'routines'"
+          :class="[
+            store.isInspectorOpen ? 'hidden xl:block xl:col-span-3' : 'hidden'
+          ]"
+        >
+          <QuickInspector />
+        </div>
+
       </div>
     </main>
+
+    <!-- Quick Search Modal (Ctrl+K) -->
+    <Transition name="fade">
+      <div v-if="isQuickSearchOpen" class="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4" dir="rtl">
+        <div @click="isQuickSearchOpen = false" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+        <div class="relative z-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden p-4 space-y-4">
+          <div class="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input 
+              v-model="quickSearchQuery"
+              type="text" 
+              placeholder="ابحث عن مشروع أو مهمة... (اضغط Esc للإغلاق)"
+              class="w-full bg-transparent text-sm font-semibold text-slate-855 dark:text-slate-100 focus:outline-none"
+              autofocus
+            />
+            <button @click="isQuickSearchOpen = false" class="text-xs text-slate-400 font-mono font-bold bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">Esc</button>
+          </div>
+
+          <div class="max-h-80 overflow-y-auto space-y-3">
+            <!-- Projects Search Results -->
+            <div v-if="quickSearchResults.projects.length > 0">
+              <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">المشاريع</span>
+              <div 
+                v-for="p in quickSearchResults.projects" 
+                :key="p.id"
+                @click="selectSearchResult(p, 'project')"
+                class="p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer flex items-center justify-between transition text-xs"
+              >
+                <span class="font-bold text-slate-800 dark:text-slate-200">{{ p.name }}</span>
+                <span class="text-[10px] text-violet-600 dark:text-violet-400 font-bold">الانتقال للمشروع ↗</span>
+              </div>
+            </div>
+
+            <!-- Tasks Search Results -->
+            <div v-if="quickSearchResults.tasks.length > 0">
+              <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">المهام</span>
+              <div 
+                v-for="t in quickSearchResults.tasks" 
+                :key="t.id"
+                @click="selectSearchResult(t, 'task')"
+                class="p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer flex items-center justify-between transition text-xs"
+              >
+                <div class="flex flex-col">
+                  <span class="font-bold text-slate-800 dark:text-slate-200">{{ t.title }}</span>
+                  <span class="text-[10px] text-slate-400">{{ t.status }}</span>
+                </div>
+                <span class="text-[10px] text-violet-600 dark:text-violet-400 font-bold">معاينة ↗</span>
+              </div>
+            </div>
+
+            <div v-if="quickSearchQuery && quickSearchResults.projects.length === 0 && quickSearchResults.tasks.length === 0" class="py-8 text-center text-xs text-slate-400 italic">
+              لم يتم العثور على أي نتائج مطابقة لـ "{{ quickSearchQuery }}"
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <!-- Active Task Dialog -->
     <TaskModal />

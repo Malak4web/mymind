@@ -25,6 +25,9 @@ describe('store.js State & Actions Unit Tests', () => {
     store.isFocusMode = false
     store.theme = 'light'
     store.pushPermission = 'default'
+    store.isSidebarCollapsed = false
+    store.isInspectorOpen = false
+    store.activeInspectorTaskId = null
   })
 
   describe('1. State Initialization & Auth Logic', () => {
@@ -350,6 +353,29 @@ describe('store.js State & Actions Unit Tests', () => {
       store.deleteHabitNote(String(habit.id), String(note.id))
       expect(store.habits).not.toBe(habitsRef5)
       expect(habit.notesList.length).toBe(0)
+    })
+  })
+
+  describe('8. Layout State & Inspector Actions', () => {
+    it('toggleSidebar() should toggle isSidebarCollapsed and persist to localStorage', () => {
+      store.isSidebarCollapsed = false
+      store.toggleSidebar()
+      expect(store.isSidebarCollapsed).toBe(true)
+      expect(localStorage.getItem('mymind_sidebar_collapsed')).toBe('true')
+
+      store.toggleSidebar()
+      expect(store.isSidebarCollapsed).toBe(false)
+      expect(localStorage.getItem('mymind_sidebar_collapsed')).toBe('false')
+    })
+
+    it('openTaskInspector() and closeTaskInspector() should toggle active task inspector state', () => {
+      store.openTaskInspector(101)
+      expect(store.isInspectorOpen).toBe(true)
+      expect(store.activeInspectorTaskId).toBe(101)
+
+      store.closeTaskInspector()
+      expect(store.isInspectorOpen).toBe(false)
+      expect(store.activeInspectorTaskId).toBeNull()
     })
   })
 })

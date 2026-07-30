@@ -1,33 +1,50 @@
-# "mymind" Audit, Testing & Bug Fixing Campaign Plan
+# Master Plan: Desktop Layout & UX Restructuring for mymind
 
-## Overview
-The goal of this campaign is to perform a comprehensive function analysis & edge cases audit across the "mymind" codebase (Laravel API controllers, Vue components, and store.js/Pinia/Vuex), build comprehensive PHPUnit and JS unit/E2E test suites, fix all identified bugs, ensure zero regressions, achieve 100% test pass rate, and verify build integrity (`npm run build`).
+## Strategic Objectives
+1. **Desktop Layout & UX Restructuring (R1)**:
+   - Optimize wide-screen layout (1440px+ and 1080px+ desktop resolutions).
+   - Ergonomic multi-column desktop architecture (Collapsible navigation sidebar, flexible central main workspace, quick-action side panel / preview inspector).
+   - Improved top bar navigation with breadcrumbs, quick search, project switcher, and theme/view toggles.
 
-## Phase Strategy
+2. **Modern Ergonomic Aesthetic & Accessibility (R2)**:
+   - Premium Glassmorphism design tokens (backdrop blur, translucent glass cards, border glow, high contrast typography).
+   - High-Contrast, accessible typography scaling and color contrast ratios.
+   - Smooth CSS / Tailwind micro-animations (hover effects, tab transitions, quick access drawer toggles, interactive card elevations).
+   - Single-click quick access to core tools, active projects, recent documents, and rapid creation actions.
 
-### Phase 1: Codebase Discovery & Assessment
-- Spawn 3 `teamwork_preview_explorer` subagents to analyze:
-  1. Backend (Laravel API controllers, routes, models, middleware, validation rules).
-  2. Frontend (Vue components, store.js / state management, services/API calls).
-  3. Environment & Testing Setup (PHPUnit config, JS test runner/Jest/Vitest/Playwright/Cypress configs, package.json scripts, database setup).
-- Synthesize findings into `PROJECT.md` and define milestone boundaries.
+3. **Clean Build & Zero Regressions (R3)**:
+   - Validate full project build (`npm run build`).
+   - Run Vitest unit & component test suite (100% pass).
+   - Verify frontend server and route responsiveness without runtime exceptions or data corruption.
 
-### Phase 2: Dual-Track Execution Setup
-- **Track 1: E2E & Unit Testing Suite Track**
-  - Spawn E2E / Test Suite creation team to construct comprehensive PHPUnit API test suite and JS unit/component test suite covering happy paths, edge cases, boundaries, security/validation flaws, and error handling.
-  - Publish `TEST_READY.md` once initial test suites are in place.
-- **Track 2: Code Audit & Implementation Track**
-  - Spawn worker subagents to inspect Laravel controllers, Vue components, and state management for logic errors, uncaught exceptions, race conditions, parameter validation gaps, and security risks.
+## Milestones & Decomposition
 
-### Phase 3: Proactive Bug Fixing & Iterative Verification
-- Iterative loop (Explorer -> Worker -> Reviewer -> Challenger -> Forensic Auditor):
-  - Workers implement fixes for failing tests, audit findings, and edge-case exceptions.
-  - Reviewers review fixes for safety, side-effects, and architecture compliance.
-  - Challengers perform stress/boundary tests.
-  - Forensic Auditor performs non-negotiable integrity verification (no dummy mocks, no hardcoded values).
+### Milestone 1: Exploration & Codebase Analysis
+- **Goal**: Analyze current Vue 3 layout components (`App.vue`, `src/components/`, `src/views/`), CSS / Tailwind setup, store state (`src/store.js`), and existing UI/UX structure.
+- **Workers**: 3 Explorers (`teamwork_preview_explorer`) in parallel.
+- **Deliverables**: Comprehensive exploration report identifying existing components, CSS structure, grid/flex layouts, visual touchpoints, and refactoring entry points.
 
-### Phase 4: Final Validation & Build Verification
-- Execute full test suite (PHPUnit + JS unit tests) aiming for 100% pass rate.
-- Run `npm run build` via worker to verify zero compilation/bundling errors.
-- Final Forensic Audit check.
-- Report completion to Sentinel.
+### Milestone 2: Desktop Layout & Wide-screen Architecture Restructuring
+- **Goal**: Restructure desktop layout for wide screens. Implement responsive multi-column layout (Collapsible Sidebar, Main Canvas/Workspace, Quick Action/Details Panel, Topbar Header).
+- **Workers**: Implementer (`teamwork_preview_worker`), Reviewers (`teamwork_preview_reviewer`), Challenger (`teamwork_preview_challenger`).
+- **Deliverables**: Updated layout components with wide-screen multi-column grid, responsive breakpoints, flex layout, zero overflow issues.
+
+### Milestone 3: Glassmorphism Aesthetic, Typography & Micro-animations
+- **Goal**: Implement modern Glassmorphism visual tokens (backdrop-blur, border glows, elevated translucent cards), enhanced contrast typography, and CSS micro-animations.
+- **Workers**: Implementer (`teamwork_preview_worker`), Reviewers (`teamwork_preview_reviewer`), Challenger (`teamwork_preview_challenger`).
+- **Deliverables**: Updated styles, components with glassmorphism classes, typography tokens, smooth hover and micro-animation transitions.
+
+### Milestone 4: Single-Click Quick Access & Navigation Ergonomics
+- **Goal**: Add single-click quick access toolbar/floating panel, quick project/tool switcher, keyboard shortcut hints, and streamlined action triggers.
+- **Workers**: Implementer (`teamwork_preview_worker`), Reviewers (`teamwork_preview_reviewer`), Challenger (`teamwork_preview_challenger`).
+- **Deliverables**: Single-click access bar, quick action modal/drawer, rapid tool shortcuts.
+
+### Milestone 5: Verification, Review & Clean Build
+- **Goal**: Verify full build (`npm run build`), test suite execution (`npm run test`), layout regression testing, and responsiveness checks.
+- **Workers**: Reviewers & Challengers.
+- **Deliverables**: Build output log, test execution report, quality verification report.
+
+### Milestone 6: Forensic Integrity Audit & Final Victory Claim
+- **Goal**: Perform independent forensic audit (`teamwork_preview_auditor`), confirm ZERO integrity violations, publish completion report, notify Sentinel.
+- **Workers**: Forensic Auditor (`teamwork_preview_auditor`).
+- **Deliverables**: CLEAN audit report, Sentinel final notification.

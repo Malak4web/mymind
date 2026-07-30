@@ -227,7 +227,8 @@ const getStatusPillStyle = (status) => {
             <div 
               v-for="task in getTasksForDate(cell.dateString)" 
               :key="'agenda-task-' + task.id"
-              @click="openEditTask(task.id)"
+              @click="store.openTaskInspector(task.id)"
+              @dblclick="openEditTask(task.id)"
               :class="[
                 'p-3 rounded-xl border transition cursor-pointer flex items-center justify-between gap-2 min-h-[44px] min-w-[44px]',
                 getStatusPillStyle(task.status)
@@ -299,7 +300,8 @@ const getStatusPillStyle = (status) => {
               :key="task.id"
               draggable="true"
               @dragstart="handleDragStart(task.id)"
-              @click.stop="openEditTask(task.id)"
+              @click.stop="store.openTaskInspector(task.id)"
+              @dblclick.stop="openEditTask(task.id)"
               :class="[
                 'text-[11px] font-bold p-1.5 rounded-lg border shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-grab active:cursor-grabbing transition duration-150 truncate text-right mb-1 block',
                 getStatusPillStyle(task.status)

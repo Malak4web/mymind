@@ -261,6 +261,99 @@ const handleTouchEnd = (closeFn) => {
 <template>
   <div class="space-y-4 text-right animate-fade-in">
     
+    <!-- Collapsed State: Sleek Icon Rail -->
+    <div 
+      v-if="store.isSidebarCollapsed" 
+      class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-3xl p-3 shadow-md flex flex-col items-center gap-4 text-center min-h-[500px]"
+    >
+      <!-- Expand Button -->
+      <button 
+        @click="store.toggleSidebar()"
+        class="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-200 transition cursor-pointer flex items-center justify-center min-h-[44px] min-w-[44px]"
+        title="توسيع القائمة الجانبية (Sidebar)"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      <!-- Compact Create Project Button -->
+      <button 
+        @click="store.isSidebarCollapsed = false"
+        class="p-2.5 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white transition cursor-pointer flex items-center justify-center min-h-[44px] min-w-[44px] shadow-sm"
+        title="إضافة مشروع جديد"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
+
+      <div class="w-full h-px bg-slate-200 dark:bg-slate-800 my-1"></div>
+
+      <!-- Category Icons Rail -->
+      <div class="flex flex-col gap-2 items-center w-full">
+        <button
+          @click="store.activeCategoryId = null"
+          :class="[
+            'w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold transition cursor-pointer',
+            store.activeCategoryId === null 
+              ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-md' 
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+          ]"
+          title="كل التصنيفات"
+        >
+          📋
+        </button>
+        <button
+          v-for="cat in store.projectCategories"
+          :key="cat.id"
+          @click="store.activeCategoryId = cat.id"
+          :class="[
+            'w-10 h-10 rounded-2xl flex items-center justify-center text-sm transition cursor-pointer relative',
+            store.activeCategoryId === cat.id 
+              ? 'ring-2 ring-violet-500 bg-violet-50 dark:bg-violet-955' 
+              : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700'
+          ]"
+          :title="cat.name"
+        >
+          <span>{{ cat.icon || '📂' }}</span>
+        </button>
+      </div>
+
+      <div class="w-full h-px bg-slate-200 dark:bg-slate-800 my-1"></div>
+
+      <!-- Project Initial Badges Rail -->
+      <div class="flex flex-col gap-2.5 items-center w-full overflow-y-auto max-h-[320px] scrollbar-hide">
+        <button
+          v-for="p in filteredProjectsByCategory"
+          :key="p.id"
+          @click="store.activeProjectId = p.id"
+          :class="[
+            'w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-extrabold transition cursor-pointer relative group',
+            store.activeProjectId === p.id 
+              ? 'bg-gradient-to-tr from-violet-600 to-indigo-650 text-white shadow-lg shadow-violet-500/30 ring-2 ring-violet-400' 
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-violet-100 dark:hover:bg-violet-955/50'
+          ]"
+          :title="p.name"
+        >
+          <span>{{ p.name ? p.name.charAt(0) : 'م' }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Expanded State: Full Panel -->
+    <div v-else class="space-y-4">
+      <div class="flex items-center justify-between px-1">
+        <button 
+          @click="store.toggleSidebar()"
+          class="text-xs font-bold text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-1"
+          title="طَي القائمة الجانبية"
+        >
+          <span>«</span>
+          <span>طَي القائمة</span>
+        </button>
+      </div>
+
     <!-- ═══════════════════════════════════════════ -->
     <!--  CATEGORY PILLS BAR                        -->
     <!-- ═══════════════════════════════════════════ -->
@@ -814,5 +907,6 @@ const handleTouchEnd = (closeFn) => {
       </div>
     </Transition>
 
+    </div>
   </div>
 </template>

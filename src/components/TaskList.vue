@@ -240,7 +240,8 @@ const bulkDelete = async () => {
       <div 
         v-for="task in filteredAndSortedTasks" 
         :key="'mobile-' + task.id"
-        @click="openEditTask(task.id)"
+        @click="store.openTaskInspector(task.id)"
+        @dblclick="openEditTask(task.id)"
         class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-3 shadow-sm text-right cursor-pointer relative overflow-hidden max-w-full"
       >
         <!-- Card Header: Status Indicator Button, Priority Pill & Selection Checkbox -->
@@ -366,18 +367,20 @@ const bulkDelete = async () => {
                 </div>
               </th>
               <th class="py-4 px-5">المرفقات</th>
+              <th class="py-4 px-4 text-center">إجراءات</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-855 text-sm text-slate-700 dark:text-slate-350">
             <tr v-if="filteredAndSortedTasks.length === 0">
-              <td colspan="6" class="py-12 text-center text-slate-400 italic font-semibold">
+              <td colspan="7" class="py-12 text-center text-slate-400 italic font-semibold">
                 لا توجد أي مهام مطابقة لفلترة البحث الحالية.
               </td>
             </tr>
             <tr 
               v-for="task in filteredAndSortedTasks" 
               :key="task.id"
-              @click="openEditTask(task.id)"
+              @click="store.openTaskInspector(task.id)"
+              @dblclick="openEditTask(task.id)"
               class="hover:bg-slate-50/40 dark:hover:bg-slate-950/20 cursor-pointer transition duration-150"
             >
               <td class="py-4 px-4 text-center" @click.stop>
@@ -421,6 +424,15 @@ const bulkDelete = async () => {
                   <span class="text-xs text-slate-500 font-extrabold">{{ task.attachments.length }}</span>
                 </div>
                 <span v-else class="text-xs text-slate-400">—</span>
+              </td>
+              <td class="py-4 px-4 text-center" @click.stop>
+                <button 
+                  @click="openEditTask(task.id)"
+                  class="p-1.5 rounded-lg text-slate-500 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                  title="تعديل المهمة (فتح النموذج الكامل)"
+                >
+                  ✏️
+                </button>
               </td>
             </tr>
           </tbody>

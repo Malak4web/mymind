@@ -67,11 +67,15 @@ describe('TaskBoard.vue Component Tests', () => {
     expect(wrapper.exists()).toBe(true)
   })
 
-  it('opens edit modal when clicking task card', async () => {
+  it('opens quick inspector on single click and task modal on double click', async () => {
     const wrapper = mount(TaskBoard)
     const taskCard = wrapper.find('.cursor-grab')
     if (taskCard.exists()) {
       await taskCard.trigger('click')
+      expect(store.isInspectorOpen).toBe(true)
+      expect(store.activeInspectorTaskId).toBe(101)
+
+      await taskCard.trigger('dblclick')
       expect(store.isTaskModalOpen).toBe(true)
       expect(store.selectedTaskIdForModal).toBe(101)
     }

@@ -104,6 +104,27 @@ export const store = reactive({
   pushPermission: 'default',
   typingCollaborators: {},
 
+  // Layout and Inspector States
+  isSidebarCollapsed: localStorage.getItem('mymind_sidebar_collapsed') === 'true',
+  isInspectorOpen: false,
+  activeInspectorTaskId: null,
+
+  // Layout & Inspector Actions
+  toggleSidebar() {
+    this.isSidebarCollapsed = !this.isSidebarCollapsed
+    localStorage.setItem('mymind_sidebar_collapsed', String(this.isSidebarCollapsed))
+  },
+
+  openTaskInspector(taskId) {
+    this.activeInspectorTaskId = taskId
+    this.isInspectorOpen = true
+  },
+
+  closeTaskInspector() {
+    this.isInspectorOpen = false
+    this.activeInspectorTaskId = null
+  },
+
   // Check role permissions helper
   hasPermission(permissionSlug) {
     if (!this.currentUser || !this.currentUser.role) return false

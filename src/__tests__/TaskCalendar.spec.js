@@ -51,11 +51,15 @@ describe('TaskCalendar.vue Component Tests', () => {
     expect(wrapper.exists()).toBe(true)
   })
 
-  it('opens edit modal when clicking task item inside cell', async () => {
+  it('opens quick inspector on single click and task modal on double click when clicking task item inside cell', async () => {
     const wrapper = mount(TaskCalendar)
     const taskItem = wrapper.findAll('.cursor-grab').find(i => i.text().includes('تسليم التصاميم'))
     if (taskItem) {
       await taskItem.trigger('click')
+      expect(store.isInspectorOpen).toBe(true)
+      expect(store.activeInspectorTaskId).toBe(201)
+
+      await taskItem.trigger('dblclick')
       expect(store.isTaskModalOpen).toBe(true)
       expect(store.selectedTaskIdForModal).toBe(201)
     }

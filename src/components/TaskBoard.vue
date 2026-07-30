@@ -667,7 +667,8 @@ const bulkDelete = async () => {
             :key="task.id"
             draggable="true"
             @dragstart="handleDragStart(task.id)"
-            @click="openEditTask(task.id)"
+            @click="store.openTaskInspector(task.id)"
+            @dblclick="openEditTask(task.id)"
             class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-855 rounded-xl p-3.5 shadow-[0_2px_4px_rgba(0,0,0,0.01)] hover:shadow-md hover:border-slate-350 dark:hover:border-slate-700 hover:-translate-y-0.5 transition duration-200 cursor-grab active:cursor-grabbing select-none relative group space-y-2"
             :title="task.title"
           >
@@ -699,6 +700,13 @@ const bulkDelete = async () => {
               >
                 <MentionText :content="task.title" />
               </h4>
+              <button 
+                @click.stop="openEditTask(task.id)"
+                class="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-violet-600 transition cursor-pointer text-xs shrink-0"
+                title="تعديل المهمة (فتح النموذج الكامل)"
+              >
+                ✏️
+              </button>
             </div>
 
             <!-- Task Description Mention & Links Preview -->
