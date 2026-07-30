@@ -15,6 +15,7 @@ class EmailDigestTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->authenticateUser();
 
         $this->project = $this->postJson('/api/projects', [
             'name' => 'مشروع تجميع البريد',

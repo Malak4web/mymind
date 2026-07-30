@@ -9,6 +9,12 @@ class NotificationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->authenticateUser();
+    }
+
     public function test_can_list_notifications()
     {
         $response = $this->getJson('/api/notifications');

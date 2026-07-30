@@ -1,6 +1,6 @@
 <script setup>
 import { store } from '../store'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 
 const email = ref('')
 const password = ref('')
@@ -78,6 +78,10 @@ const playMiniSound = () => {
     playTone(523.25, now, 0.15) // C5
     playTone(659.25, now + 0.1, 0.15) // E5
     playTone(783.99, now + 0.2, 0.3) // G5
+
+    setTimeout(() => {
+      ctx.close().catch(() => {})
+    }, 600)
   } catch (e) {
     console.log(e)
   }
@@ -121,10 +125,18 @@ const handleLogin = async () => {
 }
 
 // Auto-rotate feature showcase
+let featureInterval = null
 onMounted(() => {
-  setInterval(() => {
+  featureInterval = setInterval(() => {
     activeFeature.value = (activeFeature.value + 1) % featuresList.length
   }, 4000)
+})
+
+onUnmounted(() => {
+  if (featureInterval) {
+    clearInterval(featureInterval)
+    featureInterval = null
+  }
 })
 
 const scrollToSection = (id) => {

@@ -55,10 +55,9 @@ class AuthTest extends TestCase
 
     public function test_authenticated_user_can_get_profile()
     {
-        $token = $this->user->createToken('test-token')->plainTextToken;
+        \Laravel\Sanctum\Sanctum::actingAs($this->user);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
-                         ->getJson('/api/profile');
+        $response = $this->getJson('/api/profile');
 
         $response->assertStatus(200)
                  ->assertJsonPath('email', 'ahmed@mymind.com');
@@ -66,10 +65,9 @@ class AuthTest extends TestCase
 
     public function test_user_can_logout()
     {
-        $token = $this->user->createToken('test-token')->plainTextToken;
+        \Laravel\Sanctum\Sanctum::actingAs($this->user);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
-                         ->postJson('/api/logout');
+        $response = $this->postJson('/api/logout');
 
         $response->assertStatus(200);
     }

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Folder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class FolderController extends Controller
 {
@@ -20,6 +22,13 @@ class FolderController extends Controller
             'parent_id' => 'nullable|exists:folders,id'
         ]);
 
+        if (!empty($request->parent_id)) {
+            $parentFolder = Folder::find($request->parent_id);
+            if (!$parentFolder || (string)$parentFolder->project_id !== (string)$projectId) {
+                return response()->json(['error' => 'المجلد الأب لا ينتمي إلى هذا المشروع'], 422);
+            }
+        }
+
         $folder = Folder::create([
             'project_id' => $projectId,
             'parent_id' => $request->parent_id,
@@ -32,7 +41,30 @@ class FolderController extends Controller
     public function destroy($id)
     {
         $folder = Folder::findOrFail($id);
-        $folder->delete();
+
+        DB::transaction(function () use ($folder) {
+            $this->deleteFolderRecursive($folder);
+        });
+
         return response()->json(['message' => 'تم حذف المجلد بنجاح']);
+    }
+
+    private function deleteFolderRecursive(Folder $folder)
+    {
+        foreach ($folder->files as $file) {
+            $relativePath = str_replace('/storage/', '', $file->path);
+            Storage::disk('public')->delete($relativePath);
+            $file->delete();
+        }
+
+        foreach ($folder->children as $child) {
+            $this->deleteFolderRecursive($child);
+        }
+
+        foreach ($folder->notes as $note) {
+            $note->delete();
+        }
+
+        $folder->delete();
     }
 }

@@ -303,6 +303,10 @@ const playSuccessSound = () => {
     
     playBell(1567.98, chordTime, 0.8) // G6 bell
     playBell(2093.00, chordTime + 0.1, 0.8) // C7 bell
+
+    setTimeout(() => {
+      ctx.close().catch(() => {})
+    }, 3000)
     
   } catch (e) {
     console.error("Audio Context initialization failed or user interaction required:", e)

@@ -1,0 +1,96 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\ProjectCategory;
+use App\Models\User;
+use App\Models\Role;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class ProjectCategoryTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private $user;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $role = Role::create(['name' => 'مدير', 'description' => 'مدير النظام']);
+        $this->user = User::create([
+            'name' => 'اختبار التصنيفات',
+            'email' => 'cat@mymind.com',
+            'password' => bcrypt('password123'),
+            'role_id' => $role->id
+        ]);
+        $this->authenticateUser($this->user);
+    }
+
+    public function test_can_list_project_categories()
+    {
+        ProjectCategory::create(['name' => 'تصنيف 1', 'color' => '#8b5cf6']);
+
+        $response = $this->getJson('/api/project-categories');
+
+        $response->assertStatus(200)
+                 ->assertJsonCount(1);
+    }
+
+    public function test_can_create_project_category()
+    {
+        $data = [
+            'name' => 'تصنيف جديد',
+            'description' => 'وصف التصنيف',
+            'color' => '#3b82f6',
+            'icon' => '🚀'
+        ];
+
+        $response = $this->postJson('/api/project-categories', $data);
+
+        $response->assertStatus(201)
+                 ->assertJsonPath('name', 'تصنيف جديد');
+
+        $this->assertDatabaseHas('project_categories', ['name' => 'تصنيف جديد']);
+    }
+
+    public function test_cannot_create_category_without_required_name()
+    {
+        $response = $this->postJson('/api/project-categories', [
+            'description' => 'بدون اسم'
+        ]);
+
+        $response->assertStatus(422)
+                 ->assertJsonValidationErrors(['name']);
+    }
+
+    public function test_can_update_project_category()
+    {
+        $category = ProjectCategory::create(['name' => 'تصنيف قديم']);
+
+        $response = $this->putJson("/api/project-categories/{$category->id}", [
+            'name' => 'تصنيف معدل',
+            'color' => '#10b981'
+        ]);
+
+        $response->assertStatus(200)
+                 ->assertJsonPath('name', 'تصنيف معدل');
+
+        $this->assertDatabaseHas('project_categories', [
+            'id' => $category->id,
+            'name' => 'تصنيف معدل'
+        ]);
+    }
+
+    public function test_can_delete_project_category()
+    {
+        $category = ProjectCategory::create(['name' => 'تصنيف للحذف']);
+
+        $response = $this->deleteJson("/api/project-categories/{$category->id}");
+
+        $response->assertStatus(204);
+
+        $this->assertDatabaseMissing('project_categories', ['id' => $category->id]);
+    }
+}

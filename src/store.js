@@ -16,6 +16,7 @@ export const store = reactive({
   notes: [],
   activeDocumentFolderId: null,
   notifications: [],
+  messages: [],
   emailQueue: [],
   batchedEmails: [],
   globalStatuses: ['بانتظار البدء', 'قيد العمل', 'تحت المراجعة', 'مكتمل'],
@@ -110,6 +111,14 @@ export const store = reactive({
     if (this.currentUser.role.name === 'مدير') return true
     // Otherwise check permissions slug array
     return this.currentUser.role.permissions?.some(p => p.slug === permissionSlug) || false
+  },
+
+  getAuthHeaders(customHeaders = {}) {
+    const headers = { ...customHeaders }
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`
+    }
+    return headers
   },
 
   // Initialize and load profile/data
@@ -296,28 +305,32 @@ export const store = reactive({
   async loadTasks() {
     if (!this.activeProjectId) return
     try {
-      const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/tasks`)
+      const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/tasks`, {
+        headers: this.getAuthHeaders()
+      })
       if (res.ok) {
         const rawTasks = await res.json()
-        this.tasks = rawTasks.map(t => {
-          const values = {}
-          if (t.custom_field_values) {
-            t.custom_field_values.forEach(v => {
-              values[v.custom_field_definition_id] = v.value
-            })
-          }
-          return {
-            id: t.id,
-            projectId: t.project_id,
-            title: t.title,
-            description: t.description,
-            status: t.status,
-            startDate: t.start_date,
-            deadline: t.deadline,
-            attachments: t.attachments || [],
-            customFieldValues: values
-          }
-        })
+        if (Array.isArray(rawTasks)) {
+          this.tasks = rawTasks.map(t => {
+            const values = {}
+            if (t.custom_field_values) {
+              t.custom_field_values.forEach(v => {
+                values[v.custom_field_definition_id] = v.value
+              })
+            }
+            return {
+              id: t.id,
+              projectId: t.project_id,
+              title: t.title,
+              description: t.description,
+              status: t.status,
+              startDate: t.start_date,
+              deadline: t.deadline,
+              attachments: t.attachments || [],
+              customFieldValues: values
+            }
+          })
+        }
       }
     } catch (e) {
       console.error("فشل تحميل المهام", e)
@@ -328,7 +341,9 @@ export const store = reactive({
   async loadFolders() {
     if (!this.activeProjectId) return
     try {
-      const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/folders`)
+      const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/folders`, {
+        headers: this.getAuthHeaders()
+      })
       if (res.ok) {
         this.folders = await res.json()
       }
@@ -341,7 +356,9 @@ export const store = reactive({
   async loadProjectFiles() {
     if (!this.activeProjectId) return
     try {
-      const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/project-files`)
+      const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/project-files`, {
+        headers: this.getAuthHeaders()
+      })
       if (res.ok) {
         this.projectFiles = await res.json()
       }
@@ -370,7 +387,9 @@ export const store = reactive({
   async loadNotes() {
     if (!this.activeProjectId) return
     try {
-      const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/notes`)
+      const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/notes`, {
+        headers: this.getAuthHeaders()
+      })
       if (res.ok) {
         this.notes = await res.json()
       }
@@ -379,19 +398,40 @@ export const store = reactive({
     }
   },
 
+  // Load Messages
+  async loadMessages() {
+    if (!this.activeProjectId) return
+    try {
+      const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/messages`, {
+        headers: this.getAuthHeaders()
+      })
+      if (res.ok) {
+        const rawMsgs = await res.json()
+        this.messages = Array.isArray(rawMsgs) ? rawMsgs : []
+      }
+    } catch (e) {
+      console.error("خطأ في تحميل الرسائل", e)
+      this.messages = []
+    }
+  },
+
   // Load Notifications
   async loadNotifications() {
     try {
-      const res = await fetch(`${this.apiBase}/notifications`)
+      const res = await fetch(`${this.apiBase}/notifications`, {
+        headers: this.getAuthHeaders()
+      })
       if (res.ok) {
         const rawNotifs = await res.json()
-        this.notifications = rawNotifs.map(n => ({
-          id: n.id,
-          title: n.title,
-          text: n.text,
-          isRead: n.is_read,
-          timestamp: new Date(n.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
-        }))
+        if (Array.isArray(rawNotifs)) {
+          this.notifications = rawNotifs.map(n => ({
+            id: n.id,
+            title: n.title,
+            text: n.text,
+            isRead: n.is_read,
+            timestamp: new Date(n.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+          }))
+        }
       }
     } catch (e) {
       console.error("فشل تحميل الإشعارات", e)
@@ -401,11 +441,15 @@ export const store = reactive({
   // Load digest details
   async loadDigestInfo() {
     try {
-      const resQueue = await fetch(`${this.apiBase}/digest/queue`)
+      const resQueue = await fetch(`${this.apiBase}/digest/queue`, {
+        headers: this.getAuthHeaders()
+      })
       if (resQueue.ok) {
         this.emailQueue = await resQueue.json()
       }
-      const resEmails = await fetch(`${this.apiBase}/digest/emails`)
+      const resEmails = await fetch(`${this.apiBase}/digest/emails`, {
+        headers: this.getAuthHeaders()
+      })
       if (resEmails.ok) {
         this.batchedEmails = await resEmails.json()
       }
@@ -518,7 +562,8 @@ export const store = reactive({
 
     try {
       const res = await fetch(`${this.apiBase}/projects/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
       })
 
       if (res.ok) {
@@ -540,7 +585,8 @@ export const store = reactive({
 
     try {
       const res = await fetch(`${this.apiBase}/projects/${id}/restore`, {
-        method: 'POST'
+        method: 'POST',
+        headers: this.getAuthHeaders()
       })
 
       if (res.ok) {
@@ -563,7 +609,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/tasks`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ title, description, status, start_date: startDate, deadline })
       })
 
@@ -575,7 +621,7 @@ export const store = reactive({
           if (val) {
             await fetch(`${this.apiBase}/tasks/${task.id}/custom-fields`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
               body: JSON.stringify({ custom_field_definition_id: fieldId, value: String(val) })
             })
           }
@@ -598,18 +644,19 @@ export const store = reactive({
     }
 
     try {
+      const existingTask = this.tasks.find(t => t.id === taskId)
       const body = {
-        title: updates.title,
-        description: updates.description,
-        status: updates.status,
-        start_date: updates.startDate,
-        deadline: updates.deadline,
-        project_id: updates.projectId
+        title: updates.title !== undefined ? updates.title : existingTask?.title,
+        description: updates.description !== undefined ? updates.description : existingTask?.description,
+        status: updates.status !== undefined ? updates.status : existingTask?.status,
+        start_date: updates.startDate !== undefined ? updates.startDate : existingTask?.startDate,
+        deadline: updates.deadline !== undefined ? updates.deadline : existingTask?.deadline,
+        project_id: updates.projectId !== undefined ? updates.projectId : existingTask?.projectId
       }
 
       const res = await fetch(`${this.apiBase}/tasks/${taskId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(body)
       })
 
@@ -619,7 +666,7 @@ export const store = reactive({
           for (const [fieldId, val] of Object.entries(updates.customFieldValues)) {
             await fetch(`${this.apiBase}/tasks/${taskId}/custom-fields`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
               body: JSON.stringify({ custom_field_definition_id: fieldId, value: String(val) })
             })
           }
@@ -643,7 +690,8 @@ export const store = reactive({
     try {
       const task = this.tasks.find(t => t.id === taskId)
       const res = await fetch(`${this.apiBase}/tasks/${taskId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
       })
 
       if (res.ok) {
@@ -665,7 +713,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/projects/${projectId}/custom-fields`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ name, type })
       })
 
@@ -685,7 +733,8 @@ export const store = reactive({
 
     try {
       const res = await fetch(`${this.apiBase}/projects/${projectId}/custom-fields/${fieldId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
       })
 
       if (res.ok) {
@@ -706,6 +755,7 @@ export const store = reactive({
       formData.append('simulate_failure', '1')
     }
 
+    let interval = null
     // Set temp local preview for responsive progress feedback
     const task = this.tasks.find(t => t.id === taskId)
     if (task) {
@@ -713,11 +763,12 @@ export const store = reactive({
       task.attachments.push(tempFile)
 
       // Simulate step progress increments before API response return
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         if (tempFile.progress < 80) {
           tempFile.progress += 20
-        } else {
+        } else if (interval) {
           clearInterval(interval)
+          interval = null
         }
       }, 100)
     }
@@ -725,6 +776,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/tasks/${taskId}/attachments`, {
         method: 'POST',
+        headers: this.getAuthHeaders(),
         body: formData
       })
 
@@ -737,6 +789,11 @@ export const store = reactive({
       }
     } catch (e) {
       console.error("خطأ في رفع المرفق", e)
+    } finally {
+      if (interval) {
+        clearInterval(interval)
+        interval = null
+      }
     }
   },
 
@@ -744,7 +801,8 @@ export const store = reactive({
   async deleteAttachment(attachmentId) {
     try {
       const res = await fetch(`${this.apiBase}/attachments/${attachmentId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
       })
 
       if (res.ok) {
@@ -761,7 +819,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/folders`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ name, parent_id: parentId })
       })
       if (res.ok) {
@@ -777,7 +835,8 @@ export const store = reactive({
   async deleteFolder(id) {
     try {
       const res = await fetch(`${this.apiBase}/folders/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
       })
       if (res.ok) {
         await this.loadFolders()
@@ -802,6 +861,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/project-files`, {
         method: 'POST',
+        headers: this.getAuthHeaders(),
         body: formData
       })
       if (res.ok) {
@@ -817,7 +877,8 @@ export const store = reactive({
   async deleteProjectFile(id) {
     try {
       const res = await fetch(`${this.apiBase}/project-files/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
       })
       if (res.ok) {
         await this.loadProjectFiles()
@@ -834,7 +895,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/notes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ title, content, folder_id: folderId })
       })
       if (res.ok) {
@@ -851,7 +912,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/notes/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ title, content, folder_id: folderId })
       })
       if (res.ok) {
@@ -867,7 +928,8 @@ export const store = reactive({
   async deleteNote(id) {
     try {
       const res = await fetch(`${this.apiBase}/notes/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
       })
       if (res.ok) {
         await this.loadNotes()
@@ -882,7 +944,8 @@ export const store = reactive({
   async markNotificationRead(notificationId) {
     try {
       const res = await fetch(`${this.apiBase}/notifications/${notificationId}/read`, {
-        method: 'POST'
+        method: 'POST',
+        headers: this.getAuthHeaders()
       })
 
       if (res.ok) {
@@ -897,7 +960,8 @@ export const store = reactive({
   async markAllNotificationsRead() {
     try {
       const res = await fetch(`${this.apiBase}/notifications/read-all`, {
-        method: 'POST'
+        method: 'POST',
+        headers: this.getAuthHeaders()
       })
 
       if (res.ok) {
@@ -991,7 +1055,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/projects/${projectId}/statuses`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ status, fallback_status: fallbackStatus })
       })
 
@@ -1017,7 +1081,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/projects/${projectId}/statuses`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ status })
       })
 
@@ -1040,7 +1104,9 @@ export const store = reactive({
   // Load Project Templates
   async loadProjectTemplates() {
     try {
-      const res = await fetch(`${this.apiBase}/project-templates`)
+      const res = await fetch(`${this.apiBase}/project-templates`, {
+        headers: this.getAuthHeaders()
+      })
       if (res.ok) {
         this.projectTemplates = await res.json()
       }
@@ -1054,10 +1120,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/project-templates`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.token}`
-        },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ name, is_default: isDefault, statuses, task_template_ids: taskTemplateIds })
       })
       if (res.ok) {
@@ -1074,10 +1137,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/project-templates/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.token}`
-        },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ name, is_default: isDefault, statuses, task_template_ids: taskTemplateIds })
       })
       if (res.ok) {
@@ -1094,7 +1154,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/project-templates/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${this.token}` }
+        headers: this.getAuthHeaders()
       })
       if (res.ok) {
         await this.loadProjectTemplates()
@@ -1109,7 +1169,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/project-templates/${id}/set-default`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${this.token}` }
+        headers: this.getAuthHeaders()
       })
       if (res.ok) {
         await this.loadProjectTemplates()
@@ -1122,7 +1182,9 @@ export const store = reactive({
   // Load Task Templates
   async loadTaskTemplates() {
     try {
-      const res = await fetch(`${this.apiBase}/task-templates`)
+      const res = await fetch(`${this.apiBase}/task-templates`, {
+        headers: this.getAuthHeaders()
+      })
       if (res.ok) {
         this.taskTemplates = await res.json()
       }
@@ -1136,10 +1198,7 @@ export const store = reactive({
     try {
       const res = await fetch(`${this.apiBase}/task-templates`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.token}`
-        },
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           name,
           is_default: isDefault,
@@ -1370,6 +1429,7 @@ watch(() => store.activeProjectId, (newVal) => {
     store.loadFolders()
     store.loadProjectFiles()
     store.loadNotes()
+    store.loadMessages()
     store.activeDocumentFolderId = null
   }
 })

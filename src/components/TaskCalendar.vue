@@ -4,21 +4,62 @@ import { computed, ref } from 'vue'
 
 const projectTasks = computed(() => store.tasks.filter(t => t.projectId === store.activeProjectId))
 
+// Dynamic Month & Year navigation state
+const currentYear = ref(2026)
+const currentMonth = ref(6) // 0-indexed (6 = July)
 
+const monthNamesArabic = [
+  'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+  'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+]
 
-// Display month: يوليو 2026
-const year = 2026
-const monthIndex = 6 // July
-const monthName = 'يوليو 2026'
+const monthName = computed(() => {
+  return `${monthNamesArabic[currentMonth.value]} ${currentYear.value}`
+})
+
+const prevMonth = () => {
+  if (currentMonth.value === 0) {
+    currentMonth.value = 11
+    currentYear.value--
+  } else {
+    currentMonth.value--
+  }
+}
+
+const nextMonth = () => {
+  if (currentMonth.value === 11) {
+    currentMonth.value = 0
+    currentYear.value++
+  } else {
+    currentMonth.value++
+  }
+}
+
+const goToToday = () => {
+  const today = new Date()
+  currentYear.value = today.getFullYear()
+  currentMonth.value = today.getMonth()
+}
+
+const todayDateString = computed(() => {
+  const today = new Date()
+  const y = today.getFullYear()
+  const m = String(today.getMonth() + 1).padStart(2, '0')
+  const d = String(today.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+})
 
 // Weekdays in Arabic (starting Sunday to Saturday)
 const weekdays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
-// Days in July 2026
+// Dynamic Days Grid computed
 const calendarCells = computed(() => {
   const cells = []
-  const firstDayOfWeek = new Date(year, monthIndex, 1).getDay() // Wednesday (3)
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate() // 31
+  const yr = currentYear.value
+  const mo = currentMonth.value
+
+  const firstDayOfWeek = new Date(yr, mo, 1).getDay()
+  const daysInMonth = new Date(yr, mo + 1, 0).getDate()
 
   // Pad previous month days
   for (let i = 0; i < firstDayOfWeek; i++) {
@@ -28,7 +69,8 @@ const calendarCells = computed(() => {
   // Current month days
   for (let d = 1; d <= daysInMonth; d++) {
     const dayStr = String(d).padStart(2, '0')
-    const dateStr = `${year}-07-${dayStr}`
+    const monthStr = String(mo + 1).padStart(2, '0')
+    const dateStr = `${yr}-${monthStr}-${dayStr}`
     cells.push({
       dayNumber: d,
       dateString: dateStr,
@@ -69,7 +111,15 @@ const handleDrop = (dateString) => {
   if (!draggedTaskId.value || !dateString) return
   const task = store.tasks.find(t => t.id === draggedTaskId.value)
   if (task) {
-    store.updateTask(task.id, { deadline: dateString })
+    // Preserve existing title, description, status, startDate, and projectId when updating deadline
+    store.updateTask(task.id, {
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      startDate: task.startDate,
+      deadline: dateString,
+      projectId: task.projectId
+    })
   }
   draggedTaskId.value = null
   activeDragOverCell.value = null
@@ -87,6 +137,7 @@ const openEditTask = (taskId) => {
 
 // Custom status badge colors inside cell items
 const getStatusPillStyle = (status) => {
+  if (!status) return 'bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-350 border-r-2 border-r-slate-400 border-l-0'
   const s = status.toLowerCase()
   if (s.includes('todo') || s.includes('to do') || s.includes('بدء') || s.includes('بانتظار')) {
     return 'bg-blue-50/70 border-blue-200/50 text-blue-650 dark:bg-blue-955/20 dark:border-blue-900/30 dark:text-blue-400 border-r-2 border-r-blue-400 border-l-0'
@@ -114,9 +165,37 @@ const getStatusPillStyle = (status) => {
         </svg>
         التقويم والجدولة الزمنية
       </h2>
-      <span class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-955/60 border border-slate-200/50 dark:border-slate-850 px-3.5 py-1 rounded-xl shadow-sm">
-        {{ monthName }}
-      </span>
+
+      <!-- Dynamic Month/Year Navigation Controls -->
+      <div class="flex items-center gap-2">
+        <button 
+          @click="prevMonth" 
+          class="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+          title="الشهر السابق"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+        <span class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-955/60 border border-slate-200/50 dark:border-slate-850 px-3.5 py-1 rounded-xl shadow-sm">
+          {{ monthName }}
+        </span>
+        <button 
+          @click="nextMonth" 
+          class="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+          title="الشهر التالي"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <button 
+          @click="goToToday" 
+          class="text-xs font-bold px-3 py-1 rounded-xl border border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition cursor-pointer"
+        >
+          اليوم
+        </button>
+      </div>
     </div>
 
     <!-- Mobile Day List / Agenda View (< 640px screens) -->
@@ -137,7 +216,7 @@ const getStatusPillStyle = (status) => {
             <span class="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
               <span>📅</span>
               <span>{{ cell.dateString }}</span>
-              <span v-if="cell.dateString === '2026-07-16'" class="px-2 py-0.5 rounded-full bg-violet-600 text-white text-[9px] font-black">اليوم</span>
+              <span v-if="cell.dateString === todayDateString" class="px-2 py-0.5 rounded-full bg-violet-600 text-white text-[9px] font-black">اليوم</span>
             </span>
             <span class="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
               {{ getTasksForDate(cell.dateString).length }} مهام
@@ -191,7 +270,7 @@ const getStatusPillStyle = (status) => {
             'rounded-2xl p-3 flex flex-col justify-between min-h-[110px] transition-all duration-300 shadow-[0_2px_4px_rgba(0,0,0,0.005)] relative border',
             !cell.isCurrentMonth
               ? 'bg-slate-50/30 dark:bg-slate-955/5 border-slate-200/30 dark:border-slate-900/20 opacity-30 dark:opacity-20 cursor-not-allowed'
-              : cell.dateString === '2026-07-16'
+              : cell.dateString === todayDateString
                 ? 'bg-gradient-to-tr from-violet-500/[0.02] to-indigo-500/[0.02] border-violet-200 dark:border-violet-850 shadow-md ring-2 ring-violet-500/10'
                 : 'bg-white dark:bg-slate-900/60 border-slate-200/60 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm hover:scale-[1.01]',
             activeDragOverCell === cell.dateString ? 'border-dashed border-violet-500 bg-violet-500/[0.04] dark:bg-violet-955/20 scale-[0.98] ring-2 ring-violet-500/20' : ''
@@ -203,12 +282,12 @@ const getStatusPillStyle = (status) => {
               :class="[
                 'text-xs font-bold font-sans',
                 cell.isCurrentMonth ? 'text-slate-855 dark:text-slate-200' : 'text-slate-400',
-                cell.dateString === '2026-07-16' ? 'bg-violet-600 text-white rounded-full w-6 h-6 flex items-center justify-center font-extrabold shadow-sm shadow-violet-500/30' : ''
+                cell.dateString === todayDateString ? 'bg-violet-600 text-white rounded-full w-6 h-6 flex items-center justify-center font-extrabold shadow-sm shadow-violet-500/30' : ''
               ]"
             >
               {{ cell.dayNumber }}
             </span>
-            <span v-if="cell.dateString === '2026-07-16'" class="text-[9px] font-bold text-violet-650 dark:text-violet-400 uppercase tracking-widest leading-none pt-1">
+            <span v-if="cell.dateString === todayDateString" class="text-[9px] font-bold text-violet-650 dark:text-violet-400 uppercase tracking-widest leading-none pt-1">
               اليوم
             </span>
           </div>

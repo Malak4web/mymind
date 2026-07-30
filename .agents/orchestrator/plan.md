@@ -1,27 +1,33 @@
-# Execution Plan — Daily Routines ('يومياتي') Redesign
+# "mymind" Audit, Testing & Bug Fixing Campaign Plan
 
-## Objective
-Execute full redesign of Daily Routines ('يومياتي') screens and components in `c:\xampp\htdocs\mymind` adhering strictly to all requirements in `ORIGINAL_REQUEST.md`.
+## Overview
+The goal of this campaign is to perform a comprehensive function analysis & edge cases audit across the "mymind" codebase (Laravel API controllers, Vue components, and store.js/Pinia/Vuex), build comprehensive PHPUnit and JS unit/E2E test suites, fix all identified bugs, ensure zero regressions, achieve 100% test pass rate, and verify build integrity (`npm run build`).
 
-## Milestones & Strategy
+## Phase Strategy
 
-### Phase 1: Exploration (M1)
-- Dispatch 3 parallel Explorers (`teamwork_preview_explorer`):
-  - **Explorer 1**: Inspect Routines main screen structure, components, styles, data model, and day picker logic.
-  - **Explorer 2**: Inspect `HabitDetail.vue` (#routines/habit-[ID]), sub-tasks component, notes/journal logic, heatmap component, and streak calculations.
-  - **Explorer 3**: Inspect modals, bottom sheets, drawer system, and mobile viewport styling / zero-scroll constraints.
+### Phase 1: Codebase Discovery & Assessment
+- Spawn 3 `teamwork_preview_explorer` subagents to analyze:
+  1. Backend (Laravel API controllers, routes, models, middleware, validation rules).
+  2. Frontend (Vue components, store.js / state management, services/API calls).
+  3. Environment & Testing Setup (PHPUnit config, JS test runner/Jest/Vitest/Playwright/Cypress configs, package.json scripts, database setup).
+- Synthesize findings into `PROJECT.md` and define milestone boundaries.
 
-### Phase 2: Implementation (M2 - M4)
-- **M2 (Main Screen Redesign)**: Dispatch Implementer (`teamwork_preview_worker`) to redesign Main Screen header (glassmorphism), day picker bar, routine cards, and thumb-friendly check buttons.
-- **M3 (Habit Detail View Redesign)**: Dispatch Implementer (`teamwork_preview_worker`) to redesign `HabitDetail.vue` with progress ring header + streak counter 🔥, sub-tasks checklist, habit journal notes interface, and monthly heatmap calendar grid.
-- **M4 (Bottom Sheets Drawers)**: Dispatch Implementer (`teamwork_preview_worker`) to implement / refine bottom sheets for checking, stats, details, and creation.
+### Phase 2: Dual-Track Execution Setup
+- **Track 1: E2E & Unit Testing Suite Track**
+  - Spawn E2E / Test Suite creation team to construct comprehensive PHPUnit API test suite and JS unit/component test suite covering happy paths, edge cases, boundaries, security/validation flaws, and error handling.
+  - Publish `TEST_READY.md` once initial test suites are in place.
+- **Track 2: Code Audit & Implementation Track**
+  - Spawn worker subagents to inspect Laravel controllers, Vue components, and state management for logic errors, uncaught exceptions, race conditions, parameter validation gaps, and security risks.
 
-### Phase 3: Verification & Integrity Audit (M5)
-- Dispatch 2 Reviewers (`teamwork_preview_reviewer`) to verify code quality, UI elegance, zero horizontal overflow, and mobile thumb ergonomics.
-- Dispatch 2 Challengers (`teamwork_preview_challenger`) to stress-test viewport responsiveness, component edge cases, sub-tasks, journal, heatmap, and verify `npm run build`.
-- Dispatch Forensic Auditor (`teamwork_preview_auditor`) to verify zero cheating, genuine implementation, and clean build.
+### Phase 3: Proactive Bug Fixing & Iterative Verification
+- Iterative loop (Explorer -> Worker -> Reviewer -> Challenger -> Forensic Auditor):
+  - Workers implement fixes for failing tests, audit findings, and edge-case exceptions.
+  - Reviewers review fixes for safety, side-effects, and architecture compliance.
+  - Challengers perform stress/boundary tests.
+  - Forensic Auditor performs non-negotiable integrity verification (no dummy mocks, no hardcoded values).
 
-## Quality Standards
-- Glassmorphism & modern mobile UI/UX styling.
-- Zero horizontal scrolling on 360px-430px screens.
-- Clean `npm run build` with zero errors.
+### Phase 4: Final Validation & Build Verification
+- Execute full test suite (PHPUnit + JS unit tests) aiming for 100% pass rate.
+- Run `npm run build` via worker to verify zero compilation/bundling errors.
+- Final Forensic Audit check.
+- Report completion to Sentinel.

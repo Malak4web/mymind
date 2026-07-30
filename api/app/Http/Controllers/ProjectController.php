@@ -5,30 +5,26 @@ namespace App\Http\Controllers;
 use App\Models\Project;
 use App\Models\Task;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProjectController extends Controller
 {
     public function index(Request $request)
     {
         $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
+
         $query = Project::with(['customFields', 'users', 'category'])->where('is_deleted', false);
 
-        if ($user && $user->role && $user->role->name !== 'مدير') {
-            $query->where(function ($q) use ($user) {
-                $q->whereHas('users', function ($uq) use ($user) {
-                    $uq->where('users.id', $user->id);
-                })->orDoesntHave('users');
+        if ($user->role && $user->role->name !== 'مدير') {
+            $query->whereHas('users', function ($uq) use ($user) {
+                $uq->where('users.id', $user->id);
             });
         }
 
         $projects = $query->get()->map(function ($p) {
-            if ($p->users->isEmpty()) {
-                $firstUser = \App\Models\User::first();
-                if ($firstUser) {
-                    $p->users()->attach($firstUser->id);
-                    $p->load('users');
-                }
-            }
             $pData = $p->toArray();
             $pData['member_ids'] = $p->users->pluck('id')->all();
             $pData['category_id'] = $p->category_id;
@@ -77,110 +73,112 @@ class ProjectController extends Controller
             }
         }
 
-        $project = Project::create([
-            'name' => $validated['name'],
-            'description' => $validated['description'] ?? null,
-            'statuses' => $statuses,
-            'category_id' => $validated['category_id'] ?? null
-        ]);
+        return DB::transaction(function () use ($request, $validated, $statuses, $customFields, $template) {
+            $project = Project::create([
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+                'statuses' => $statuses,
+                'category_id' => $validated['category_id'] ?? null
+            ]);
 
-        foreach ($customFields as $cf) {
-            if (!empty($cf['name']) && !empty($cf['type'])) {
-                \App\Models\CustomFieldDefinition::create([
-                    'project_id' => $project->id,
-                    'name' => $cf['name'],
-                    'type' => $cf['type'],
-                    'active' => true
-                ]);
+            foreach ($customFields as $cf) {
+                if (!empty($cf['name']) && !empty($cf['type'])) {
+                    \App\Models\CustomFieldDefinition::create([
+                        'project_id' => $project->id,
+                        'name' => $cf['name'],
+                        'type' => $cf['type'],
+                        'active' => true
+                    ]);
+                }
             }
-        }
 
-        // Auto-spawn tasks using task templates linked to project template
-        if ($template && !empty($template->task_template_ids)) {
-            foreach ($template->task_template_ids as $taskTemplateId) {
-                $taskTemplate = \App\Models\TaskTemplate::find($taskTemplateId);
-                if ($taskTemplate) {
-                    $title = $taskTemplate->name;
-                    $description = null;
-                    $status = $statuses[0];
-                    $priority = 'متوسط';
-                    $startDate = null;
-                    $deadline = null;
-                    $attachments = [];
-                    $customFieldsValues = [];
+            // Auto-spawn tasks using task templates linked to project template
+            if ($template && !empty($template->task_template_ids)) {
+                foreach ($template->task_template_ids as $taskTemplateId) {
+                    $taskTemplate = \App\Models\TaskTemplate::find($taskTemplateId);
+                    if ($taskTemplate) {
+                        $title = $taskTemplate->name;
+                        $description = null;
+                        $status = $statuses[0];
+                        $priority = 'متوسط';
+                        $startDate = null;
+                        $deadline = null;
+                        $attachments = [];
+                        $customFieldsValues = [];
 
-                    // Parse the dynamic fields array from custom_fields_values JSON
-                    if (!empty($taskTemplate->custom_fields_values) && is_array($taskTemplate->custom_fields_values)) {
-                        foreach ($taskTemplate->custom_fields_values as $f) {
-                            if (empty($f['type'])) continue;
-                            $fName = $f['name'] ?? '';
-                            $fVal = $f['value'] ?? '';
+                        // Parse the dynamic fields array from custom_fields_values JSON
+                        if (!empty($taskTemplate->custom_fields_values) && is_array($taskTemplate->custom_fields_values)) {
+                            foreach ($taskTemplate->custom_fields_values as $f) {
+                                if (empty($f['type'])) continue;
+                                $fName = $f['name'] ?? '';
+                                $fVal = $f['value'] ?? '';
 
-                            if ($f['type'] === 'title') {
-                                $title = $fVal;
-                            } elseif ($f['type'] === 'description' || $f['type'] === 'textarea') {
-                                $description = $fVal;
-                            } elseif ($f['type'] === 'status') {
-                                $status = $fVal;
-                            } elseif ($f['type'] === 'priority') {
-                                $priority = $fVal;
-                            } elseif ($f['type'] === 'date_start_offset') {
-                                $startDate = now()->addDays(intval($fVal))->toDateString();
-                            } elseif ($f['type'] === 'date_due_offset') {
-                                $deadline = now()->addDays(intval($fVal))->toDateString();
-                            } elseif ($f['type'] === 'attachment') {
-                                $attachments[] = $fVal;
-                            } elseif (in_array($f['type'], ['text', 'number', 'link'])) {
-                                $customFieldsValues[$fName] = $fVal;
+                                if ($f['type'] === 'title') {
+                                    $title = $fVal;
+                                } elseif ($f['type'] === 'description' || $f['type'] === 'textarea') {
+                                    $description = $fVal;
+                                } elseif ($f['type'] === 'status') {
+                                    $status = $fVal;
+                                } elseif ($f['type'] === 'priority') {
+                                    $priority = $fVal;
+                                } elseif ($f['type'] === 'date_start_offset') {
+                                    $startDate = now()->addDays(intval($fVal))->toDateString();
+                                } elseif ($f['type'] === 'date_due_offset') {
+                                    $deadline = now()->addDays(intval($fVal))->toDateString();
+                                } elseif ($f['type'] === 'attachment') {
+                                    $attachments[] = $fVal;
+                                } elseif (in_array($f['type'], ['text', 'number', 'link'])) {
+                                    $customFieldsValues[$fName] = $fVal;
+                                }
                             }
                         }
-                    }
 
-                    $task = \App\Models\Task::create([
-                        'project_id' => $project->id,
-                        'title' => $title,
-                        'description' => $description,
-                        'status' => $status,
-                        'start_date' => $startDate,
-                        'deadline' => $deadline,
-                        'priority' => $priority
-                    ]);
+                        $task = \App\Models\Task::create([
+                            'project_id' => $project->id,
+                            'title' => $title,
+                            'description' => $description,
+                            'status' => $status,
+                            'start_date' => $startDate,
+                            'deadline' => $deadline,
+                            'priority' => $priority
+                        ]);
 
-                    foreach ($attachments as $attName) {
-                        if (!empty($attName)) {
-                            \App\Models\Attachment::create([
-                                'task_id' => $task->id,
-                                'name' => $attName,
-                                'size' => '0 KB',
-                                'path' => 'attachments/placeholder.png'
-                            ]);
+                        foreach ($attachments as $attName) {
+                            if (!empty($attName)) {
+                                \App\Models\Attachment::create([
+                                    'task_id' => $task->id,
+                                    'name' => $attName,
+                                    'size' => '0 KB',
+                                    'path' => 'attachments/placeholder.png'
+                                ]);
+                            }
                         }
-                    }
 
-                    foreach ($customFieldsValues as $fieldName => $value) {
-                        $cfDef = \App\Models\CustomFieldDefinition::where('project_id', $project->id)
-                            ->where('name', $fieldName)
-                            ->first();
-                        if ($cfDef) {
-                            \App\Models\CustomFieldValue::create([
-                                'task_id' => $task->id,
-                                'custom_field_definition_id' => $cfDef->id,
-                                'value' => (string)$value
-                            ]);
+                        foreach ($customFieldsValues as $fieldName => $value) {
+                            $cfDef = \App\Models\CustomFieldDefinition::where('project_id', $project->id)
+                                ->where('name', $fieldName)
+                                ->first();
+                            if ($cfDef) {
+                                \App\Models\CustomFieldValue::create([
+                                    'task_id' => $task->id,
+                                    'custom_field_definition_id' => $cfDef->id,
+                                    'value' => (string)$value
+                                ]);
+                            }
                         }
                     }
                 }
             }
-        }
 
-        if ($request->has('member_ids') && is_array($request->member_ids)) {
-            $project->users()->sync($request->member_ids);
-        }
+            if ($request->has('member_ids') && is_array($request->member_ids)) {
+                $project->users()->sync($request->member_ids);
+            }
 
-        $pData = $project->load('users')->toArray();
-        $pData['member_ids'] = $project->users->pluck('id')->all();
+            $pData = $project->load('users')->toArray();
+            $pData['member_ids'] = $project->users->pluck('id')->all();
 
-        return response()->json($pData, 201);
+            return response()->json($pData, 201);
+        });
     }
 
     public function show($id)

@@ -1,30 +1,20 @@
-# Original User Request
+# ORIGINAL USER REQUEST
 
-## Request — 2026-07-30T16:39:34Z
+## 2026-07-30T14:48:38Z
 
-إعادة تصميم شاملة لكل الشاشات والصفحات الخاصة بـ "يومياتي" (الشاشة الرئيسية للعادات، شاشة تفاصيل العادة الداخلية HabitDetail.vue، اليوميات والملاحظات، شجرة المهام الفرعية، والتقويم الحراري للمتابعة) لتصبح تطبيق هاتف أصيل مودرن ومريح للعين مع الاستغلال الأمثل للمساحات دون تعقيد.
+You are the Project Orchestrator for the "mymind" audit, testing, and bug fixing campaign.
 
-Working directory: c:\xampp\htdocs\mymind
-Integrity mode: development
+Your working directory is: `c:\xampp\htdocs\mymind\.agents\orchestrator`
+The original user request is stored at: `c:\xampp\htdocs\mymind\.agents\ORIGINAL_REQUEST.md`
 
-## Requirements
+Requirements summary:
+1. R1: Comprehensive Function Analysis & Edge Cases Audit across Laravel API controllers, Vue components, and store.js.
+2. R2: End-to-End (E2E) & Unit Testing Suites (PHPUnit tests for Laravel API, Frontend unit/component tests, and integration scenarios).
+3. R3: Proactive Bug Fixing & Zero Regressions (Fix any exceptions/bugs found, ensure stability).
 
-### R1. الشاشة الرئيسية ليومياتي (Daily Routines Main Screen)
-- إعادة هيكلة الهيدر وكروت العادات وشريط الأيام الأسبوعي ليصبح بتنسيق زجاجي فاخر، مريح بصرياً ومستغل للمساحات الذكية مع أزرار تفقّد مريحة للإبهام.
+Acceptance Criteria:
+- 100% pass rate on PHPUnit & JS unit tests.
+- Comprehensive coverage of main and edge cases with zero hidden bugs.
+- Successful `npm run build` with zero errors.
 
-### R2. الشاشة الداخلية لتفاصيل العادة (HabitDetail.vue)
-- إعادة تصميم شاشة تفاصيل العادة المستقلة #routines/habit-[ID] بالكامل لتتضمن:
-  - هيدر إنجاز أنيق مع حلقة التقدم الدائرية وعداد السلسلة المتواصلة 🔥.
-  - قائمة المهام الفرعية التفاعلية (Sub-tasks Checklist) بتنسيق مخصص للموبايل.
-  - دفتر اليوميات والملاحظات (Habit Journal Notes) بواجهة كتابة واستعراض عصرية.
-  - تقويم التكرار الحراري الشهري (Monthly Heatmap Grid).
-
-### R3. سهولة اللمس وتجربة النوافذ المنبثقة (Mobile Bottom Sheets Drawers)
-- إتاحة جميع أدوات التفقّد والمتابعة والإحصائيات بلمسة إبهام واحدة مع فتح التفاصيل وإضافة العادات كـ Bottom Sheets منزلقة وسلسة.
-
-## Acceptance Criteria
-
-### [Design & Technical Audit]
-- [ ] واجهة مودرن مريحة للعين واستغلال ذكي للمساحات في جميع الشاشات الرئيسية والداخلية.
-- [ ] خلو العرض تماماً من أي تمرير أفقي غير مقشود على الهواتف الذكية (Width 360px to 430px).
-- [ ] نجاح التجميع الكامل npm run build بنسبة 100% ودون أي خطأ.
+Please begin by creating your working directory `.agents/orchestrator/`, writing `plan.md`, `progress.md`, and `context.md`, and spawning necessary specialized worker subagents to analyze the project, create test suites, execute tests, fix issues, and verify all requirements. Keep `progress.md` updated as milestones progress. When all work is done and verified, message Sentinel to report completion.

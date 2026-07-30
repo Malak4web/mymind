@@ -17,6 +17,7 @@ class AttachmentTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->authenticateUser();
         Storage::fake('public');
 
         $this->project = $this->postJson('/api/projects', [

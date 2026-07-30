@@ -1,83 +1,82 @@
-# BRIEFING — 2026-07-30T17:35:25+03:00
+# BRIEFING — 2026-07-30T17:48:43Z
 
 ## Mission
-Project Orchestrator for "Daily Routines ('يومياتي')" Redesign in c:\xampp\htdocs\mymind.
-Full mobile UI/UX redesign of Routines Main View, HabitDetail.vue (#routines/habit-[ID]), progress ring, streak 🔥, subtasks checklist, journal notes, monthly heatmap, and bottom sheets drawers. Zero unwanted horizontal scrolling on mobile, 100% successful `npm run build`.
+Orchestrate the mymind audit, E2E & unit testing, and bug fixing campaign to achieve 100% test pass rate, comprehensive edge-case coverage, zero hidden bugs, clean build, and verified code integrity.
 
 ## 🔒 My Identity
-- Archetype: Project Orchestrator
+- Archetype: teamwork_project_orchestrator
 - Roles: orchestrator, user_liaison, human_reporter, successor
 - Working directory: c:\xampp\htdocs\mymind\.agents\orchestrator
-- Original parent: parent
-- Original parent conversation ID: 0e1bdc4d-1a13-46cb-abfc-ec2f1c484a56
+- Original parent: Sentinel
+- Original parent conversation ID: c33ea55e-44bd-457a-aeec-8d19f60f7572
 
 ## 🔒 My Workflow
-- **Pattern**: Project Orchestrator
-- **Scope document**: c:\xampp\htdocs\mymind\.agents\orchestrator\PROJECT.md
-1. **Decompose**: M1 Exploration (Done), M2 Main Screen Redesign (Done), M3 Habit Detail View (`HabitDetail.vue`) (Done), M4 Bottom Sheets & Drawers (Done), M5 Verification & Audit (Done).
-2. **Dispatch & Execute**: Explorer -> Worker -> Reviewer -> Challenger -> Auditor loop per milestone.
-3. **On failure**: Retry -> Replace -> Skip -> Redistribute -> Redesign -> Escalate.
-4. **Succession**: Self-succeed at 16 spawns.
+- **Pattern**: Project Pattern
+- **Scope document**: c:\xampp\htdocs\mymind\PROJECT.md
+1. **Decompose**: Partition application into sub-orchestrated milestones / exploration tracks (Laravel API Backend, Vue Frontend Components & Pinia/Vuex Store, E2E Testing Suite Track).
+2. **Dispatch & Execute**:
+   - Spawning parallel exploration & E2E testing orchestrators/workers.
+   - Dual-track execution: E2E Testing Track + Implementation/Audit Track.
+   - Final milestone: Pass 100% E2E and Unit test suites, zero lints/build errors, forensic integrity audit verification.
+3. **On failure**: Retry → Replace → Skip (if non-critical) → Redistribute → Redesign → Escalate.
+4. **Succession**: Self-succeed at 16 subagent spawns.
+
+- **Work items**:
+  1. Milestone 1: Exploration & Codebase Analysis [DONE]
+  2. Milestone 2: Test Infra & Suite Setup (PHPUnit + JS Vitest) [in-progress]
+  3. Milestone 3: Audit, Bug Fixes & Regression Remediation [in-progress]
+  4. Milestone 4: Reviewer & Challenger Verification [pending]
+  5. Milestone 5: Forensic Integrity Audit & Build Validation [pending]
+
+- **Current phase**: 2
+- **Current focus**: Dual-Track Execution — Setting up JS test runner & test suite while dispatching bug fix workers.
 
 ## 🔒 Key Constraints
-- Never write or modify source code directly.
-- Never run build/test commands directly.
-- Delegate all work to subagents via invoke_subagent.
-- Hard veto on Forensic Auditor integrity violations.
+- NEVER write, modify, or create source code files directly.
+- NEVER run build/test commands yourself — require workers to do so.
+- MAY use file-editing tools ONLY for metadata/state files (.md) in .agents/ folder.
+- FORENSIC AUDITOR verdict is a non-negotiable binary veto.
+- 100% PHPUnit & JS unit test pass rate required.
+- `npm run build` must complete with 0 errors.
 
 ## Current Parent
-- Conversation ID: 0e1bdc4d-1a13-46cb-abfc-ec2f1c484a56
-- Updated: 2026-07-30T17:35:25+03:00
+- Conversation ID: c33ea55e-44bd-457a-aeec-8d19f60f7572
+- Updated: 2026-07-30T18:05:30Z
 
 ## Key Decisions Made
-- Initialized Project Orchestrator state files for Daily Routines ('يومياتي') Redesign project.
-- Planned 5 milestones: M1 (Exploration), M2 (Main Screen Redesign), M3 (Habit Detail View), M4 (Bottom Sheets Drawers), M5 (Verification & Audit).
-- Dispatched 3 parallel Explorers for Milestone M1 (Completed).
-- Dispatched Implementer M2 for Milestone M2 (Completed & Build Verified).
-- Dispatched Implementer M3 for Milestone M3 (Completed & Build Verified).
-- Dispatched Implementer M4 for Milestone M4 (Completed & Build Verified).
-- Dispatched Reviewers 1 & 2 (APPROVED), Challengers 1 & 2 (PASSED), and Forensic Auditor (CLEAN). All acceptance criteria 100% satisfied.
+- Synthesized findings from 3 exploration tracks into PROJECT.md.
+- Initiating Dual-Track Execution: Track 1 (Test Suite Worker) + Track 2 (Backend & Frontend Fix Worker).
 
 ## Team Roster
 | Agent | Type | Work Item | Status | Conv ID |
 |-------|------|-----------|--------|---------|
-| Explorer 1 | teamwork_preview_explorer | Routines Main Screen Architecture | Completed | 40bdeecd-427b-4040-802d-fb1d4818d079 |
-| Explorer 2 | teamwork_preview_explorer | HabitDetail View & Components | Completed | 515ba9e9-4e80-49c1-b7f6-d908697046f1 |
-| Explorer 3 | teamwork_preview_explorer | Bottom Sheets & Mobile Layout | Completed | 75e41bbd-00fe-434d-a4e5-0be988f75028 |
-| Implementer M2 | teamwork_preview_worker | Main Screen UI/UX Redesign | Completed | 84910821-5354-4845-a0eb-304d7cd9a1ef |
-| Implementer M3 | teamwork_preview_worker | Habit Detail View Redesign | Completed | 44edc367-c985-4fc6-bd74-4e8404771797 |
-| Implementer M4 | teamwork_preview_worker | Mobile Bottom Sheets & Drawers | Completed | 4d5cb9a4-9a73-4623-8a63-fdc9121575ac |
-| Reviewer 1 | teamwork_preview_reviewer | Code & UI Quality Audit | Completed (APPROVED) | 3587a7d7-95c1-472f-92a2-000088e71caa |
-| Reviewer 2 | teamwork_preview_reviewer | Mobile Usability Audit | Completed (APPROVED) | d591e7e6-6264-4ae1-9df5-2e404a4eb7b8 |
-| Forensic Auditor | teamwork_preview_auditor | Forensic Integrity Audit | Completed (CLEAN) | 8e06d350-14d2-486b-a50b-728a85131c4c |
-| Challenger 1 | teamwork_preview_challenger | Viewport & Build Stress Verification | Completed (PASSED) | 14c2b1f0-46a5-460b-a11d-83163a8ac8f1 |
-| Challenger 2 | teamwork_preview_challenger | Feature & Edge Case Verification | Completed (PASSED) | 2819d5f1-c2e9-43d4-a790-6343cd5504f3 |
+| Explorer (Backend Gen1) | teamwork_preview_explorer | Backend API Audit | Stalled/Replaced | 9a73ea22-e719-40e9-b897-509e42b6d122 |
+| Explorer (Backend Gen2) | teamwork_preview_explorer | Backend API Audit (Laravel in api/) | Completed | 3dd3807a-42b3-46cf-b08b-1f7c7917b3e9 |
+| Explorer (Frontend) | teamwork_preview_explorer | Vue Components & State Management Audit | Completed | 04bb386b-ffa4-4f42-9e28-8274cd76dfb7 |
+| Explorer (Infra) | teamwork_preview_explorer | Build & Test Infrastructure Assessment | Completed | 7c2ad8c9-d0fb-402d-98c8-1652fcf0cf06 |
+| Test Suite Worker | teamwork_preview_worker | Vitest Setup, JS & PHPUnit Test Suite | Completed | 0c1f7938-4713-42c5-9387-c9a0016f2c08 |
+| Bug Fix Worker | teamwork_preview_worker | Backend Security & Frontend Bug Remediation | Completed | 7de7c0d5-ac83-4190-9d6c-6c415f0538ca |
+| Reviewer 1 (Backend) | teamwork_preview_reviewer | Backend Code & Test Pass Review | In-Progress | 1ebde775-61a0-43dd-8e21-c0d12fdd33e6 |
+| Reviewer 2 (Frontend) | teamwork_preview_reviewer | Frontend Code & Build Pass Review | In-Progress | cd313a85-5004-4c63-885e-4fb76fcf970e |
+| Challenger 1 (Backend) | teamwork_preview_challenger | Backend API Stress Testing | Completed | 5bca64b1-2885-41a0-b5f2-58f514e8f32b |
+| Challenger 2 (Frontend) | teamwork_preview_challenger | Frontend State & Edge Cases Stress Testing | In-Progress | 484048bf-62de-4d8b-af96-f1d8d04c864f |
+| Forensic Auditor 1 | teamwork_preview_auditor | Forensic Code Integrity Verification | In-Progress | 4033cc73-623f-4eaa-b135-b8be04ec6f37 |
 
 ## Succession Status
 - Succession required: no
-- Spawn count: 14 / 16
-- Pending subagents: none
+- Spawn count: 11 / 16
+- Pending subagents: 1ebde775-61a0-43dd-8e21-c0d12fdd33e6, cd313a85-5004-4c63-885e-4fb76fcf970e, 5bca64b1-2885-41a0-b5f2-58f514e8f32b, 484048bf-62de-4d8b-af96-f1d8d04c864f, 4033cc73-623f-4eaa-b135-b8be04ec6f37
 - Predecessor: none
 - Successor: not yet spawned
 
 ## Active Timers
-- Heartbeat cron: task-25
+- Heartbeat cron: task-15
 - Safety timer: none
 
 ## Artifact Index
-- c:\xampp\htdocs\mymind\.agents\orchestrator\ORIGINAL_REQUEST.md — Original User Request
-- c:\xampp\htdocs\mymind\.agents\orchestrator\PROJECT.md — Project scope and milestones
-- c:\xampp\htdocs\mymind\.agents\orchestrator\progress.md — Execution progress tracking
-- c:\xampp\htdocs\mymind\.agents\orchestrator\plan.md — Detailed execution plan
-- c:\xampp\htdocs\mymind\.agents\orchestrator\handoff.md — Final Handoff Report
-- c:\xampp\htdocs\mymind\.agents\explorer_1\handoff.md — Main Screen Exploration Handoff
-- c:\xampp\htdocs\mymind\.agents\explorer_2\handoff.md — HabitDetail Exploration Handoff
-- c:\xampp\htdocs\mymind\.agents\explorer_3\handoff.md — Bottom Sheets & Layout Handoff
-- c:\xampp\htdocs\mymind\.agents\implementer_m2\handoff.md — M2 Main Screen Redesign Handoff
-- c:\xampp\htdocs\mymind\.agents\implementer_m3\handoff.md — M3 HabitDetail Redesign Handoff
-- c:\xampp\htdocs\mymind\.agents\implementer_m4\handoff.md — M4 Bottom Sheets Handoff
-- c:\xampp\htdocs\mymind\.agents\reviewer_m1_1\handoff.md — Reviewer 1 Handoff (APPROVED)
-- c:\xampp\htdocs\mymind\.agents\reviewer_m1_2\handoff.md — Reviewer 2 Handoff (APPROVED)
-- c:\xampp\htdocs\mymind\.agents\challenger_1\handoff.md — Challenger 1 Handoff (PASSED)
-- c:\xampp\htdocs\mymind\.agents\challenger_m4_1\handoff.md — Challenger 2 Handoff (PASSED)
-- c:\xampp\htdocs\mymind\.agents\victory_auditor\handoff.md — Forensic Integrity Audit Handoff (CLEAN)
+- c:\xampp\htdocs\mymind\.agents\orchestrator\ORIGINAL_REQUEST.md — Verbatim user request
+- c:\xampp\htdocs\mymind\.agents\orchestrator\BRIEFING.md — Persistent working memory
+- c:\xampp\htdocs\mymind\.agents\orchestrator\plan.md — Campaign execution plan
+- c:\xampp\htdocs\mymind\.agents\orchestrator\progress.md — Campaign progress log and heartbeat
+- c:\xampp\htdocs\mymind\.agents\orchestrator\context.md — Context and environment summary
+- c:\xampp\htdocs\mymind\PROJECT.md — Master project scope & architecture document

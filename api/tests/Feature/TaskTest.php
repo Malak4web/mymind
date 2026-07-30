@@ -14,6 +14,7 @@ class TaskTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->authenticateUser();
         
         // Create project helper for task relation
         $this->project = $this->postJson('/api/projects', [
@@ -52,6 +53,17 @@ class TaskTest extends TestCase
             'title' => 'مهمة خاطئة',
             'start_date' => '2026-07-20',
             'deadline' => '2026-07-15'
+        ];
+
+        $response = $this->postJson("/api/projects/{$this->project['id']}/tasks", $data);
+        $response->assertStatus(422);
+    }
+
+    public function test_handles_malformed_date_inputs_gracefully_with_422()
+    {
+        $data = [
+            'title' => 'مهمة تاريخ غير صالح',
+            'start_date' => 'invalid-date-string'
         ];
 
         $response = $this->postJson("/api/projects/{$this->project['id']}/tasks", $data);

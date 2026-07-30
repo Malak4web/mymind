@@ -26,9 +26,28 @@ class TaskController extends Controller
             'deadline' => 'nullable|date'
         ]);
 
+        if (!empty($validated['start_date'])) {
+            try {
+                new \DateTime($validated['start_date']);
+            } catch (\Throwable $e) {
+                return response()->json(['error' => 'تاريخ غير صالح'], 422);
+            }
+        }
+        if (!empty($validated['deadline'])) {
+            try {
+                new \DateTime($validated['deadline']);
+            } catch (\Throwable $e) {
+                return response()->json(['error' => 'تاريخ غير صالح'], 422);
+            }
+        }
+
         if (!empty($validated['start_date']) && !empty($validated['deadline'])) {
-            if (new \DateTime($validated['deadline']) < new \DateTime($validated['start_date'])) {
-                return response()->json(['error' => 'تاريخ التسليم لا يمكن أن يكون قبل تاريخ البدء'], 422);
+            try {
+                if (new \DateTime($validated['deadline']) < new \DateTime($validated['start_date'])) {
+                    return response()->json(['error' => 'تاريخ التسليم لا يمكن أن يكون قبل تاريخ البدء'], 422);
+                }
+            } catch (\Throwable $e) {
+                return response()->json(['error' => 'تاريخ غير صالح'], 422);
             }
         }
 
@@ -60,9 +79,28 @@ class TaskController extends Controller
         $start = $request->input('start_date', $task->start_date);
         $end = $request->input('deadline', $task->deadline);
 
+        if (!empty($start)) {
+            try {
+                new \DateTime($start);
+            } catch (\Throwable $e) {
+                return response()->json(['error' => 'تاريخ غير صالح'], 422);
+            }
+        }
+        if (!empty($end)) {
+            try {
+                new \DateTime($end);
+            } catch (\Throwable $e) {
+                return response()->json(['error' => 'تاريخ غير صالح'], 422);
+            }
+        }
+
         if (!empty($start) && !empty($end)) {
-            if (new \DateTime($end) < new \DateTime($start)) {
-                return response()->json(['error' => 'تاريخ التسليم لا يمكن أن يكون قبل تاريخ البدء'], 422);
+            try {
+                if (new \DateTime($end) < new \DateTime($start)) {
+                    return response()->json(['error' => 'تاريخ التسليم لا يمكن أن يكون قبل تاريخ البدء'], 422);
+                }
+            } catch (\Throwable $e) {
+                return response()->json(['error' => 'تاريخ غير صالح'], 422);
             }
         }
 

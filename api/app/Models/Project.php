@@ -18,6 +18,15 @@ class Project extends Model
         'is_deleted' => 'boolean',
     ];
 
+    protected static function booted()
+    {
+        static::creating(function ($project) {
+            if (empty($project->statuses)) {
+                $project->statuses = ['بانتظار البدء', 'قيد العمل', 'تحت المراجعة', 'مكتمل'];
+            }
+        });
+    }
+
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class);
@@ -36,5 +45,15 @@ class Project extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(ProjectCategory::class, 'category_id');
+    }
+
+    public function folders(): HasMany
+    {
+        return $this->hasMany(Folder::class);
+    }
+
+    public function notes(): HasMany
+    {
+        return $this->hasMany(Note::class);
     }
 }

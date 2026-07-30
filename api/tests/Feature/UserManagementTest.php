@@ -58,10 +58,9 @@ class UserManagementTest extends TestCase
 
     public function test_admin_can_list_users()
     {
-        $token = $this->adminUser->createToken('admin-token')->plainTextToken;
+        \Laravel\Sanctum\Sanctum::actingAs($this->adminUser);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
-                         ->getJson('/api/users');
+        $response = $this->getJson('/api/users');
 
         $response->assertStatus(200)
                  ->assertJsonCount(2);
@@ -69,17 +68,16 @@ class UserManagementTest extends TestCase
 
     public function test_member_cannot_list_users()
     {
-        $token = $this->normalUser->createToken('member-token')->plainTextToken;
+        \Laravel\Sanctum\Sanctum::actingAs($this->normalUser);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
-                         ->getJson('/api/users');
+        $response = $this->getJson('/api/users');
 
         $response->assertStatus(403);
     }
 
     public function test_admin_can_create_user_with_role()
     {
-        $token = $this->adminUser->createToken('admin-token')->plainTextToken;
+        \Laravel\Sanctum\Sanctum::actingAs($this->adminUser);
 
         $data = [
             'name' => 'عضو جديد',
@@ -88,8 +86,7 @@ class UserManagementTest extends TestCase
             'role_id' => $this->memberRole->id
         ];
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
-                         ->postJson('/api/users', $data);
+        $response = $this->postJson('/api/users', $data);
 
         $response->assertStatus(201)
                  ->assertJsonPath('email', 'newmember@mymind.com');
@@ -99,10 +96,9 @@ class UserManagementTest extends TestCase
 
     public function test_admin_can_update_user_role()
     {
-        $token = $this->adminUser->createToken('admin-token')->plainTextToken;
+        \Laravel\Sanctum\Sanctum::actingAs($this->adminUser);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
-                         ->putJson("/api/users/{$this->normalUser->id}", [
+        $response = $this->putJson("/api/users/{$this->normalUser->id}", [
                              'name' => 'سارة المعدلة',
                              'role_id' => $this->adminRole->id
                          ]);
@@ -115,7 +111,7 @@ class UserManagementTest extends TestCase
 
     public function test_admin_can_delete_user()
     {
-        $token = $this->adminUser->createToken('admin-token')->plainTextToken;
+        \Laravel\Sanctum\Sanctum::actingAs($this->adminUser);
 
         $userToDelete = User::create([
             'name' => 'عضو مؤقت',
@@ -124,8 +120,7 @@ class UserManagementTest extends TestCase
             'role_id' => $this->memberRole->id
         ]);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
-                         ->deleteJson("/api/users/{$userToDelete->id}");
+        $response = $this->deleteJson("/api/users/{$userToDelete->id}");
 
         $response->assertStatus(200);
 
