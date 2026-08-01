@@ -1,0 +1,64 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'feature/**'
+      - 'fix/**'
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  frontend-ci:
+    name: Build & Test Frontend (Vue + Vite)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Run Frontend Tests
+        run: npm run test --if-present
+
+      - name: Build Frontend
+        run: npm run build
+
+  backend-ci:
+    name: Build & Test Backend (Laravel API)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, bcmath, pdo_mysql, pdo_sqlite, ctype, xml, json, curl, tokenizer
+          coverage: none
+
+      - name: Install Backend Dependencies
+        run: |
+          cd api
+          composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare Environment & Run Tests
+        run: |
+          cd api
+          cp .env.example .env
+          php artisan key:generate
+          php artisan test

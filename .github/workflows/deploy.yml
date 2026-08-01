@@ -1,0 +1,95 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, bcmath, pdo_mysql, curl, xml, zip
+
+      - name: Install PHP Dependencies
+        run: |
+          cd api
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node Dependencies & Build Frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 173.212.237.82
+          username: root
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: 2212
+          source: "."
+          target: "/var/www/mind"
+          rm: false
+          strip_components: 0
+          tar_tmp_path: "/tmp"
+          exclude: |
+            .git
+            .github
+            node_modules
+            api/node_modules
+            api/vendor
+            storage/*.key
+            .env
+
+      - name: Execute Post-Deployment Scripts
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 173.212.237.82
+          username: root
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: 2212
+          script: |
+            cd /var/www/mind
+
+            # Install backend dependencies on remote target if needed
+            if [ -d "api" ]; then
+              cd api
+              composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+              
+              # Run database migrations
+              php artisan migrate --force
+
+              # Recreate storage symlink
+              php artisan storage:link --force || true
+
+              # Clear & cache application config, routes, views, and events
+              php artisan optimize:clear
+              php artisan config:cache
+              php artisan route:cache
+              php artisan view:cache
+              php artisan event:cache || true
+
+              # Set directory & file permissions safely
+              find . -type f -exec chmod 644 {} \;
+              find . -type d -exec chmod 755 {} \;
+              chmod +x artisan
+              chmod -R 775 storage bootstrap/cache
+              chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+            fi
