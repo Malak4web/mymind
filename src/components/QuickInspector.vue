@@ -79,6 +79,7 @@ const openFullModal = () => {
   if (!activeTask.value) return
   store.selectedTaskIdForModal = activeTask.value.id
   store.isTaskModalOpen = true
+  store.closeTaskInspector()
 }
 
 const triggerFileUpload = async () => {
@@ -131,7 +132,7 @@ const addQuickComment = () => {
 
 <template>
   <aside 
-    class="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xl space-y-4 text-right transition-all duration-300 flex flex-col max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-hide sticky top-20"
+    class="bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl border-l border-white/30 dark:border-slate-800/60 rounded-3xl p-5 shadow-2xl space-y-4 text-right transition-all duration-300 flex flex-col max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-hide sticky top-20"
     dir="rtl"
   >
     <!-- Inspector Header Bar -->

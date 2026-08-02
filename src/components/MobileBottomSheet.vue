@@ -100,11 +100,12 @@ onUnmounted(() => {
     <div 
       v-if="isOpen" 
       :class="[
-        'fixed inset-0 z-50 flex dir-rtl',
+        'fixed inset-0 z-50 flex dir-rtl mobile-bottom-sheet',
         drawerMode 
           ? 'items-end sm:items-stretch justify-center sm:justify-end' 
           : 'items-end sm:items-center justify-center p-0 sm:p-4'
       ]"
+      role="dialog"
       dir="rtl"
     >
       <!-- Backdrop Overlay -->

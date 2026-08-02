@@ -51,7 +51,7 @@ describe('Login.vue Component Tests', () => {
     await loginBtn.trigger('click')
 
     // Submit form with empty fields
-    await wrapper.find('form').trigger('submit.prevent')
+    await wrapper.find('form').trigger('submit')
 
     expect(wrapper.text()).toContain('يرجى إدخال البريد الإلكتروني وكلمة المرور')
     expect(store.isAuthenticated).toBe(false)
@@ -85,7 +85,7 @@ describe('Login.vue Component Tests', () => {
     await passwordInput.setValue('password123')
 
     // Submit
-    await wrapper.find('form').trigger('submit.prevent')
+    await wrapper.find('form').trigger('submit')
 
     expect(global.fetch).toHaveBeenCalledWith(
       `${store.apiBase}/login`,
@@ -111,7 +111,7 @@ describe('Login.vue Component Tests', () => {
     await wrapper.find('input[type="email"]').setValue('invalid@user.com')
     await wrapper.find('input[type="password"]').setValue('wrongpass')
 
-    await wrapper.find('form').trigger('submit.prevent')
+    await wrapper.find('form').trigger('submit')
 
     expect(wrapper.text()).toContain('بيانات الاعتماد غير صحيحة')
     expect(store.isAuthenticated).toBe(false)

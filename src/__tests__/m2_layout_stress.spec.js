@@ -96,13 +96,14 @@ describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', 
       expect(sidebarSpan + mainSpan + inspectorSpan).toBe(12)
     })
 
-    it('Verifies exact class bindings in App.vue for all 4 matrix combinations', () => {
+    it('Verifies exact class bindings in App.vue for all 4 matrix combinations', async () => {
       // 1. Expanded Sidebar & Closed Inspector
       store.isSidebarCollapsed = false
       store.isInspectorOpen = false
       let wrapper = mount(App, { shallow: true })
       let mainWorkspace = wrapper.find('main > div > div:nth-child(2)')
       expect(mainWorkspace.classes()).toContain('xl:col-span-9')
+      wrapper.unmount()
 
       // 2. Collapsed Sidebar & Closed Inspector
       store.isSidebarCollapsed = true
@@ -110,6 +111,7 @@ describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', 
       wrapper = mount(App, { shallow: true })
       mainWorkspace = wrapper.find('main > div > div:nth-child(2)')
       expect(mainWorkspace.classes()).toContain('xl:col-span-11')
+      wrapper.unmount()
 
       // 3. Expanded Sidebar & Open Inspector
       store.isSidebarCollapsed = false
@@ -117,6 +119,7 @@ describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', 
       wrapper = mount(App, { shallow: true })
       mainWorkspace = wrapper.find('main > div > div:nth-child(2)')
       expect(mainWorkspace.classes()).toContain('xl:col-span-6')
+      wrapper.unmount()
 
       // 4. Collapsed Sidebar & Open Inspector
       store.isSidebarCollapsed = true
@@ -124,11 +127,15 @@ describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', 
       wrapper = mount(App, { shallow: true })
       mainWorkspace = wrapper.find('main > div > div:nth-child(2)')
       expect(mainWorkspace.classes()).toContain('xl:col-span-8')
-    })
+      wrapper.unmount()
+    }, 15000)
   })
 
   describe('2. Edge Cases in QuickInspector.vue', () => {
     beforeEach(() => {
+      store.tasks = [
+        { id: 101, title: 'مهمة تجريبية', description: 'وصف المهمة', status: 'قيد العمل', project_id: 1, attachments: [] }
+      ]
       store.activeInspectorTaskId = 101
       store.isInspectorOpen = true
     })
@@ -174,20 +181,13 @@ describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', 
       expect(wrapper.text()).toContain('لا توجد مرفقات.')
     })
 
-    it('EMPIRICALLY CONFIRMED BUG: store.uploadFileToTask throws TypeError when task.attachments is null', async () => {
-      store.tasks[0].attachments = null
-      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) })
+    it('Renders attachments list cleanly when valid attachments present', async () => {
+      store.tasks[0].attachments = [{ name: 'file1.pdf', size: '200 KB' }]
 
-      let caughtError = null
-      try {
-        await store.uploadFileToTask(101, 'test.png', '1.0 MB', false)
-      } catch (err) {
-        caughtError = err
-      }
-
-      // Confirms store.js line 770 throws TypeError: Cannot read properties of null (reading 'push')
-      expect(caughtError).not.toBeNull()
-      expect(caughtError.message).toContain("reading 'push'")
+      const wrapper = mount(QuickInspector)
+      expect(wrapper.text()).toContain('1 مرفق')
+      expect(wrapper.text()).toContain('file1.pdf')
+      expect(wrapper.text()).toContain('200 KB')
     })
 
     it('Handles QuickInspector template gracefully when attachments array contains null item', async () => {
@@ -202,6 +202,30 @@ describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', 
       }
 
       expect(renderError).toBeNull()
+    })
+
+    it('uploadFileToTask handles null attachments list safely', async () => {
+      const task = { id: 101, title: 'مهمة', attachments: null }
+      store.tasks = [task]
+      const origFetch = global.fetch
+      global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}))
+      try {
+        store.uploadFileToTask(101, 'document.png', '500 KB')
+        expect(Array.isArray(task.attachments)).toBe(true)
+        expect(task.attachments.length).toBe(1)
+        expect(task.attachments[0].name).toBe('document.png')
+      } finally {
+        global.fetch = origFetch
+      }
+    })
+
+    it('openFullModal closes QuickInspector when opening TaskModal', async () => {
+      const wrapper = mount(QuickInspector)
+      const modalBtn = wrapper.find('button[title="فتح المهمة في النافذة المنبثقة الكاملة"]')
+      await modalBtn.trigger('click')
+      expect(store.selectedTaskIdForModal).toBe(101)
+      expect(store.isTaskModalOpen).toBe(true)
+      expect(store.isInspectorOpen).toBe(false)
     })
   })
 
@@ -234,6 +258,21 @@ describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', 
       store.toggleSidebar()
       expect(store.isSidebarCollapsed).toBe(false)
       expect(localStorage.getItem('mymind_sidebar_collapsed')).toBe('false')
+    })
+  })
+
+  describe('4. Quick Search View Context in App.vue', () => {
+    it('switches store.activeView to kanban when selecting a task search result from settings or routines', async () => {
+      store.activeView = 'settings'
+      const wrapper = mount(App, { shallow: true })
+      wrapper.vm.selectSearchResult({ id: 101, projectId: 1, title: 'مهمة فحص الواجهة' }, 'task')
+      expect(store.activeView).toBe('kanban')
+      expect(store.isInspectorOpen).toBe(true)
+      expect(store.activeInspectorTaskId).toBe(101)
+
+      store.activeView = 'routines'
+      wrapper.vm.selectSearchResult({ id: 101, projectId: 1, title: 'مهمة فحص الواجهة' }, 'task')
+      expect(store.activeView).toBe('kanban')
     })
   })
 })

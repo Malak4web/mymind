@@ -1,50 +1,46 @@
-# Master Plan: Desktop Layout & UX Restructuring for mymind
+# Master Plan: Mobile UX/UI Redesign for Daily Routines & Habits (اليوميات والعادات)
 
 ## Strategic Objectives
-1. **Desktop Layout & UX Restructuring (R1)**:
-   - Optimize wide-screen layout (1440px+ and 1080px+ desktop resolutions).
-   - Ergonomic multi-column desktop architecture (Collapsible navigation sidebar, flexible central main workspace, quick-action side panel / preview inspector).
-   - Improved top bar navigation with breadcrumbs, quick search, project switcher, and theme/view toggles.
+1. **Segmented Control & Touch Navigation (R1)**:
+   - Mobile segmented control ("اليوميات" | "العادات") visible and intuitive on mobile viewports (< 768px).
+   - Horizontal touch/swipe gesture support for smooth switching between Daily Reflection Notes and Habit Tracking.
 
-2. **Modern Ergonomic Aesthetic & Accessibility (R2)**:
-   - Premium Glassmorphism design tokens (backdrop blur, translucent glass cards, border glow, high contrast typography).
-   - High-Contrast, accessible typography scaling and color contrast ratios.
-   - Smooth CSS / Tailwind micro-animations (hover effects, tab transitions, quick access drawer toggles, interactive card elevations).
-   - Single-click quick access to core tools, active projects, recent documents, and rapid creation actions.
+2. **Mobile Ergonomics & Habit Cards Redesign (R2)**:
+   - Thumb-friendly habit cards with minimum 44x44px touch target sizes and visual completion feedback.
+   - Compact progress gauge & streak counter top bar on mobile without screen clutter.
+   - Enhanced mobile daily notes with smooth inline journal editing and quick floating/fixed submit action.
 
-3. **Clean Build & Zero Regressions (R3)**:
-   - Validate full project build (`npm run build`).
-   - Run Vitest unit & component test suite (100% pass).
-   - Verify frontend server and route responsiveness without runtime exceptions or data corruption.
+3. **Automated Test Coverage & Verification (R3)**:
+   - Update and expand Vitest test suite (`src/__tests__/DailyRoutines.spec.js`) to cover mobile segmented control, swipe gesture handling, habit check-in state logic, and mobile daily notes.
+   - Ensure 100% pass rate on `npm test` / `npx vitest run` and zero build errors on `npm run build`.
 
 ## Milestones & Decomposition
 
 ### Milestone 1: Exploration & Codebase Analysis
-- **Goal**: Analyze current Vue 3 layout components (`App.vue`, `src/components/`, `src/views/`), CSS / Tailwind setup, store state (`src/store.js`), and existing UI/UX structure.
+- **Goal**: Analyze current `DailyRoutines.vue`, `src/__tests__/DailyRoutines.spec.js`, `store.js`, responsive styles, and touch event handling.
 - **Workers**: 3 Explorers (`teamwork_preview_explorer`) in parallel.
-- **Deliverables**: Comprehensive exploration report identifying existing components, CSS structure, grid/flex layouts, visual touchpoints, and refactoring entry points.
+- **Deliverables**: Comprehensive analysis report detailing existing implementation, structure, gesture integration points, and test expansion strategy.
 
-### Milestone 2: Desktop Layout & Wide-screen Architecture Restructuring
-- **Goal**: Restructure desktop layout for wide screens. Implement responsive multi-column layout (Collapsible Sidebar, Main Canvas/Workspace, Quick Action/Details Panel, Topbar Header).
+### Milestone 2: Segmented Control & Mobile Touch Navigation
+- **Goal**: Implement top segmented control ("اليوميات" | "العادات") and touch swipe gesture logic on mobile screens (< 768px).
 - **Workers**: Implementer (`teamwork_preview_worker`), Reviewers (`teamwork_preview_reviewer`), Challenger (`teamwork_preview_challenger`).
-- **Deliverables**: Updated layout components with wide-screen multi-column grid, responsive breakpoints, flex layout, zero overflow issues.
+- **Deliverables**: Updated `DailyRoutines.vue` with mobile segmented tabs and swipe gesture handlers.
 
-### Milestone 3: Glassmorphism Aesthetic, Typography & Micro-animations
-- **Goal**: Implement modern Glassmorphism visual tokens (backdrop-blur, border glows, elevated translucent cards), enhanced contrast typography, and CSS micro-animations.
+### Milestone 3: Mobile Ergonomics & Habit Cards Redesign
+- **Goal**: Redesign habit cards for mobile (min 44x44px touch targets), compact progress gauge & streak bar, and enhanced mobile daily notes UI.
 - **Workers**: Implementer (`teamwork_preview_worker`), Reviewers (`teamwork_preview_reviewer`), Challenger (`teamwork_preview_challenger`).
-- **Deliverables**: Updated styles, components with glassmorphism classes, typography tokens, smooth hover and micro-animation transitions.
+- **Deliverables**: Thumb-friendly mobile UI components in `DailyRoutines.vue`.
 
-### Milestone 4: Single-Click Quick Access & Navigation Ergonomics
-- **Goal**: Add single-click quick access toolbar/floating panel, quick project/tool switcher, keyboard shortcut hints, and streamlined action triggers.
-- **Workers**: Implementer (`teamwork_preview_worker`), Reviewers (`teamwork_preview_reviewer`), Challenger (`teamwork_preview_challenger`).
-- **Deliverables**: Single-click access bar, quick action modal/drawer, rapid tool shortcuts.
+### Milestone 4: Automated Test Suite Expansion (`DailyRoutines.spec.js`)
+- **Goal**: Expand Vitest unit/component tests to cover segmented control, touch swipe triggers, habit check-in, notes submit, and state updates.
+- **Workers**: Implementer (`teamwork_preview_worker`), Reviewer (`teamwork_preview_reviewer`).
+- **Deliverables**: Passing test suite with 100% pass rate (`npx vitest run`) and clean build (`npm run build`).
 
-### Milestone 5: Verification, Review & Clean Build
-- **Goal**: Verify full build (`npm run build`), test suite execution (`npm run test`), layout regression testing, and responsiveness checks.
-- **Workers**: Reviewers & Challengers.
-- **Deliverables**: Build output log, test execution report, quality verification report.
+### Milestone 5: Review, Stress Testing & Forensic Integrity Audit
+- **Goal**: Independent review, empirical stress testing, and forensic integrity audit.
+- **Workers**: Reviewers (`teamwork_preview_reviewer`), Challenger (`teamwork_preview_challenger`), Forensic Auditor (`teamwork_preview_auditor`).
+- **Deliverables**: CLEAN audit verdict, 0 test failures, verified build.
 
-### Milestone 6: Forensic Integrity Audit & Final Victory Claim
-- **Goal**: Perform independent forensic audit (`teamwork_preview_auditor`), confirm ZERO integrity violations, publish completion report, notify Sentinel.
-- **Workers**: Forensic Auditor (`teamwork_preview_auditor`).
-- **Deliverables**: CLEAN audit report, Sentinel final notification.
+### Milestone 6: Final Verification & Victory Claim
+- **Goal**: Final verification and victory claim to Sentinel.
+- **Deliverables**: Comprehensive handoff report and victory notification.

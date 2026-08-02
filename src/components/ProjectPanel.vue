@@ -357,7 +357,7 @@ const handleTouchEnd = (closeFn) => {
     <!-- ═══════════════════════════════════════════ -->
     <!--  CATEGORY PILLS BAR                        -->
     <!-- ═══════════════════════════════════════════ -->
-    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4 shadow-[0_4px_12px_rgba(0,0,0,0.01)]">
+    <div class="glass-card rounded-2xl p-4 shadow-sm">
       <div class="flex items-center justify-between mb-3">
         <button 
           @click="showCategoryForm = !showCategoryForm"
@@ -543,7 +543,7 @@ const handleTouchEnd = (closeFn) => {
     <!-- ═══════════════════════════════════════════ -->
     <!--  PROJECTS LIST (filtered by category)      -->
     <!-- ═══════════════════════════════════════════ -->
-    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 shadow-[0_4px_12px_rgba(0,0,0,0.01)]">
+    <div class="glass-card rounded-2xl p-5 shadow-sm">
       <div class="flex items-center justify-between mb-4">
         <span class="text-[10px] font-bold text-slate-400">
           {{ filteredProjectsByCategory.length }} مشروع
@@ -573,10 +573,10 @@ const handleTouchEnd = (closeFn) => {
           @dragend="handleDragEnd"
           @click="store.activeProjectId = p.id"
           :class="[
-            'p-4 rounded-xl border text-right cursor-pointer transition-all duration-200 relative group flex items-start justify-between gap-3 overflow-hidden',
+            'p-4 rounded-xl text-right cursor-pointer transition-all duration-300 relative group flex items-start justify-between gap-3 overflow-hidden glass-card-hover btn-touch-active',
             store.activeProjectId === p.id 
-              ? 'bg-slate-50/60 dark:bg-slate-955/20 border-slate-350 dark:border-slate-700 shadow-sm' 
-              : 'border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700',
+              ? 'ring-2 ring-violet-500/50 shadow-glass-glow' 
+              : '',
             draggedProjectIndex === idx ? 'opacity-30 border-dashed border-violet-500 scale-95' : '',
             dragOverProjectIndex === idx && draggedProjectIndex !== idx ? 'ring-2 ring-violet-500 border-violet-500 bg-violet-50/40 dark:bg-violet-955/30' : ''
           ]"
@@ -810,7 +810,7 @@ const handleTouchEnd = (closeFn) => {
           @touchstart="handleTouchStart"
           @touchmove="handleTouchMove"
           @touchend="handleTouchEnd(() => showMemberModal = false)"
-          class="relative z-10 bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-md max-h-[85vh] overflow-y-auto w-full shadow-2xl space-y-5 text-right transform transition-all duration-300"
+          class="relative z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/30 dark:border-slate-700/60 shadow-2xl rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-md max-h-[85vh] overflow-y-auto w-full space-y-5 text-right transform transition-all duration-300"
         >
           <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto my-2.5 shrink-0 sm:hidden cursor-grab"></div>
 

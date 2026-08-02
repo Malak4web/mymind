@@ -198,7 +198,7 @@ const scrollToSection = (id) => {
           
           <button 
             @click="isLoginModalOpen = true"
-            class="bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-750 hover:to-indigo-750 text-white font-extrabold text-xs px-4 py-2 rounded-xl transition cursor-pointer shadow-md shadow-violet-500/10"
+            class="bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-750 hover:to-indigo-750 text-white font-extrabold text-xs px-4 py-2 rounded-xl transition cursor-pointer shadow-md shadow-violet-500/10 btn-touch-active hover:-translate-y-0.5 hover:shadow-glass-glow"
           >
             تسجيل الدخول
           </button>
@@ -231,7 +231,7 @@ const scrollToSection = (id) => {
           <div class="flex items-center gap-4 flex-wrap pt-2">
             <button 
               @click="isLoginModalOpen = true"
-              class="bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-750 hover:to-indigo-750 text-white font-extrabold text-sm px-7 py-3.5 rounded-2xl transition cursor-pointer shadow-lg shadow-violet-500/20 transform hover:-translate-y-0.5 duration-200"
+              class="bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-750 hover:to-indigo-750 text-white font-extrabold text-sm px-7 py-3.5 rounded-2xl transition cursor-pointer shadow-lg shadow-violet-500/20 transform hover:-translate-y-0.5 hover:shadow-glass-glow duration-200 btn-touch-active"
             >
               ابدأ الاستخدام مجاناً
             </button>
@@ -438,7 +438,7 @@ const scrollToSection = (id) => {
                 <div>✓ أنيميشن احتفالي محفز وأصوات تشجيعية</div>
               </div>
             </div>
-            <button @click="isLoginModalOpen = true" class="w-full mt-6 bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-750 hover:to-indigo-750 text-white font-extrabold py-2.5 rounded-xl text-xs transition cursor-pointer shadow-md shadow-violet-500/10">اشترك الآن</button>
+            <button @click="isLoginModalOpen = true" class="w-full mt-6 bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-750 hover:to-indigo-750 text-white font-extrabold py-2.5 rounded-xl text-xs transition cursor-pointer shadow-md shadow-violet-500/10 btn-touch-active hover:-translate-y-0.5 hover:shadow-glass-glow">اشترك الآن</button>
           </div>
 
         </div>
@@ -532,7 +532,7 @@ const scrollToSection = (id) => {
             <button 
               type="submit" 
               :disabled="loading"
-              class="w-full bg-gradient-to-tr from-violet-600 to-indigo-650 hover:from-violet-750 hover:to-indigo-750 disabled:opacity-40 text-white font-extrabold py-3 rounded-xl text-sm transition cursor-pointer shadow-md shadow-violet-500/10 flex items-center justify-center gap-1.5"
+              class="w-full bg-gradient-to-tr from-violet-600 to-indigo-650 hover:from-violet-750 hover:to-indigo-750 disabled:opacity-40 text-white font-extrabold py-3 rounded-xl text-sm transition cursor-pointer shadow-md shadow-violet-500/10 flex items-center justify-center gap-1.5 btn-touch-active hover:-translate-y-0.5 hover:shadow-glass-glow"
             >
               <span v-if="loading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
               <span>تسجيل الدخول للنظام</span>

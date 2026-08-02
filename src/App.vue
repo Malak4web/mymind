@@ -50,6 +50,9 @@ const selectSearchResult = (item, type) => {
   if (type === 'project') {
     store.activeProjectId = item.id
   } else if (type === 'task') {
+    if (store.activeView === 'settings' || store.activeView === 'routines') {
+      store.activeView = 'kanban'
+    }
     if (item.projectId) store.activeProjectId = item.projectId
     store.openTaskInspector(item.id)
   }
@@ -212,7 +215,7 @@ watch(() => store.projects, (newProjects) => {
     <!-- Top Glassmorphic Navigation Header (Non-sticky, Hidden in Focus Mode) -->
     <header 
       v-if="!store.isFocusMode"
-      class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/80 z-30 shadow-sm sticky top-0 md:relative"
+      class="glass-header shadow-md z-30 sticky top-0 md:relative"
     >
       <!-- Desktop Navigation Header (hidden on mobile) -->
       <div class="hidden md:flex max-w-full w-full px-6 md:px-8 py-3 items-center justify-between gap-4 flex-wrap">
@@ -222,7 +225,7 @@ watch(() => store.projects, (newProjects) => {
           <!-- Sidebar Toggle Button (<< / >>) -->
           <button 
             @click="store.toggleSidebar()"
-            class="p-2 rounded-xl border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-955/40 hover:text-violet-600 dark:hover:text-violet-400 transition cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center font-bold text-xs shadow-sm"
+            class="p-2 rounded-xl border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-955/40 hover:text-violet-600 dark:hover:text-violet-400 transition cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center font-bold text-xs shadow-sm btn-touch-active"
             :title="store.isSidebarCollapsed ? 'توسيع القائمة الجانبية (>>)' : 'طَي القائمة الجانبية (<<)'"
           >
             <span>{{ store.isSidebarCollapsed ? '>>' : '<<' }}</span>
@@ -251,7 +254,7 @@ watch(() => store.projects, (newProjects) => {
           <!-- Quick Search trigger input button (Ctrl+K) -->
           <button 
             @click="isQuickSearchOpen = true"
-            class="bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/80 dark:hover:bg-slate-750 border border-slate-200/70 dark:border-slate-700/60 rounded-2xl px-3.5 py-2 text-xs text-slate-400 dark:text-slate-400 flex items-center gap-3 transition cursor-pointer shadow-inner min-w-[200px] justify-between"
+            class="bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/80 dark:hover:bg-slate-750 border border-slate-200/70 dark:border-slate-700/60 rounded-2xl px-3.5 py-2 text-xs text-slate-400 dark:text-slate-400 flex items-center gap-3 transition cursor-pointer shadow-inner min-w-[200px] justify-between btn-touch-active"
           >
             <div class="flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -265,20 +268,20 @@ watch(() => store.projects, (newProjects) => {
           <!-- Quick Create Button (+ إضافة جديدة) -->
           <button 
             @click="triggerQuickCreate"
-            class="bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-700 hover:to-indigo-700 text-white font-extrabold text-xs px-3.5 py-2 rounded-2xl shadow-md shadow-violet-500/20 transition cursor-pointer flex items-center gap-1.5 min-h-[40px]"
+            class="bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-700 hover:to-indigo-700 text-white font-extrabold text-xs px-3.5 py-2 rounded-2xl shadow-md shadow-violet-500/20 hover:-translate-y-0.5 hover:shadow-glass-glow transition-all duration-300 cursor-pointer flex items-center gap-1.5 min-h-[40px] btn-touch-active"
           >
             <span>+</span>
             <span>إضافة جديدة</span>
           </button>
 
           <!-- View Tabs Navigator -->
-          <div class="bg-slate-100/80 dark:bg-slate-955/80 border border-slate-200/50 dark:border-slate-855 p-1 rounded-2xl flex gap-1">
+          <div class="bg-slate-100/60 dark:bg-slate-955/60 backdrop-blur-md border border-white/40 dark:border-slate-800/60 p-1.5 rounded-2xl flex gap-1">
             <button 
               @click="setView('kanban')" 
               :class="[
-                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px]',
+                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px] btn-touch-active',
                 store.activeView === 'kanban' 
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200/40 dark:ring-slate-800' 
+                  ? 'glass-tab-active text-slate-900 dark:text-white shadow-sm' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-350'
               ]"
             >
@@ -290,9 +293,9 @@ watch(() => store.projects, (newProjects) => {
             <button 
               @click="setView('list')" 
               :class="[
-                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px]',
+                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px] btn-touch-active',
                 store.activeView === 'list' 
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200/40 dark:ring-slate-800' 
+                  ? 'glass-tab-active text-slate-900 dark:text-white shadow-sm' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-350'
               ]"
             >
@@ -304,9 +307,9 @@ watch(() => store.projects, (newProjects) => {
             <button 
               @click="setView('calendar')" 
               :class="[
-                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px]',
+                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px] btn-touch-active',
                 store.activeView === 'calendar' 
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200/40 dark:ring-slate-800' 
+                  ? 'glass-tab-active text-slate-900 dark:text-white shadow-sm' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-350'
               ]"
             >
@@ -318,9 +321,9 @@ watch(() => store.projects, (newProjects) => {
             <button 
               @click="setView('routines')" 
               :class="[
-                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px]',
+                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px] btn-touch-active',
                 store.activeView === 'routines' 
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200/40 dark:ring-slate-800 text-violet-600 dark:text-violet-400 font-extrabold' 
+                  ? 'glass-tab-active text-violet-600 dark:text-violet-400 font-extrabold shadow-sm' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-350'
               ]"
             >
@@ -332,9 +335,9 @@ watch(() => store.projects, (newProjects) => {
             <button 
               @click="goToSettings" 
               :class="[
-                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px]',
+                'px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[36px] btn-touch-active',
                 store.activeView === 'settings' 
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200/40 dark:ring-slate-800' 
+                  ? 'glass-tab-active text-slate-900 dark:text-white shadow-sm' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-350'
               ]"
             >
@@ -514,10 +517,10 @@ watch(() => store.projects, (newProjects) => {
           
           <!-- Selected Tasks / Routines Component container -->
           <div :class="[
-            'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-3xl p-4 sm:p-6 transition-all duration-500',
+            'glass-card rounded-3xl p-4 sm:p-6 transition-all duration-500',
             store.isFocusMode 
               ? 'shadow-2xl shadow-violet-500/[0.02] border-violet-500/20 dark:border-violet-900/35 ring-1 ring-violet-500/10' 
-              : 'shadow-[0_4px_12px_rgba(0,0,0,0.015)]'
+              : 'shadow-glass-md'
           ]">
             <div v-if="store.activeView === 'settings'">
               <Settings />

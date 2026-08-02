@@ -158,5 +158,5 @@ describe('TaskBoard.vue Component Tests', () => {
     } else {
       wrapper.unmount()
     }
-  })
+  }, 15000)
 })

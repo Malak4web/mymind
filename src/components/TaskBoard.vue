@@ -623,7 +623,7 @@ const bulkDelete = async () => {
         @dragleave="handleDragLeave"
         @drop="handleDrop(status)"
         :class="[
-          'bg-slate-50/50 dark:bg-slate-900/30 border border-slate-200/60 dark:border-slate-850 rounded-2xl p-4 flex flex-col space-y-4 min-h-[480px] transition-all duration-300 w-[85vw] sm:w-80 shrink-0 lg:w-full snap-center',
+          'bg-slate-100/40 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200/50 dark:border-slate-800/60 rounded-2xl p-4 flex flex-col space-y-4 min-h-[480px] transition-all duration-300 w-[85vw] sm:w-80 shrink-0 lg:w-full snap-center shadow-sm',
           activeDragOverColumn === status ? 'border-violet-500/80 bg-violet-500/[0.03] dark:bg-violet-900/[0.04]' : '',
           getColumnColorClass(status),
           selectedMobileStatus !== 'all' && selectedMobileStatus !== status ? 'hidden lg:flex' : 'flex'
@@ -669,7 +669,7 @@ const bulkDelete = async () => {
             @dragstart="handleDragStart(task.id)"
             @click="store.openTaskInspector(task.id)"
             @dblclick="openEditTask(task.id)"
-            class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-855 rounded-xl p-3.5 shadow-[0_2px_4px_rgba(0,0,0,0.01)] hover:shadow-md hover:border-slate-350 dark:hover:border-slate-700 hover:-translate-y-0.5 transition duration-200 cursor-grab active:cursor-grabbing select-none relative group space-y-2"
+            class="glass-card-hover rounded-xl p-3.5 shadow-sm hover:-translate-y-1 hover:shadow-glass-glow transition-all duration-300 btn-touch-active cursor-grab active:cursor-grabbing select-none relative group space-y-2"
             :title="task.title"
           >
             <!-- Selection Checkbox (Touch hit target min 44px top-left) -->
@@ -785,7 +785,7 @@ const bulkDelete = async () => {
     <!-- Floating Bulk Actions Bar (Responsive Mobile Stack / Sheet) -->
     <div 
       v-if="selectedTaskIds.length > 0"
-      class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl w-[calc(100%-2rem)] max-w-lg px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-6 z-40 animate-fade-in flex-row-reverse" 
+      class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl border border-violet-500/30 shadow-glass-glow rounded-2xl w-[calc(100%-2rem)] max-w-lg px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-6 z-40 animate-fade-in flex-row-reverse" 
       dir="rtl"
     >
       <span class="text-xs font-extrabold text-slate-800 dark:text-slate-200 shrink-0">

@@ -156,7 +156,7 @@ const getStatusPillStyle = (status) => {
 </script>
 
 <template>
-  <div class="space-y-5 text-right">
+  <div class="glass-card rounded-2xl p-5 shadow-glass-sm space-y-5 text-right">
     
     <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-855 pb-4">
       <h2 class="text-base font-extrabold text-slate-855 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">

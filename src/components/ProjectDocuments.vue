@@ -269,11 +269,10 @@ const handleTouchEnd = (closeFn) => {
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" v-else>
         
-        <!-- Render Folders -->
         <div 
           v-for="folder in currentFolders" 
           :key="'folder-' + folder.id"
-          class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-855 rounded-2xl p-4 flex items-center justify-between group hover:border-slate-350 dark:hover:border-slate-700 hover:shadow-sm transition cursor-pointer"
+          class="glass-card-hover rounded-2xl p-4 flex items-center justify-between group cursor-pointer btn-touch-active"
           @click="store.activeDocumentFolderId = folder.id"
         >
           <div class="flex items-center gap-3">
@@ -307,7 +306,7 @@ const handleTouchEnd = (closeFn) => {
         <div 
           v-for="file in currentFiles" 
           :key="'file-' + file.id"
-          class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-855 rounded-2xl p-4 flex items-center justify-between group hover:border-slate-350 dark:hover:border-slate-700 hover:shadow-sm transition cursor-pointer"
+          class="glass-card-hover rounded-2xl p-4 flex items-center justify-between group cursor-pointer btn-touch-active"
           @click="openFileInNewTab(file)"
         >
           <div class="flex items-center gap-3 min-w-0">
@@ -353,7 +352,7 @@ const handleTouchEnd = (closeFn) => {
         <div 
           v-for="note in currentNotes" 
           :key="'note-' + note.id"
-          class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-855 rounded-2xl p-4 flex items-center justify-between group hover:border-slate-350 dark:hover:border-slate-700 hover:shadow-sm transition cursor-pointer"
+          class="glass-card-hover rounded-2xl p-4 flex items-center justify-between group cursor-pointer btn-touch-active"
           @click="openEditNoteModal(note)"
         >
           <div class="flex items-center gap-3">

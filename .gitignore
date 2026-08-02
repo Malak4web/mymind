@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Temporary test scripts & subagent outputs
+.agents/
+*.txt
+*.flag
+run_*.js
+run_*.cjs
+verify_suite.cjs

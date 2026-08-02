@@ -88,6 +88,58 @@ export const store = reactive({
     ]
   })(),
 
+  // Daily Quick Tasks State (اليوميات)
+  dailyTasks: (() => {
+    try {
+      const saved = localStorage.getItem('mymind_daily_tasks')
+      if (saved) return JSON.parse(saved)
+    } catch (e) {
+      console.error('فشل تحميل اليوميات من التخزين المحلي', e)
+    }
+    return [
+      {
+        id: 101,
+        title: 'مراجعة أهداف اليوم والمهام الأكثر أهمية',
+        category: 'شخصي',
+        priority: 'عالية',
+        dueTime: '09:00',
+        completed: false,
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 102,
+        title: 'متابعة رسائل البريد الإلكتروني والرد السريع',
+        category: 'عمل',
+        priority: 'متوسطة',
+        dueTime: '10:30',
+        completed: true,
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 103,
+        title: 'تمارين الاستطالة والاستراحة الصباحية',
+        category: 'صحة',
+        priority: 'منخفضة',
+        dueTime: '12:00',
+        completed: false,
+        createdAt: new Date().toISOString()
+      }
+    ]
+  })(),
+
+  // Dynamic Categories for Daily Tasks & Routines
+  dailyTaskCategories: (() => {
+    try {
+      const saved = localStorage.getItem('mymind_daily_task_categories')
+      if (saved) return JSON.parse(saved)
+    } catch (e) {
+      console.error('فشل تحميل تصنيفات اليوميات من التخزين المحلي', e)
+    }
+    return ['عام', 'عمل', 'شخصي', 'صحة', 'دراسة', 'عاجل']
+  })(),
+
+
+
 
   // Navigation and UI States
   activeProjectId: null,
@@ -768,6 +820,7 @@ export const store = reactive({
     // Set temp local preview for responsive progress feedback
     const task = this.tasks.find(t => String(t.id) === String(taskId))
     if (task) {
+      if (!task.attachments) task.attachments = []
       const tempFile = { name, size, progress: 0, status: 'uploading' }
       task.attachments.push(tempFile)
 
@@ -1289,6 +1342,77 @@ export const store = reactive({
     }
   },
 
+  // Daily Tasks Management Methods (اليوميات)
+  saveDailyTasks() {
+    try {
+      localStorage.setItem('mymind_daily_tasks', JSON.stringify(this.dailyTasks))
+    } catch (e) {
+      console.error('فشل حفظ اليوميات في التخزين المحلي', e)
+    }
+  },
+
+  addDailyTask(taskData) {
+    const newTask = {
+      id: Date.now(),
+      category: 'عام',
+      priority: 'متوسطة',
+      dueTime: '',
+      completed: false,
+      createdAt: new Date().toISOString(),
+      ...taskData
+    }
+    this.dailyTasks = [newTask, ...this.dailyTasks]
+    this.saveDailyTasks()
+    return newTask
+  },
+
+  toggleDailyTask(id) {
+    const task = this.dailyTasks.find(t => String(t.id) === String(id))
+    if (task) {
+      task.completed = !task.completed
+      this.dailyTasks = [...this.dailyTasks]
+      this.saveDailyTasks()
+    }
+  },
+
+  deleteDailyTask(id) {
+    this.dailyTasks = this.dailyTasks.filter(t => String(t.id) !== String(id))
+    this.saveDailyTasks()
+  },
+
+  updateDailyTask(id, data) {
+    const taskIndex = this.dailyTasks.findIndex(t => String(t.id) === String(id))
+    if (taskIndex !== -1) {
+      this.dailyTasks[taskIndex] = { ...this.dailyTasks[taskIndex], ...data }
+      this.dailyTasks = [...this.dailyTasks]
+      this.saveDailyTasks()
+    }
+  },
+
+  // Daily Task Categories Management
+  saveDailyTaskCategories() {
+    try {
+      localStorage.setItem('mymind_daily_task_categories', JSON.stringify(this.dailyTaskCategories))
+    } catch (e) {
+      console.error('فشل حفظ تصنيفات اليوميات في التخزين المحلي', e)
+    }
+  },
+
+  addDailyTaskCategory(categoryName) {
+    const name = categoryName ? categoryName.trim() : ''
+    if (!name || this.dailyTaskCategories.includes(name)) return false
+    this.dailyTaskCategories = [...this.dailyTaskCategories, name]
+    this.saveDailyTaskCategories()
+    return true
+  },
+
+  deleteDailyTaskCategory(categoryName) {
+    if (categoryName === 'عام') return false
+    this.dailyTaskCategories = this.dailyTaskCategories.filter(c => c !== categoryName)
+    this.saveDailyTaskCategories()
+    return true
+  },
+
   // Habits Management Methods (يومياتي)
   saveHabits() {
     try {
@@ -1375,10 +1499,19 @@ export const store = reactive({
     if (!habit) return
     if (!habit.notesList) habit.notesList = []
     
+    let formattedDate = dateStr
+    if (!formattedDate) {
+      const now = new Date()
+      const y = now.getFullYear()
+      const m = String(now.getMonth() + 1).padStart(2, '0')
+      const d = String(now.getDate()).padStart(2, '0')
+      formattedDate = `${y}-${m}-${d}`
+    }
+
     const newNote = {
       id: Date.now(),
       content: content.trim(),
-      dateStr: dateStr || new Date().toISOString().split('T')[0],
+      dateStr: formattedDate,
       createdAt: new Date().toISOString()
     }
     habit.notesList.unshift(newNote)

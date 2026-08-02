@@ -256,7 +256,7 @@ const handleTouchEnd = () => {
         @touchstart="handleTouchStart"
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
-        class="relative z-10 bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-2xl max-h-[88vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl p-5 sm:p-8 space-y-5 text-right transform transition-all duration-300"
+        class="relative z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/30 dark:border-slate-700/60 shadow-2xl rounded-3xl w-full max-w-2xl max-h-[88vh] sm:max-h-[90vh] overflow-y-auto p-5 sm:p-8 space-y-5 text-right transform transition-all duration-300"
       >
         <!-- Mobile Drag Handle Bar -->
         <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto my-2.5 shrink-0 sm:hidden cursor-grab"></div>

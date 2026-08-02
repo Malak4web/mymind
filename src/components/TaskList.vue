@@ -329,7 +329,7 @@ const bulkDelete = async () => {
     </div>
 
     <!-- Desktop Table View (Hidden on Mobile) -->
-    <div class="hidden sm:block bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.005)]">
+    <div class="hidden sm:block glass-card rounded-2xl p-4 shadow-glass-sm overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-right border-collapse">
           <thead>
