@@ -2,7 +2,7 @@ import { reactive, watch } from 'vue'
 
 export const store = reactive({
   // Connection and Authentication
-  apiBase: 'http://127.0.0.1:8000/api',
+  apiBase: import.meta.env.VITE_API_BASE_URL || 'https://mind.zadians.com/api',
   token: localStorage.getItem('mymind_token') || '',
   isAuthenticated: false,
   currentUser: null,
