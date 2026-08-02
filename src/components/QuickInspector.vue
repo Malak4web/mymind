@@ -273,14 +273,14 @@ const addQuickComment = () => {
           <span class="text-[10px] text-slate-400 font-bold">{{ activeTask.attachments?.length || 0 }} مرفق</span>
         </div>
 
-        <div v-if="activeTask.attachments && activeTask.attachments.length > 0" class="space-y-1.5 max-h-36 overflow-y-auto">
+        <div v-if="activeTask.attachments && activeTask.attachments.filter(Boolean).length > 0" class="space-y-1.5 max-h-36 overflow-y-auto">
           <div 
-            v-for="(file, idx) in activeTask.attachments" 
+            v-for="(file, idx) in activeTask.attachments.filter(Boolean)" 
             :key="idx"
             class="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 text-xs"
           >
-            <span class="font-bold truncate text-slate-700 dark:text-slate-300 max-w-[180px]">{{ file.name }}</span>
-            <span class="text-[10px] font-mono text-slate-400">{{ file.size }}</span>
+            <span class="font-bold truncate text-slate-700 dark:text-slate-300 max-w-[180px]">{{ file?.name || 'ملف بدون اسم' }}</span>
+            <span class="text-[10px] font-mono text-slate-400">{{ file?.size || '' }}</span>
           </div>
         </div>
         <div v-else class="text-[11px] text-slate-400 italic">لا توجد مرفقات.</div>

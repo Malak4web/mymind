@@ -8,6 +8,22 @@ describe('TaskBoard.vue Component Tests', () => {
     localStorage.clear()
     vi.restoreAllMocks()
 
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url.includes('/tasks')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([
+            { id: 101, project_id: 1, title: 'مهمة تصميم', status: 'بانتظار البدء', deadline: '2026-08-01' },
+            { id: 102, project_id: 1, title: 'مهمة برمجة', status: 'قيد العمل', deadline: '2026-08-05' }
+          ])
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve([])
+      })
+    })
+
     store.activeProjectId = 1
     store.projects = [
       { id: 1, name: 'مشروع رئيسي', statuses: ['بانتظار البدء', 'قيد العمل', 'مكتمل'] }

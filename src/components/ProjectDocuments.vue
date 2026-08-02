@@ -29,8 +29,9 @@ onMounted(async () => {
 const breadcrumbs = computed(() => {
   const list = []
   let currentId = store.activeDocumentFolderId
+  const folders = Array.isArray(store.folders) ? store.folders : []
   while (currentId) {
-    const folder = store.folders.find(f => f.id === currentId)
+    const folder = folders.find(f => f.id === currentId)
     if (folder) {
       list.unshift(folder)
       currentId = folder.parent_id
@@ -43,15 +44,18 @@ const breadcrumbs = computed(() => {
 
 // Filter items belonging to the current directory
 const currentFolders = computed(() => {
-  return store.folders.filter(f => f.parent_id === store.activeDocumentFolderId)
+  const folders = Array.isArray(store.folders) ? store.folders : []
+  return folders.filter(f => f.parent_id === store.activeDocumentFolderId)
 })
 
 const currentFiles = computed(() => {
-  return store.projectFiles.filter(f => f.folder_id === store.activeDocumentFolderId)
+  const files = Array.isArray(store.projectFiles) ? store.projectFiles : []
+  return files.filter(f => f.folder_id === store.activeDocumentFolderId)
 })
 
 const currentNotes = computed(() => {
-  return store.notes.filter(n => n.folder_id === store.activeDocumentFolderId)
+  const notes = Array.isArray(store.notes) ? store.notes : []
+  return notes.filter(n => n.folder_id === store.activeDocumentFolderId)
 })
 
 // Folder actions
