@@ -229,6 +229,10 @@ describe('store.js State & Actions Unit Tests', () => {
   })
 
   describe('5. Habits & Routines Actions (Local Storage State)', () => {
+    beforeEach(() => {
+      store.habits = []
+    })
+
     it('addHabit() should append new habit and save to localStorage', () => {
       const initialCount = store.habits.length
       const newHabit = store.addHabit({ title: 'قراءة قرآن', category: 'روحانيات' })

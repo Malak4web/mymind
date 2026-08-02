@@ -1300,7 +1300,7 @@ export const store = reactive({
 
   addHabit(habitData) {
     const newHabit = {
-      id: Date.now(),
+      id: habitData.id || (Date.now() + Math.random()),
       logs: {},
       frequency: [0, 1, 2, 3, 4, 5, 6],
       timeOfDay: 'anytime',
