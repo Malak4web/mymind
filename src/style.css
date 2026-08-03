@@ -4,14 +4,14 @@
 
 @variant dark (&:where(.dark, .dark *));
 
-@theme {
-  --font-sans: 'Tajawal', system-ui, -apple-system, sans-serif;
-
 html, body {
   touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
   overflow-x: hidden;
 }
+
+@theme {
+  --font-sans: 'Tajawal', system-ui, -apple-system, sans-serif;
   
   /* Color Accents */
   --color-brand-50: #f5f3ff;
