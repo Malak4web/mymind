@@ -575,7 +575,7 @@ const handleDeleteDailyNote = (noteId) => {
 </script>
 
 <template>
-  <div class="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 relative overflow-x-hidden" @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd">
+  <div class="max-w-6xl mx-auto p-2 sm:p-3 relative overflow-x-hidden" @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd">
     
     <!-- Animated Confetti Overlay -->
     <div v-if="showConfetti" class="fixed inset-0 pointer-events-none z-50 overflow-hidden">
@@ -594,8 +594,8 @@ const handleDeleteDailyNote = (noteId) => {
     </div>
 
     <!-- Main Top Sticky Segmented Control (العادات vs اليوميات) with Glassmorphism & Active Sliding Pill Indicator -->
-    <div class="sticky top-0 z-30 mb-6 bg-white/80 dark:bg-slate-900/80 p-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-md backdrop-blur-xl glass-header">
-      <div class="relative flex items-center justify-between gap-2 p-1 bg-slate-100/90 dark:bg-slate-800/90 rounded-xl">
+    <div class="sticky top-0 z-30 mb-2 sm:mb-4 bg-white/80 dark:bg-slate-900/80 p-1 sm:p-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-md backdrop-blur-xl glass-header">
+      <div class="relative flex items-center justify-between gap-1.5 py-1 px-1.5 bg-slate-100/90 dark:bg-slate-800/90 rounded-xl">
         <!-- Active Sliding Pill Indicator -->
         <div
           class="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 shadow-md shadow-violet-600/30 transition-all duration-300 ease-out"
@@ -605,7 +605,7 @@ const handleDeleteDailyNote = (noteId) => {
         <button
           @click="activeTab = 'habits'"
           :class="[
-            'relative z-10 flex-1 px-4 py-2.5 rounded-xl font-extrabold text-sm transition-all duration-200 flex items-center justify-center gap-2 min-h-[44px] min-w-[44px] cursor-pointer',
+            'relative z-10 flex-1 px-3 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-1.5 min-h-[32px] sm:min-h-[44px] min-w-[32px] sm:min-w-[44px] cursor-pointer',
             activeTab === 'habits'
               ? 'text-white'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -613,7 +613,7 @@ const handleDeleteDailyNote = (noteId) => {
         >
           <span>⚡ العادات اليومية</span>
           <span :class="[
-            'px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-colors',
+            'px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold transition-colors',
             activeTab === 'habits' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
           ]">
             {{ activeHabits.length }}
@@ -623,7 +623,7 @@ const handleDeleteDailyNote = (noteId) => {
         <button
           @click="activeTab = 'journal'"
           :class="[
-            'relative z-10 flex-1 px-4 py-2.5 rounded-xl font-extrabold text-sm transition-all duration-200 flex items-center justify-center gap-2 min-h-[44px] min-w-[44px] cursor-pointer',
+            'relative z-10 flex-1 px-3 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-1.5 min-h-[32px] sm:min-h-[44px] min-w-[32px] sm:min-w-[44px] cursor-pointer',
             activeTab === 'journal'
               ? 'text-white'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -631,7 +631,7 @@ const handleDeleteDailyNote = (noteId) => {
         >
           <span>📝 اليوميات (تاسكات سريعة)</span>
           <span :class="[
-            'px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-colors',
+            'px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold transition-colors',
             activeTab === 'journal' ? 'bg-white/20 text-white' : 'bg-violet-500/15 text-violet-600 dark:text-violet-300'
           ]">
             {{ store.dailyTasks ? store.dailyTasks.length : 0 }}
@@ -641,20 +641,20 @@ const handleDeleteDailyNote = (noteId) => {
     </div>
 
     <!-- Mobile Sticky Compact Progress Gauge & Streak Bar (<768px) -->
-    <div class="block md:hidden sticky top-[68px] z-20 mb-6 p-3 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 shadow-md">
-      <div class="flex items-center justify-between gap-3 text-xs font-bold">
-        <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+    <div class="block md:hidden sticky top-[52px] z-20 mb-2 sm:mb-4 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 shadow-md">
+      <div class="flex items-center justify-between gap-2 text-xs font-bold">
+        <div class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0 text-[11px]">
           <span class="animate-pulse">🔥</span>
           <span>{{ totalActiveStreaks }} يوم streak</span>
         </div>
         <div class="flex-1 min-w-0 flex items-center gap-2">
-          <div class="w-full h-3 rounded-full bg-slate-200 dark:bg-slate-700/80 overflow-hidden p-0.5">
+          <div class="w-full h-1.5 sm:h-2 rounded-full bg-slate-200 dark:bg-slate-700/80 overflow-hidden">
             <div
               class="h-full bg-gradient-to-r from-violet-500 via-indigo-500 to-emerald-400 rounded-full transition-all duration-500"
               :style="{ width: `${activeTab === 'habits' ? selectedDateStats.percentage : dailyTasksStats.percentage}%` }"
             ></div>
           </div>
-          <span class="text-[11px] font-black text-violet-600 dark:text-violet-400 shrink-0">
+          <span class="text-[10px] font-black text-violet-600 dark:text-violet-400 shrink-0">
             {{ activeTab === 'habits' ? `${selectedDateStats.completed}/${selectedDateStats.total}` : `${dailyTasksStats.completed}/${dailyTasksStats.total}` }} ({{ activeTab === 'habits' ? selectedDateStats.percentage : dailyTasksStats.percentage }}%)
           </span>
         </div>
@@ -664,46 +664,46 @@ const handleDeleteDailyNote = (noteId) => {
     <!-- Habits Tab View -->
     <div v-if="activeTab === 'habits'">
       <!-- Top Glass Header Summary -->
-      <div class="relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border border-white/40 dark:border-slate-800/60 shadow-xl rounded-3xl p-5 md:p-8 overflow-hidden mb-6 sm:mb-8">
+      <div class="relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border border-white/40 dark:border-slate-800/60 shadow-xl rounded-2xl sm:rounded-3xl p-2.5 sm:p-4 overflow-hidden mb-2 sm:mb-4">
 
       <!-- Ambient Radial Glow Mesh -->
       <div class="absolute -top-24 -right-24 w-96 h-96 bg-gradient-to-tr from-violet-500/10 via-indigo-500/10 to-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
       <div class="absolute -bottom-24 -left-24 w-96 h-96 bg-gradient-to-bl from-indigo-500/10 via-teal-500/10 to-violet-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-      <div class="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+      <div class="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-6">
         
         <div>
-          <div class="flex items-center gap-2 mb-2">
-            <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1.5 shadow-sm animate-pulse">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1 shadow-sm animate-pulse">
               🔥 {{ totalActiveStreaks }} يوم مجموع السلاسل
             </span>
           </div>
-          <h2 class="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+          <h2 class="text-lg sm:text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
             يومياتي والعادات
           </h2>
-          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1 font-semibold">
+          <p class="text-[11px] sm:text-sm text-slate-600 dark:text-slate-300 mt-0.5 font-semibold leading-tight">
             سجل إنجازك اليومي، أو اضغط على أي عادة لملاحظة المعاينة والإحصائيات ✨
           </p>
         </div>
 
         <button 
           @click="isAddModalOpen = true"
-          class="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-black text-sm transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-violet-600/25 hover:scale-105 active:scale-95 min-h-[44px]"
+          class="w-full sm:w-auto px-4 py-2 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-black text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-lg shadow-violet-600/25 hover:scale-105 active:scale-95 min-h-[36px] sm:min-h-[44px]"
         >
-          <span class="text-base font-black">+</span>
+          <span class="text-sm sm:text-base font-black">+</span>
           <span>إضافة عادة</span>
         </button>
 
       </div>
 
       <!-- Date Navigator & Integrated Progress Gauge -->
-      <div class="relative z-10 mt-6 sm:mt-8 pt-6 border-t border-slate-200/80 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="relative z-10 mt-3 sm:mt-8 pt-3 sm:pt-6 border-t border-slate-200/80 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
         
-        <!-- Date Selector Stepper (360px mobile viewport compliance with min-w-0 and truncate) -->
-        <div class="flex items-center gap-1.5 sm:gap-2 bg-slate-100/80 dark:bg-slate-800/60 p-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/50 w-full sm:w-auto justify-between shadow-inner">
+        <!-- Date Selector Stepper -->
+        <div class="flex items-center gap-1 sm:gap-2 bg-slate-100/80 dark:bg-slate-800/60 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-slate-200/80 dark:border-slate-700/50 w-full sm:w-auto justify-between shadow-inner">
           <button 
             @click="changeDate(-1)" 
-            class="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0" 
+            class="p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 transition cursor-pointer min-h-[36px] min-w-[36px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center shrink-0" 
             title="اليوم السابق"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transform rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -718,7 +718,7 @@ const handleDeleteDailyNote = (noteId) => {
 
           <button 
             @click="changeDate(1)" 
-            class="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0" 
+            class="p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 transition cursor-pointer min-h-[36px] min-w-[36px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center shrink-0" 
             title="اليوم التالي"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -729,19 +729,19 @@ const handleDeleteDailyNote = (noteId) => {
           <button 
             v-if="!isToday" 
             @click="resetToToday" 
-            class="mr-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-violet-600 text-white hover:bg-violet-500 transition cursor-pointer min-h-[44px] flex items-center shrink-0 shadow-sm"
+            class="mr-1 px-2 py-1 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold bg-violet-600 text-white hover:bg-violet-500 transition cursor-pointer min-h-[32px] sm:min-h-[44px] flex items-center shrink-0 shadow-sm"
           >
             العودة
           </button>
         </div>
 
-        <!-- Integrated Daily Progress Gauge Bar -->
-        <div class="w-full sm:w-72 bg-slate-100/80 dark:bg-slate-800/50 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/50 shadow-inner">
-          <div class="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+        <!-- Integrated Daily Progress Gauge Bar (Desktop only, mobile uses top sticky gauge) -->
+        <div class="hidden md:block w-full sm:w-72 bg-slate-100/80 dark:bg-slate-800/50 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-200/80 dark:border-slate-700/50 shadow-inner">
+          <div class="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
             <span>إنجاز اليوم</span>
             <span class="text-violet-600 dark:text-violet-400 font-black">{{ selectedDateStats.completed }} من {{ selectedDateStats.total }} ({{ selectedDateStats.percentage }}%)</span>
           </div>
-          <div class="w-full h-3.5 rounded-full bg-slate-200 dark:bg-slate-700/80 overflow-hidden p-0.5">
+          <div class="w-full h-1.5 sm:h-2 rounded-full bg-slate-200 dark:bg-slate-700/80 overflow-hidden p-0.5">
             <div 
               class="h-full bg-gradient-to-r from-violet-500 via-indigo-500 to-emerald-400 transition-all duration-700 rounded-full shadow-sm"
               :style="{ width: `${selectedDateStats.percentage}%` }"
@@ -753,14 +753,14 @@ const handleDeleteDailyNote = (noteId) => {
     </div>
 
     <!-- Weekly Day Picker Bar (Sunday to Saturday) -->
-    <div class="mb-6 sm:mb-8 p-2 sm:p-3 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl rounded-3xl border border-white/40 dark:border-slate-800/60 shadow-xl">
+    <div class="mb-2 sm:mb-4 p-1.5 sm:p-3 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl rounded-2xl sm:rounded-3xl border border-white/40 dark:border-slate-800/60 shadow-xl">
       <div class="grid grid-cols-7 gap-1 sm:gap-2">
         <button 
           v-for="day in currentWeekDays" 
           :key="day.dateKey"
           @click="selectedDate = day.dateObj"
           :class="[
-            'relative flex flex-col items-center justify-center py-2 sm:py-3 px-0.5 rounded-2xl transition-all duration-300 cursor-pointer min-h-[64px] w-full min-w-0',
+            'relative flex flex-col items-center justify-center py-1 sm:py-3 px-0.5 rounded-xl sm:rounded-2xl transition-all duration-300 cursor-pointer min-h-[44px] sm:min-h-[64px] w-full min-w-0',
             day.isSelected
               ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/25 scale-105 ring-2 ring-violet-400/30'
               : 'bg-white/70 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/50'
@@ -781,7 +781,7 @@ const handleDeleteDailyNote = (noteId) => {
             <span 
               v-if="day.completionState === 'all'" 
               :class="[
-                'w-2 h-2 rounded-full transition-transform',
+                'w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full transition-transform',
                 day.isSelected ? 'bg-emerald-300 ring-2 ring-white/40' : 'bg-emerald-500 shadow-sm shadow-emerald-500/50'
               ]"
               title="جميع العادات مكتملة"
@@ -789,7 +789,7 @@ const handleDeleteDailyNote = (noteId) => {
             <span 
               v-else-if="day.completionState === 'partial'" 
               :class="[
-                'w-2 h-2 rounded-full transition-transform',
+                'w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full transition-transform',
                 day.isSelected ? 'bg-amber-300 ring-2 ring-white/40' : 'bg-amber-400 shadow-sm shadow-amber-400/50'
               ]"
               title="مكتمل جزئياً"
@@ -797,54 +797,54 @@ const handleDeleteDailyNote = (noteId) => {
             <span 
               v-else 
               :class="[
-                'w-1.5 h-1.5 rounded-full opacity-40',
+                'w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full opacity-40',
                 day.isSelected ? 'bg-white/60' : 'bg-slate-300 dark:bg-slate-600'
               ]"
             ></span>
 
-            <span v-if="day.isToday && !day.isSelected" class="w-1.5 h-1.5 rounded-full bg-violet-500 animate-ping"></span>
+            <span v-if="day.isToday && !day.isSelected" class="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-violet-500 animate-ping"></span>
           </div>
         </button>
       </div>
     </div>
 
     <!-- Empty State -->
-    <div v-if="activeHabits.length === 0" class="text-center py-16 bg-white/80 dark:bg-slate-900/80 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 p-8 shadow-sm">
-      <div class="w-16 h-16 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center mx-auto mb-4 text-3xl">
+    <div v-if="activeHabits.length === 0" class="text-center py-12 sm:py-16 bg-white/80 dark:bg-slate-900/80 rounded-2xl sm:rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 p-6 sm:p-8 shadow-sm">
+      <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center mx-auto mb-3 sm:mb-4 text-2xl sm:text-3xl">
         🌱
       </div>
-      <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">لا توجد عادات مخصصة لهذا اليوم</h3>
-      <p class="text-sm text-slate-400 mt-1 max-w-sm mx-auto">قم بإضافة عادتك الأولى واختيار أيام تكرارها البسيطة</p>
+      <h3 class="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">لا توجد عادات مخصصة لهذا اليوم</h3>
+      <p class="text-xs sm:text-sm text-slate-400 mt-1 max-w-sm mx-auto">قم بإضافة عادتك الأولى واختيار أيام تكرارها البسيطة</p>
       <button 
         @click="isAddModalOpen = true"
-        class="mt-5 px-6 py-2.5 rounded-xl bg-violet-600 text-white font-bold text-sm shadow-md hover:bg-violet-500 transition cursor-pointer min-h-[44px]"
+        class="mt-4 sm:mt-5 px-5 py-2 sm:px-6 sm:py-2.5 rounded-xl bg-violet-600 text-white font-bold text-xs sm:text-sm shadow-md hover:bg-violet-500 transition cursor-pointer min-h-[36px] sm:min-h-[44px]"
       >
         + إضافة عادة جديدة
       </button>
     </div>
 
-    <!-- Streamlined Modern Routine Cards List (Compact 2-Row Layout) -->
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+    <!-- Streamlined Modern Routine Cards List (High-Density Compact Layout) -->
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-2">
       
       <div 
         v-for="habit in activeHabits" 
         :key="habit.id"
         @click="openQuickDetail(habit)"
         :class="[
-          'group relative rounded-3xl p-4 sm:p-5 border transition-all duration-300 shadow-sm hover:shadow-xl cursor-pointer overflow-hidden flex flex-col justify-between gap-3',
+          'group relative rounded-2xl sm:rounded-3xl p-2.5 border transition-all duration-300 shadow-sm hover:shadow-xl cursor-pointer overflow-hidden flex flex-col justify-between gap-2',
           habit.logs?.[selectedDateKey]?.completed 
             ? 'border-emerald-500/50 bg-gradient-to-r from-emerald-50/40 to-teal-50/20 dark:from-emerald-950/20 dark:to-teal-950/10 shadow-emerald-500/5' 
             : 'border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 hover:border-violet-400 dark:hover:border-violet-600'
         ]"
       >
-        <!-- Row 1: Primary Habit Details & Ergonomic 56px Thumb-Friendly Check Button -->
-        <div class="flex items-center justify-between gap-3">
+        <!-- Row 1: Primary Habit Details & Sleek 32-36px Check-in Toggle -->
+        <div class="flex items-center justify-between gap-2">
           
-          <div class="flex items-center gap-3.5 min-w-0 flex-1">
+          <div class="flex items-center gap-2 min-w-0 flex-1">
             <!-- Icon Badge -->
             <div 
               :class="[
-                'w-12 h-12 sm:w-13 sm:h-13 rounded-2xl flex items-center justify-center text-2xl shadow-md bg-gradient-to-tr text-white transition-transform duration-300 group-hover:scale-110 shrink-0',
+                'w-9 h-9 rounded-xl flex items-center justify-center text-lg shadow-md bg-gradient-to-tr text-white transition-transform duration-300 group-hover:scale-110 shrink-0',
                 habit.color || 'from-violet-500 to-indigo-500'
               ]"
             >
@@ -853,29 +853,29 @@ const handleDeleteDailyNote = (noteId) => {
 
             <!-- Title, Category & Streak Badges -->
             <div class="min-w-0 flex-1">
-              <h4 class="text-base font-extrabold text-slate-900 dark:text-slate-50 truncate flex items-center gap-2">
+              <h4 class="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-slate-50 truncate flex items-center gap-1.5 leading-tight">
                 {{ habit.title }}
               </h4>
 
-              <div class="flex items-center gap-1.5 flex-wrap mt-1">
+              <div class="flex items-center gap-1 flex-wrap mt-0.5">
                 <!-- Category Badge -->
-                <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/60 shrink-0">
+                <span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/60 shrink-0 leading-tight">
                   {{ habit.category || 'عادات يومية' }}
                 </span>
 
                 <!-- Streak Counter Badge -->
-                <span class="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1 shrink-0">
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-0.5 shrink-0 leading-tight">
                   🔥 {{ getHabitStreak(habit) }} يوم
                 </span>
               </div>
             </div>
           </div>
 
-          <!-- Thumb-Friendly Check Button (56px x 56px with Spring Scale Micro-animations) -->
+          <!-- Sleek 32-36px Check-in Toggle Button -->
           <button 
             @click="(e) => handleToggleHabit(habit, selectedDateKey, e)"
             :class="[
-              'w-14 h-14 min-h-[56px] min-w-[56px] rounded-2xl flex items-center justify-center text-2xl font-black transition-all duration-300 shadow-md cursor-pointer shrink-0 transform active:scale-90 hover:scale-105',
+              'w-9 h-9 min-h-[36px] min-w-[36px] rounded-xl flex items-center justify-center text-base font-black transition-all duration-300 shadow-md cursor-pointer shrink-0 transform active:scale-90 hover:scale-105',
               habit.logs?.[selectedDateKey]?.completed
                 ? 'bg-gradient-to-tr from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30 scale-105 ring-2 ring-emerald-400/40'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-violet-600 hover:text-white hover:shadow-lg hover:shadow-violet-600/30 border border-slate-200 dark:border-slate-700'
@@ -883,23 +883,23 @@ const handleDeleteDailyNote = (noteId) => {
             title="تسجيل الإنجاز"
           >
             <span v-if="habit.logs?.[selectedDateKey]?.completed" class="animate-pulse">✓</span>
-            <span v-else class="text-xl font-black text-slate-400 group-hover:text-white">+</span>
+            <span v-else class="text-base font-black text-slate-400 group-hover:text-white">+</span>
           </button>
 
         </div>
 
         <!-- Row 2: Scheduled Days Overview & Secondary Action Controls -->
-        <div class="pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
+        <div class="pt-1.5 sm:pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-1.5">
           
           <!-- Scheduled Days Micro Dots / Pills Strip -->
-          <div class="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1">
-            <span class="text-[11px] font-bold text-slate-400 ml-1 shrink-0">الأيام:</span>
+          <div class="flex items-center gap-1 overflow-x-auto scrollbar-hide py-0.5">
+            <span class="text-[10px] sm:text-[11px] font-bold text-slate-400 ml-0.5 shrink-0">الأيام:</span>
             <button 
               v-for="day in getHabitScheduledDays(habit)" 
               :key="day.dateKey"
               @click="(e) => handleToggleHabitDay(habit, day, e)"
               :class="[
-                'px-2.5 py-1.5 rounded-xl flex items-center justify-center gap-1 text-[11px] font-extrabold transition-all cursor-pointer border min-h-[44px] min-w-[44px] shrink-0',
+                'px-1.5 py-1 sm:px-2.5 sm:py-1.5 rounded-lg sm:rounded-xl flex items-center justify-center gap-0.5 text-[10px] sm:text-[11px] font-extrabold transition-all cursor-pointer border min-h-[32px] min-w-[32px] sm:min-h-[44px] sm:min-w-[44px] shrink-0',
                 day.isCompleted
                   ? 'bg-emerald-500 text-white border-emerald-400 shadow-sm'
                   : day.isSelected
@@ -909,16 +909,16 @@ const handleDeleteDailyNote = (noteId) => {
               :title="`${day.dayName} (${day.dayNumber}) - ${day.isCompleted ? 'مكتمل' : 'انقر للتسجيل'}`"
             >
               <span>{{ day.dayName }}</span>
-              <span v-if="day.isCompleted" class="text-[10px]">✓</span>
+              <span v-if="day.isCompleted" class="text-[9px] sm:text-[10px]">✓</span>
             </button>
           </div>
 
           <!-- Secondary Actions (Full Detail, Stats Drawer & Delete Button) -->
-          <div class="flex items-center gap-1 shrink-0">
+          <div class="flex items-center gap-0.5 shrink-0">
             <!-- Expand into full #routines/habit-[ID] detail view -->
             <button 
               @click="(e) => openHabitDetail(habit, e)"
-              class="min-h-[44px] min-w-[44px] px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-300 hover:bg-violet-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center"
+              class="min-h-[32px] min-w-[32px] sm:min-h-[44px] sm:min-w-[44px] px-1.5 py-1 sm:px-2.5 sm:py-1.5 rounded-lg sm:rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-300 hover:bg-violet-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center"
               title="فتح التفاصيل الكاملة"
             >
               ↗
@@ -927,19 +927,19 @@ const handleDeleteDailyNote = (noteId) => {
             <!-- Stats Drawer Trigger -->
             <button 
               @click="(e) => openStatsDrawer(habit, e)"
-              class="min-h-[44px] min-w-[44px] px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-300 hover:bg-violet-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center gap-1"
+              class="min-h-[32px] min-w-[32px] sm:min-h-[44px] sm:min-w-[44px] px-1.5 py-1 sm:px-2.5 sm:py-1.5 rounded-lg sm:rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-300 hover:bg-violet-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center gap-0.5"
               title="عرض تقويم وإحصائيات العادة"
             >
               <span>📊</span>
             </button>
 
-            <!-- Delete Button (min 44px hit target) -->
+            <!-- Delete Button -->
             <button 
               @click="(e) => confirmDeleteHabit(habit, e)"
-              class="min-h-[44px] min-w-[44px] p-2.5 rounded-xl text-slate-300 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center"
+              class="min-h-[32px] min-w-[32px] sm:min-h-[44px] sm:min-w-[44px] p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl text-slate-300 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center"
               title="حذف العادة"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </button>
@@ -953,36 +953,36 @@ const handleDeleteDailyNote = (noteId) => {
     <!-- End Habits Tab View -->
 
     <!-- Daily Tasks / Journal Tab View -->
-    <div v-if="activeTab === 'journal'" class="space-y-6">
+    <div v-if="activeTab === 'journal'" class="space-y-4 sm:space-y-6">
       
       <!-- Top Glass Card for Quick Entry & Progress -->
-      <div class="relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border border-white/40 dark:border-slate-800/60 shadow-xl rounded-3xl p-5 md:p-8 overflow-hidden">
+      <div class="relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border border-white/40 dark:border-slate-800/60 shadow-xl rounded-2xl sm:rounded-3xl p-3 sm:p-5 md:p-8 overflow-hidden">
         
         <!-- Header Info & Progress Bar -->
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-6 pb-6 border-b border-slate-200/80 dark:border-slate-800">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-6 mb-4 sm:mb-6 pb-4 sm:pb-6 border-b border-slate-200/80 dark:border-slate-800">
           <div>
-            <div class="flex items-center gap-2 mb-1.5">
-              <span class="px-3 py-1 rounded-full text-xs font-black bg-violet-500/15 text-violet-600 dark:text-violet-300 border border-violet-500/30">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-violet-500/15 text-violet-600 dark:text-violet-300 border border-violet-500/30">
                 📌 مفكرة المهام اليومية السريعة
               </span>
             </div>
-            <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+            <h2 class="text-lg sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
               سجل اليوميات والتاسكات السريعة
             </h2>
-            <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
+            <p class="text-[11px] sm:text-sm text-slate-600 dark:text-slate-400 mt-0.5 leading-tight">
               أضف مهامك اليومية الخفيفة، صنفها حسب المجال، وتابع نسبة إنجازك اليومي 🚀
             </p>
           </div>
 
           <!-- Progress Gauge -->
-          <div class="w-full sm:w-72 bg-slate-100/80 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/50 shadow-inner">
-            <div class="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+          <div class="w-full sm:w-72 bg-slate-100/80 dark:bg-slate-800/50 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200/80 dark:border-slate-700/50 shadow-inner">
+            <div class="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
               <span>تقدم اليوميات</span>
               <span class="text-violet-600 dark:text-violet-400 font-black">
                 {{ dailyTasksStats.completed }} / {{ dailyTasksStats.total }} ({{ dailyTasksStats.percentage }}%)
               </span>
             </div>
-            <div class="w-full h-3.5 rounded-full bg-slate-200 dark:bg-slate-700/80 overflow-hidden p-0.5">
+            <div class="w-full h-1.5 sm:h-3.5 rounded-full bg-slate-200 dark:bg-slate-700/80 overflow-hidden p-0.5">
               <div
                 class="h-full bg-gradient-to-r from-violet-500 via-indigo-500 to-emerald-400 transition-all duration-700 rounded-full shadow-sm"
                 :style="{ width: `${dailyTasksStats.percentage}%` }"
@@ -992,25 +992,25 @@ const handleDeleteDailyNote = (noteId) => {
         </div>
 
         <!-- Quick Task Entry Form -->
-        <form @submit.prevent="handleCreateDailyTask" class="space-y-4">
-          <div class="flex flex-col md:flex-row gap-3">
+        <form @submit.prevent="handleCreateDailyTask" class="space-y-3 sm:space-y-4">
+          <div class="flex flex-col md:flex-row gap-2.5 sm:gap-3">
             <!-- Task Title Input -->
             <div class="flex-1 relative">
               <input
                 v-model="newDailyTaskTitle"
                 type="text"
                 placeholder="أضف مهمة جديدة لسجل يومياتك اليوم... (مثلاً: الاتصال بالعميل، مراجعة ملف الميزانية)"
-                class="w-full px-4 py-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500 transition min-h-[48px]"
+                class="w-full px-3.5 py-2.5 sm:px-4 sm:py-3.5 rounded-xl sm:rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500 transition min-h-[40px] sm:min-h-[48px]"
                 required
               />
             </div>
 
             <!-- Options Row: Category, Priority, Due Time, Submit -->
-            <div class="flex flex-wrap sm:flex-nowrap items-center gap-2">
+            <div class="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2">
               <!-- Category Selector -->
               <select
                 v-model="newDailyTaskCategory"
-                class="px-3 py-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer min-h-[48px]"
+                class="px-2.5 py-2 sm:px-3 sm:py-3 rounded-lg sm:rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer min-h-[36px] sm:min-h-[48px]"
               >
                 <option v-for="cat in dailyTaskCategories" :key="cat" :value="cat">🏷️ {{ cat }}</option>
               </select>
@@ -1018,7 +1018,7 @@ const handleDeleteDailyNote = (noteId) => {
               <!-- Priority Selector -->
               <select
                 v-model="newDailyTaskPriority"
-                class="px-3 py-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer min-h-[48px]"
+                class="px-2.5 py-2 sm:px-3 sm:py-3 rounded-lg sm:rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer min-h-[36px] sm:min-h-[48px]"
               >
                 <option value="منخفضة">🟢 منخفضة</option>
                 <option value="متوسطة">🟡 متوسطة</option>
@@ -1029,16 +1029,16 @@ const handleDeleteDailyNote = (noteId) => {
               <input
                 v-model="newDailyTaskTime"
                 type="time"
-                class="px-3 py-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer min-h-[48px]"
+                class="px-2.5 py-2 sm:px-3 sm:py-3 rounded-lg sm:rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer min-h-[36px] sm:min-h-[48px]"
                 title="تحديد موعد اختياري"
               />
 
               <!-- Submit Button -->
               <button
                 type="submit"
-                class="px-6 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-black text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-violet-600/20 active:scale-95 min-h-[48px] shrink-0"
+                class="px-4 py-2 sm:px-6 sm:py-3 rounded-lg sm:rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-black text-xs transition-all cursor-pointer flex items-center justify-center gap-1 shadow-md shadow-violet-600/20 active:scale-95 min-h-[36px] sm:min-h-[48px] shrink-0"
               >
-                <span class="text-base font-bold">+</span>
+                <span class="text-sm sm:text-base font-bold">+</span>
                 <span>إضافة</span>
               </button>
             </div>
@@ -1047,9 +1047,9 @@ const handleDeleteDailyNote = (noteId) => {
       </div>
 
       <!-- Daily Notes Inline Journal Editor (R2 Mobile Ergonomics & Daily Notes) -->
-      <div class="relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border border-white/40 dark:border-slate-800/60 shadow-xl rounded-3xl p-5 md:p-6 overflow-hidden">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+      <div class="relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border border-white/40 dark:border-slate-800/60 shadow-xl rounded-2xl sm:rounded-3xl p-3 sm:p-5 md:p-6 overflow-hidden">
+        <div class="flex items-center justify-between mb-2.5 sm:mb-3">
+          <h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-white flex items-center gap-1.5 sm:gap-2">
             <span>📖</span>
             <span>ملاحظات اليوميات الخفيفة</span>
           </h3>
@@ -1058,12 +1058,12 @@ const handleDeleteDailyNote = (noteId) => {
           </span>
         </div>
 
-        <form @submit.prevent="handleSaveDailyNote" class="space-y-3">
+        <form @submit.prevent="handleSaveDailyNote" class="space-y-2.5 sm:space-y-3">
           <div class="relative">
             <textarea
               v-model="dailyNoteInput"
               placeholder="اكتب ملاحظة أو خاطر سريع لسجل يومك اليوم..."
-              class="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500 transition min-h-[80px] resize-none"
+              class="w-full px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl sm:rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500 transition min-h-[70px] sm:min-h-[80px] resize-none"
               required
             ></textarea>
           </div>
@@ -1071,8 +1071,7 @@ const handleDeleteDailyNote = (noteId) => {
           <div class="flex items-center justify-end">
             <button
               type="submit"
-              @click.prevent="handleSaveDailyNote"
-              class="glass-fab-mobile px-6 py-2.5 rounded-xl text-white font-black text-xs cursor-pointer flex items-center justify-center gap-2 min-h-[44px] min-w-[44px]"
+              class="glass-fab-mobile px-4 py-2 sm:px-6 sm:py-2.5 rounded-xl text-white font-black text-xs cursor-pointer flex items-center justify-center gap-1.5 min-h-[36px] sm:min-h-[44px] min-w-[36px] sm:min-w-[44px]"
             >
               <span>💬 حفظ الملاحظة</span>
             </button>
@@ -1080,19 +1079,19 @@ const handleDeleteDailyNote = (noteId) => {
         </form>
 
         <!-- Saved Notes List -->
-        <div v-if="savedDailyNotes.length > 0" class="mt-4 space-y-2 pt-4 border-t border-slate-200/60 dark:border-slate-800">
+        <div v-if="savedDailyNotes.length > 0" class="mt-3 space-y-2 pt-3 border-t border-slate-200/60 dark:border-slate-800">
           <div
             v-for="note in savedDailyNotes"
             :key="note.id"
-            class="p-3 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700 flex items-start justify-between gap-3 text-xs"
+            class="p-2.5 sm:p-3 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700 flex items-start justify-between gap-2 text-xs"
           >
             <div class="flex-1 min-w-0">
-              <p class="font-semibold text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{{ note.content }}</p>
+              <p class="font-semibold text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-tight">{{ note.content }}</p>
               <span class="text-[10px] text-slate-400 font-bold block mt-1">⏰ {{ note.createdAt }}</span>
             </div>
             <button
               @click="handleDeleteDailyNote(note.id)"
-              class="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0 cursor-pointer"
+              class="p-1 rounded-lg text-slate-400 hover:text-rose-500 min-h-[32px] min-w-[32px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center shrink-0 cursor-pointer"
               title="حذف الملاحظة"
             >
               🗑️
@@ -1102,13 +1101,13 @@ const handleDeleteDailyNote = (noteId) => {
       </div>
 
       <!-- Filters & Tasks Controls -->
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800/60">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800/60">
         <!-- Status Filter Pills -->
-        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+        <div class="flex items-center gap-1 sm:gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
           <button
             @click="dailyTaskStatusFilter = 'all'"
             :class="[
-              'px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center',
+              'px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 min-h-[32px] sm:min-h-[44px] min-w-[32px] sm:min-w-[44px] flex items-center justify-center',
               dailyTaskStatusFilter === 'all'
                 ? 'bg-violet-600 text-white shadow-sm'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -1120,7 +1119,7 @@ const handleDeleteDailyNote = (noteId) => {
           <button
             @click="dailyTaskStatusFilter = 'pending'"
             :class="[
-              'px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center',
+              'px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 min-h-[32px] sm:min-h-[44px] min-w-[32px] sm:min-w-[44px] flex items-center justify-center',
               dailyTaskStatusFilter === 'pending'
                 ? 'bg-amber-600 text-white shadow-sm'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -1132,7 +1131,7 @@ const handleDeleteDailyNote = (noteId) => {
           <button
             @click="dailyTaskStatusFilter = 'completed'"
             :class="[
-              'px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center',
+              'px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 min-h-[32px] sm:min-h-[44px] min-w-[32px] sm:min-w-[44px] flex items-center justify-center',
               dailyTaskStatusFilter === 'completed'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -1146,7 +1145,7 @@ const handleDeleteDailyNote = (noteId) => {
         <div class="flex items-center gap-2">
           <select
             v-model="dailyTaskCategoryFilter"
-            class="px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold border border-slate-200 dark:border-slate-700 focus:outline-none cursor-pointer min-h-[44px] min-w-[44px]"
+            class="px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold border border-slate-200 dark:border-slate-700 focus:outline-none cursor-pointer min-h-[36px] sm:min-h-[44px]"
           >
             <option value="all">كل التصنيفات</option>
             <option v-for="cat in dailyTaskCategories" :key="cat" :value="cat">{{ cat }}</option>
@@ -1155,7 +1154,7 @@ const handleDeleteDailyNote = (noteId) => {
           <button
             @click="isCategoryManageModalOpen = true"
             type="button"
-            class="px-2.5 py-2.5 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-300 text-xs font-bold border border-violet-500/20 transition cursor-pointer flex items-center gap-1 shrink-0 min-h-[44px] min-w-[44px]"
+            class="px-2 py-2 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-300 text-xs font-bold border border-violet-500/20 transition cursor-pointer flex items-center gap-1 shrink-0 min-h-[36px] sm:min-h-[44px]"
             title="إدارة التصنيفات"
           >
             <span>⚙️</span>
@@ -1166,30 +1165,30 @@ const handleDeleteDailyNote = (noteId) => {
             v-model="dailyTaskSearchQuery"
             type="text"
             placeholder="بحث..."
-            class="px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 text-xs font-semibold border border-slate-200 dark:border-slate-700 focus:outline-none w-32 sm:w-44 min-h-[44px] min-w-[44px]"
+            class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 text-xs font-semibold border border-slate-200 dark:border-slate-700 focus:outline-none w-28 sm:w-44 min-h-[36px] sm:min-h-[44px]"
           />
         </div>
       </div>
 
       <!-- Daily Tasks List -->
-      <div v-if="filteredDailyTasks.length > 0" class="space-y-3">
+      <div v-if="filteredDailyTasks.length > 0" class="space-y-2.5 sm:space-y-3">
         <div
           v-for="task in filteredDailyTasks"
           :key="task.id"
           :class="[
-            'group relative p-4 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-4 glass-card-hover',
+            'group relative p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all duration-300 flex items-center justify-between gap-3 sm:gap-4 glass-card-hover',
             task.completed
               ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-900/40 opacity-80'
               : 'bg-white/80 dark:bg-slate-900/80 border-slate-200/70 dark:border-slate-800 shadow-sm hover:shadow-md'
           ]"
         >
           <!-- Left side: Checkbox & Title & Badges -->
-          <div class="flex items-center gap-3.5 min-w-0 flex-1">
+          <div class="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
             <!-- Custom Checkbox Button -->
             <button
               @click="handleToggleDailyTask(task.id)"
               :class="[
-                'w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all duration-300 shrink-0 cursor-pointer min-h-[44px] min-w-[44px] -m-2 p-2',
+                'w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all duration-300 shrink-0 cursor-pointer min-h-[36px] min-w-[36px] sm:min-h-[44px] sm:min-w-[44px] -m-1.5 p-1.5',
                 task.completed
                   ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm shadow-emerald-500/30'
                   : 'border-slate-300 dark:border-slate-600 hover:border-violet-500 text-transparent'
@@ -1202,11 +1201,11 @@ const handleDeleteDailyNote = (noteId) => {
             </button>
 
             <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-center gap-2 mb-1">
+              <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1">
                 <!-- Task Title -->
                 <span
                   :class="[
-                    'text-sm sm:text-base font-extrabold tracking-tight transition-all',
+                    'text-xs sm:text-base font-extrabold tracking-tight transition-all leading-tight',
                     task.completed
                       ? 'line-through text-slate-400 dark:text-slate-500'
                       : 'text-slate-900 dark:text-white'
@@ -1217,16 +1216,16 @@ const handleDeleteDailyNote = (noteId) => {
               </div>
 
               <!-- Metadata Pills (Category, Priority, Time) -->
-              <div class="flex flex-wrap items-center gap-2 text-[11px] font-bold">
+              <div class="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-[11px] font-bold">
                 <!-- Category Pill -->
-                <span class="px-2.5 py-0.5 rounded-md bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20">
+                <span class="px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20">
                   🏷️ {{ task.category || 'عام' }}
                 </span>
 
                 <!-- Priority Pill -->
                 <span
                   :class="[
-                    'px-2 py-0.5 rounded-md border',
+                    'px-1.5 py-0.5 rounded-md border',
                     task.priority === 'عالية' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' :
                     task.priority === 'منخفضة' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' :
                     'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
@@ -1236,7 +1235,7 @@ const handleDeleteDailyNote = (noteId) => {
                 </span>
 
                 <!-- Optional Due Time -->
-                <span v-if="task.dueTime" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                <span v-if="task.dueTime" class="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
                   ⏰ {{ task.dueTime }}
                 </span>
               </div>
@@ -1244,11 +1243,11 @@ const handleDeleteDailyNote = (noteId) => {
           </div>
 
           <!-- Right side: Actions -->
-          <div class="flex items-center gap-2 shrink-0">
+          <div class="flex items-center gap-1 shrink-0">
             <!-- Delete Button -->
             <button
               @click="handleDeleteDailyTask(task.id)"
-              class="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+              class="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer min-h-[36px] min-w-[36px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center"
               title="حذف المهمة"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1260,27 +1259,35 @@ const handleDeleteDailyNote = (noteId) => {
       </div>
 
       <!-- Empty State -->
-      <div v-else class="text-center py-12 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-dashed border-slate-300 dark:border-slate-800">
-        <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center text-2xl">
+      <div v-else class="text-center py-10 sm:py-12 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 p-4">
+        <div class="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-2 sm:mb-3 rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center text-xl sm:text-2xl">
           📝
         </div>
-        <h3 class="text-base font-black text-slate-800 dark:text-slate-200">لا توجد تاسكات يومية هنا حالياً</h3>
+        <h3 class="text-sm sm:text-base font-black text-slate-800 dark:text-slate-200">لا توجد تاسكات يومية هنا حالياً</h3>
         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">أضف مهمة جديدة من الشريط العلوي لسجل اليوميات</p>
       </div>
 
     </div>
     <!-- End Daily Tasks / Journal Tab View -->
 
+    <!-- Micro Floating Action Button (Micro-FAB) -->
+    <button
+      @click="isAddModalOpen = true"
+      class="fixed bottom-4 left-4 z-40 md:hidden w-10 h-10 min-h-[36px] min-w-[36px] rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg flex items-center justify-center text-xl font-bold active:scale-95 transition-all micro-fab cursor-pointer"
+      title="إضافة جديدة"
+    >
+      +
+    </button>
+
     <!-- 1. Bottom Sheet: Add New Habit -->
     <MobileBottomSheet 
-
       :isOpen="isAddModalOpen" 
       @close="isAddModalOpen = false"
       title="إضافة عادة جديدة"
       icon="✨"
       maxWidth="max-w-md"
     >
-      <form @submit.prevent="submitNewHabit" class="space-y-5">
+      <form @submit.prevent="submitNewHabit" class="space-y-4 sm:space-y-5">
         <!-- Title -->
         <div>
           <label class="block text-xs font-extrabold text-slate-700 dark:text-slate-300 mb-1.5">اسم العادة</label>
@@ -1303,7 +1310,7 @@ const handleDeleteDailyNote = (noteId) => {
               type="button"
               @click="customForm.category = cat"
               :class="[
-                'px-3 py-1.5 rounded-xl text-xs font-extrabold border transition cursor-pointer min-h-[44px] flex items-center justify-center',
+                'px-3 py-1.5 rounded-xl text-xs font-extrabold border transition cursor-pointer min-h-[36px] sm:min-h-[44px] flex items-center justify-center',
                 customForm.category === cat 
                   ? 'bg-violet-600 text-white border-violet-600 shadow-sm' 
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
@@ -1324,7 +1331,7 @@ const handleDeleteDailyNote = (noteId) => {
               type="button"
               @click="customForm.icon = e"
               :class="[
-                'w-11 h-11 min-h-[44px] min-w-[44px] rounded-xl text-lg flex items-center justify-center border transition cursor-pointer',
+                'w-10 h-10 sm:w-11 sm:h-11 min-h-[36px] min-w-[36px] sm:min-h-[44px] sm:min-w-[44px] rounded-xl text-lg flex items-center justify-center border transition cursor-pointer',
                 customForm.icon === e ? 'bg-violet-600 text-white border-violet-600 shadow-md scale-110' : 'bg-slate-100 dark:bg-slate-800 border-transparent'
               ]"
             >
@@ -1343,7 +1350,7 @@ const handleDeleteDailyNote = (noteId) => {
               type="button"
               @click="customForm.color = c.value"
               :class="[
-                'w-11 h-11 min-h-[44px] min-w-[44px] rounded-xl bg-gradient-to-tr border-2 transition cursor-pointer',
+                'w-10 h-10 sm:w-11 sm:h-11 min-h-[36px] min-w-[36px] sm:min-h-[44px] sm:min-w-[44px] rounded-xl bg-gradient-to-tr border-2 transition cursor-pointer',
                 c.value,
                 customForm.color === c.value ? 'border-white dark:border-slate-900 ring-2 ring-violet-500 scale-110' : 'border-transparent opacity-80'
               ]"
@@ -1352,7 +1359,7 @@ const handleDeleteDailyNote = (noteId) => {
           </div>
         </div>
 
-        <!-- Days Frequency Picker Grid (360px viewport compliant min-w-0 w-full h-11) -->
+        <!-- Days Frequency Picker Grid -->
         <div>
           <label class="block text-xs font-extrabold text-slate-700 dark:text-slate-300 mb-2">أيام التكرار الأسبوعية</label>
           <div class="grid grid-cols-7 gap-1 text-center">
@@ -1362,7 +1369,7 @@ const handleDeleteDailyNote = (noteId) => {
               type="button"
               @click="toggleFormDay(day.id)"
               :class="[
-                'py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer min-h-[44px] w-full min-w-0 h-11 flex items-center justify-center',
+                'py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer min-h-[36px] sm:min-h-[44px] w-full min-w-0 h-10 sm:h-11 flex items-center justify-center',
                 customForm.frequency.includes(day.id)
                   ? 'bg-violet-600 text-white border-violet-600 shadow-sm'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-transparent'

@@ -169,26 +169,58 @@ describe('DailyRoutines.vue Component Tests', () => {
     expect(wrapper.text()).toContain('سجل اليوميات والتاسكات السريعة')
   })
 
-  it('enforces minimum 44x44px touch target dimensions on interactive buttons', () => {
+  it('enforces touch target dimensions, 32-36px micro toggles, compact card classes, micro-FAB, and slim tab bar selectors', () => {
     const wrapper = mount(DailyRoutines)
     const buttons = wrapper.findAll('button')
 
-    // Filter interactive buttons with touch target classes
+    // Filter interactive buttons with compact touch target classes
     const interactiveButtons = buttons.filter(b => {
       const cls = b.classes().join(' ')
-      return cls.includes('min-h-[44px]') || cls.includes('min-h-[48px]') || cls.includes('min-h-[56px]') || cls.includes('min-h-[64px]')
+      return cls.includes('min-h-[32px]') || cls.includes('min-h-[36px]') || cls.includes('min-h-[44px]') || cls.includes('min-h-[48px]')
     })
 
     expect(interactiveButtons.length).toBeGreaterThan(0)
 
-    // Check specific critical touch buttons
-    const checkBtn = wrapper.find('button[title="تسجيل الإنجاز"]')
-    expect(checkBtn.classes()).toContain('min-h-[56px]')
-    expect(checkBtn.classes()).toContain('min-w-[56px]')
+    // Assert container compact padding class p-2 sm:p-3
+    const rootContainer = wrapper.find('div.max-w-6xl')
+    expect(rootContainer.exists()).toBe(true)
+    expect(rootContainer.classes()).toContain('p-2')
+    expect(rootContainer.classes()).toContain('sm:p-3')
 
+    // Assert habit card list gap-2 and card p-2.5
+    const cardList = wrapper.find('div.grid.grid-cols-1')
+    expect(cardList.exists()).toBe(true)
+    expect(cardList.classes()).toContain('gap-2')
+
+    const firstCard = wrapper.find('div.group.relative.rounded-2xl')
+    expect(firstCard.exists()).toBe(true)
+    expect(firstCard.classes()).toContain('p-2.5')
+
+    // Check sleek 32-36px check-in toggle button
+    const checkBtn = wrapper.find('button[title="تسجيل الإنجاز"]')
+    expect(checkBtn.exists()).toBe(true)
+    expect(checkBtn.classes()).toContain('w-9')
+    expect(checkBtn.classes()).toContain('h-9')
+    expect(checkBtn.classes()).toContain('min-h-[36px]')
+    expect(checkBtn.classes()).toContain('min-w-[36px]')
+
+    // Check micro floating action button (Micro-FAB)
+    const microFab = wrapper.find('button.micro-fab')
+    expect(microFab.exists()).toBe(true)
+    expect(microFab.classes()).toContain('fixed')
+    expect(microFab.classes()).toContain('bottom-4')
+    expect(microFab.classes()).toContain('left-4')
+
+    // Assert slim tab bar segmented switcher py-1 px-1.5
+    const segmentedSwitcher = wrapper.find('div.relative.flex.items-center.justify-between')
+    expect(segmentedSwitcher.exists()).toBe(true)
+    expect(segmentedSwitcher.classes()).toContain('py-1')
+    expect(segmentedSwitcher.classes()).toContain('px-1.5')
+
+    // Check stepper button micro dimensions
     const prevDateBtn = wrapper.find('button[title="اليوم السابق"]')
-    expect(prevDateBtn.classes()).toContain('min-h-[44px]')
-    expect(prevDateBtn.classes()).toContain('min-w-[44px]')
+    expect(prevDateBtn.classes()).toContain('min-h-[36px]')
+    expect(prevDateBtn.classes()).toContain('min-w-[36px]')
   })
 
   it('updates progress bar and streak counter upon habit check-in', async () => {
