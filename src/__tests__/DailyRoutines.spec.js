@@ -181,11 +181,11 @@ describe('DailyRoutines.vue Component Tests', () => {
 
     expect(interactiveButtons.length).toBeGreaterThan(0)
 
-    // Assert container compact padding class p-2 sm:p-3
+    // Assert container compact padding class px-1 sm:px-3
     const rootContainer = wrapper.find('div.max-w-6xl')
     expect(rootContainer.exists()).toBe(true)
-    expect(rootContainer.classes()).toContain('p-2')
-    expect(rootContainer.classes()).toContain('sm:p-3')
+    expect(rootContainer.classes()).toContain('px-1')
+    expect(rootContainer.classes()).toContain('sm:px-3')
 
     // Assert habit card list gap-2 and card p-2.5
     const cardList = wrapper.find('div.grid.grid-cols-1')

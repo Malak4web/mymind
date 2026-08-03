@@ -517,7 +517,8 @@ watch(() => store.projects, (newProjects) => {
           
           <!-- Selected Tasks / Routines Component container -->
           <div :class="[
-            'glass-card rounded-3xl p-4 sm:p-6 transition-all duration-500',
+            'glass-card rounded-3xl transition-all duration-500',
+            store.activeView === 'routines' ? 'p-1 sm:p-4 border-0 shadow-none bg-transparent dark:bg-transparent backdrop-blur-none' : 'p-2 sm:p-6',
             store.isFocusMode 
               ? 'shadow-2xl shadow-violet-500/[0.02] border-violet-500/20 dark:border-violet-900/35 ring-1 ring-violet-500/10' 
               : 'shadow-glass-md'

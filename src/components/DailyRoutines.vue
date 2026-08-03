@@ -575,7 +575,7 @@ const handleDeleteDailyNote = (noteId) => {
 </script>
 
 <template>
-  <div class="max-w-6xl mx-auto p-2 sm:p-3 relative overflow-x-hidden" @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd">
+  <div class="w-full max-w-6xl mx-auto px-1 sm:px-3 py-1 relative overflow-x-hidden" @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd">
     
     <!-- Animated Confetti Overlay -->
     <div v-if="showConfetti" class="fixed inset-0 pointer-events-none z-50 overflow-hidden">

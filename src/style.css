@@ -6,6 +6,12 @@
 
 @theme {
   --font-sans: 'Tajawal', system-ui, -apple-system, sans-serif;
+
+html, body {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
+}
   
   /* Color Accents */
   --color-brand-50: #f5f3ff;
