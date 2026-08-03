@@ -12,6 +12,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     pool: 'forks',
+    singleThread: true,
     teardownTimeout: 1000,
+    isolate: false,
   },
 })
