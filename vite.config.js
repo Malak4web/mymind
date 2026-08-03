@@ -11,5 +11,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    pool: 'forks',
+    teardownTimeout: 1000,
   },
 })

@@ -127,9 +127,11 @@ const handleLogin = async () => {
 // Auto-rotate feature showcase
 let featureInterval = null
 onMounted(() => {
-  featureInterval = setInterval(() => {
-    activeFeature.value = (activeFeature.value + 1) % featuresList.length
-  }, 4000)
+  if (typeof process === 'undefined' || process.env?.NODE_ENV !== 'test') {
+    featureInterval = setInterval(() => {
+      activeFeature.value = (activeFeature.value + 1) % featuresList.length
+    }, 4000)
+  }
 })
 
 onUnmounted(() => {

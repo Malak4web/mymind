@@ -4,6 +4,8 @@ import Login from '../components/Login.vue'
 import { store } from '../store.js'
 
 describe('Login.vue Component Tests', () => {
+  let wrapper = null
+
   beforeEach(() => {
     localStorage.clear()
     store.token = ''
@@ -12,22 +14,29 @@ describe('Login.vue Component Tests', () => {
     vi.restoreAllMocks()
   })
 
+  afterEach(() => {
+    if (wrapper) {
+      wrapper.unmount()
+      wrapper = null
+    }
+  })
+
   it('renders landing page hero content and branding', () => {
-    const wrapper = mount(Login)
+    wrapper = mount(Login)
     expect(wrapper.text()).toContain('MyMind')
     expect(wrapper.text()).toContain('عقلي برو')
     expect(wrapper.text()).toContain('نظّم أفكارك')
   })
 
   it('renders pricing plans and feature list cards', () => {
-    const wrapper = mount(Login)
+    wrapper = mount(Login)
     expect(wrapper.text()).toContain('عقلي مجاني')
     expect(wrapper.text()).toContain('عقلي برو')
     expect(wrapper.text()).toContain('لوحات كانبان التفاعلية')
   })
 
   it('opens login modal overlay when login button is clicked', async () => {
-    const wrapper = mount(Login)
+    wrapper = mount(Login)
 
     // Initially modal is hidden
     expect(wrapper.find('form').exists()).toBe(false)
@@ -44,7 +53,7 @@ describe('Login.vue Component Tests', () => {
   })
 
   it('shows error message when trying to submit empty email/password (edge case)', async () => {
-    const wrapper = mount(Login)
+    wrapper = mount(Login)
     
     // Open login modal
     const loginBtn = wrapper.findAll('button').find(b => b.text().includes('تسجيل الدخول'))
@@ -71,7 +80,7 @@ describe('Login.vue Component Tests', () => {
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
     })
 
-    const wrapper = mount(Login)
+    wrapper = mount(Login)
 
     // Open modal
     const loginBtn = wrapper.findAll('button').find(b => b.text().includes('تسجيل الدخول'))
@@ -102,7 +111,7 @@ describe('Login.vue Component Tests', () => {
       json: () => Promise.resolve({ message: 'بيانات الاعتماد غير صحيحة' })
     })
 
-    const wrapper = mount(Login)
+    wrapper = mount(Login)
 
     // Open modal
     const loginBtn = wrapper.findAll('button').find(b => b.text().includes('تسجيل الدخول'))
@@ -118,7 +127,7 @@ describe('Login.vue Component Tests', () => {
   })
 
   it('cycles demo tasks status on click in hero section', async () => {
-    const wrapper = mount(Login)
+    wrapper = mount(Login)
     const demoCard = wrapper.find('.cursor-pointer')
 
     if (demoCard.exists()) {
