@@ -153,6 +153,12 @@ jobs:
               find . -type f -exec chmod 644 {} \;
               find . -type d -exec chmod 755 {} \;
               chmod +x artisan
-              chmod -R 775 storage bootstrap/cache
-              chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+              
+              # Ensure SQLite database file and folder have write permissions for web server (www-data)
+              mkdir -p database
+              touch database/database.sqlite
+              chmod -R 777 database
+              chmod 666 database/database.sqlite 2>/dev/null || true
+              chmod -R 775 storage bootstrap/cache database
+              chown -R www-data:www-data storage bootstrap/cache database 2>/dev/null || true
             fi
