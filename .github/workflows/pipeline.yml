@@ -112,14 +112,6 @@ jobs:
           rm: false
           strip_components: 0
           tar_tmp_path: "/tmp"
-          exclude: |
-            .git
-            .github
-            node_modules
-            api/node_modules
-            api/vendor
-            storage/*.key
-            .env
 
       - name: Execute Post-Deployment Scripts
         uses: appleboy/ssh-action@v1.0.3
