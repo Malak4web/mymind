@@ -187,7 +187,7 @@ export const store = reactive({
   },
 
   getAuthHeaders(customHeaders = {}) {
-    const headers = { ...customHeaders }
+    const headers = { 'Accept': 'application/json', ...customHeaders }
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`
     }
@@ -1363,7 +1363,7 @@ export const store = reactive({
 
   // Real-time synchronization
   realtimeSyncTimer: null,
-  _dailyWriteCooldownUntil: 0, // timestamp: don't overwrite local state until this time passes
+
 
   startRealtimeSync() {
     if (this.realtimeSyncTimer) return
@@ -1395,12 +1395,12 @@ export const store = reactive({
   },
 
   // Daily Tasks Management Methods (اليوميات)
+  _dailyWritesPending: 0, // count of pending writes - don't overwrite while > 0
+
   async loadDailyTasks(isSilent = false) {
-    // During write cooldown, don't overwrite local state with server data
-    // This prevents the poll from reverting local changes while server is processing
-    if (Date.now() < this._dailyWriteCooldownUntil) {
-      return
-    }
+    // During write cooldown or pending writes, don't overwrite local state
+
+    if (this._dailyWritesPending > 0) return
 
     try {
       const res = await fetch(`${this.apiBase}/daily-tasks`, {
@@ -1409,8 +1409,9 @@ export const store = reactive({
       if (res.ok) {
         const rawTasks = await res.json()
         if (Array.isArray(rawTasks)) {
-          // Still in cooldown? (async fetch took time, check again)
-          if (Date.now() < this._dailyWriteCooldownUntil) return
+          // Re-check after async fetch
+      
+          if (this._dailyWritesPending > 0) return
 
           const mapped = rawTasks.map(t => ({
             id: t.id,
@@ -1430,6 +1431,7 @@ export const store = reactive({
           }
         }
       }
+      // If not res.ok (401, 500, etc.), just silently skip - don't touch local data
     } catch (e) {
       if (!isSilent) console.error('فشل تحميل اليوميات من السيرفر', e)
     }
@@ -1441,11 +1443,6 @@ export const store = reactive({
     } catch (e) {
       console.error('فشل حفظ اليوميات في التخزين المحلي', e)
     }
-  },
-
-  // Set a cooldown: polls won't overwrite local state for this many seconds
-  _setWriteCooldown(seconds = 5) {
-    this._dailyWriteCooldownUntil = Date.now() + (seconds * 1000)
   },
 
   async addDailyTask(taskData) {
@@ -1461,7 +1458,7 @@ export const store = reactive({
     }
     this.dailyTasks = [newTask, ...this.dailyTasks]
     this.saveDailyTasks()
-    this._setWriteCooldown(6)
+    this._dailyWritesPending++
 
     try {
       const res = await fetch(`${this.apiBase}/daily-tasks`, {
@@ -1486,10 +1483,9 @@ export const store = reactive({
       }
     } catch (e) {
       console.error('فشل إضافة المهمة اليومية إلى السيرفر', e)
+    } finally {
+      this._dailyWritesPending = Math.max(0, this._dailyWritesPending - 1)
     }
-
-    // After write completes, allow next poll to refresh
-    this._dailyWriteCooldownUntil = Date.now() + 1000
     return newTask
   },
 
@@ -1499,7 +1495,7 @@ export const store = reactive({
       task.completed = !task.completed
       this.dailyTasks = [...this.dailyTasks]
       this.saveDailyTasks()
-      this._setWriteCooldown(5)
+      this._dailyWritesPending++
 
       try {
         await fetch(`${this.apiBase}/daily-tasks/${id}`, {
@@ -1509,16 +1505,16 @@ export const store = reactive({
         })
       } catch (e) {
         console.error('فشل تحديث المهمة اليومية على السيرفر', e)
+      } finally {
+        this._dailyWritesPending = Math.max(0, this._dailyWritesPending - 1)
       }
-
-      this._dailyWriteCooldownUntil = Date.now() + 1000
     }
   },
 
   async deleteDailyTask(id) {
     this.dailyTasks = this.dailyTasks.filter(t => String(t.id) !== String(id))
     this.saveDailyTasks()
-    this._setWriteCooldown(6)
+    this._dailyWritesPending++
 
     try {
       await fetch(`${this.apiBase}/daily-tasks/${id}`, {
@@ -1527,9 +1523,9 @@ export const store = reactive({
       })
     } catch (e) {
       console.error('فشل حذف المهمة اليومية من السيرفر', e)
+    } finally {
+      this._dailyWritesPending = Math.max(0, this._dailyWritesPending - 1)
     }
-
-    this._dailyWriteCooldownUntil = Date.now() + 1000
   },
 
   async updateDailyTask(id, data) {
@@ -1538,7 +1534,7 @@ export const store = reactive({
       this.dailyTasks[taskIndex] = { ...this.dailyTasks[taskIndex], ...data }
       this.dailyTasks = [...this.dailyTasks]
       this.saveDailyTasks()
-      this._setWriteCooldown(5)
+      this._dailyWritesPending++
 
       try {
         await fetch(`${this.apiBase}/daily-tasks/${id}`, {
@@ -1554,9 +1550,9 @@ export const store = reactive({
         })
       } catch (e) {
         console.error('فشل تعديل المهمة اليومية على السيرفر', e)
+      } finally {
+        this._dailyWritesPending = Math.max(0, this._dailyWritesPending - 1)
       }
-
-      this._dailyWriteCooldownUntil = Date.now() + 1000
     }
   },
 
