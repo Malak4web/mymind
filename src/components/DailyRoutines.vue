@@ -1,7 +1,20 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { store } from '../store'
 import MobileBottomSheet from './MobileBottomSheet.vue'
+
+const handleWindowFocus = () => {
+  store.loadDailyTasks()
+}
+
+onMounted(() => {
+  store.loadDailyTasks()
+  window.addEventListener('focus', handleWindowFocus)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('focus', handleWindowFocus)
+})
 
 // Date helpers
 const formatDateKey = (dateObj) => {

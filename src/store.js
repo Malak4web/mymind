@@ -1363,6 +1363,19 @@ export const store = reactive({
   // Daily Tasks Management Methods (اليوميات)
   async loadDailyTasks() {
     try {
+      const localTasks = this.dailyTasks || []
+      if (localTasks.length > 0) {
+        try {
+          await fetch(`${this.apiBase}/daily-tasks/sync`, {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: JSON.stringify({ tasks: localTasks })
+          })
+        } catch (syncErr) {
+          console.error('فشل المزامنة الأولية لليوميات السابقة', syncErr)
+        }
+      }
+
       const res = await fetch(`${this.apiBase}/daily-tasks`, {
         headers: this.getAuthHeaders()
       })

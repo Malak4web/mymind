@@ -76,17 +76,31 @@ class DailyTaskController extends Controller
         if (is_array($tasks)) {
             foreach ($tasks as $t) {
                 if (empty($t['title'])) continue;
-                DailyTask::updateOrCreate(
-                    ['id' => $t['id'] ?? null],
-                    [
+                
+                $existing = DailyTask::where('title', $t['title'])
+                    ->where(function($q) use ($user) {
+                        if ($user) {
+                            $q->where('user_id', $user->id)->orWhereNull('user_id');
+                        }
+                    })->first();
+
+                if ($existing) {
+                    $existing->update([
+                        'category' => $t['category'] ?? $existing->category,
+                        'priority' => $t['priority'] ?? $existing->priority,
+                        'due_time' => $t['dueTime'] ?? ($t['due_time'] ?? $existing->due_time),
+                        'completed' => isset($t['completed']) ? (bool)$t['completed'] : $existing->completed
+                    ]);
+                } else {
+                    DailyTask::create([
                         'user_id' => $user ? $user->id : null,
                         'title' => $t['title'],
                         'category' => $t['category'] ?? 'عام',
                         'priority' => $t['priority'] ?? 'متوسطة',
                         'due_time' => $t['dueTime'] ?? ($t['due_time'] ?? null),
                         'completed' => !empty($t['completed'])
-                    ]
-                );
+                    ]);
+                }
             }
         }
 
