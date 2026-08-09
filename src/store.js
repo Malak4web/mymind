@@ -411,13 +411,13 @@ export const store = reactive({
     if (!this.activeProjectId) return
     const activeProj = this.projects.find(p => p.id === this.activeProjectId)
     if (activeProj) {
-      const counts = {}
-      (activeProj.statuses || []).forEach(s => { counts[s] = 0 })
-      this.tasks.forEach(t => {
+      const counts = {};
+      (activeProj.statuses || []).forEach(s => { counts[s] = 0 });
+      (this.tasks || []).forEach(t => {
         counts[t.status] = (counts[t.status] || 0) + 1
-      })
+      });
       activeProj.task_counts = counts
-      activeProj.total_tasks_count = this.tasks.length
+      activeProj.total_tasks_count = (this.tasks || []).length
     }
   },
 
