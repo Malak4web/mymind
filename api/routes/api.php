@@ -125,7 +125,22 @@ Route::middleware('auth:sanctum')->group(function () {
     // Daily Tasks routes
     Route::get('/daily-tasks', [DailyTaskController::class, 'index']);
     Route::post('/daily-tasks', [DailyTaskController::class, 'store']);
+    Route::post('/daily-tasks/sync', [DailyTaskController::class, 'sync']);
     Route::put('/daily-tasks/{id}', [DailyTaskController::class, 'update']);
     Route::delete('/daily-tasks/{id}', [DailyTaskController::class, 'destroy']);
-    Route::post('/daily-tasks/sync', [DailyTaskController::class, 'sync']);
+});
+
+// One-time migration trigger (run once then remove)
+Route::get('/run-migrate', function () {
+    try {
+        Artisan::call('migrate', ['--force' => true]);
+        return response()->json([
+            'message' => 'Migration completed successfully',
+            'output' => Artisan::output()
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage()
+        ], 500);
+    }
 });
