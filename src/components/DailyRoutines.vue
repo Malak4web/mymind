@@ -8,7 +8,7 @@ const handleWindowFocus = () => {
 }
 
 onMounted(() => {
-  store.loadDailyTasks()
+  store.startRealtimeSync()
   window.addEventListener('focus', handleWindowFocus)
 })
 

@@ -2,7 +2,7 @@ import { reactive, watch } from 'vue'
 
 export const store = reactive({
   // Connection and Authentication
-  apiBase: import.meta.env.VITE_API_BASE_URL || 'https://mind.zadians.com/api',
+  apiBase: import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && window.location && window.location.origin ? `${window.location.origin}/api` : 'https://mind.zadians.com/api'),
   token: localStorage.getItem('mymind_token') || '',
   isAuthenticated: false,
   currentUser: null,
@@ -360,6 +360,7 @@ export const store = reactive({
           await this.loadNotes()
           await this.loadMessages()
           await this.loadDailyTasks()
+          this.startRealtimeSync()
         } else {
           this.activeProjectId = null
           this.tasks = []
@@ -1360,11 +1361,44 @@ export const store = reactive({
     }
   },
 
+  // Real-time synchronization
+  realtimeSyncTimer: null,
+  _initialDailySyncDone: false,
+
+  startRealtimeSync() {
+    if (this.realtimeSyncTimer) return
+
+    this.loadDailyTasks(true)
+
+    this.realtimeSyncTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        this.loadDailyTasks(true)
+      }
+    }, 2500)
+
+    if (typeof window !== 'undefined') {
+      const triggerImmediateSync = () => {
+        this.loadDailyTasks(true)
+      }
+
+      window.addEventListener('focus', triggerImmediateSync)
+      window.addEventListener('online', triggerImmediateSync)
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            triggerImmediateSync()
+          }
+        })
+      }
+    }
+  },
+
   // Daily Tasks Management Methods (اليوميات)
-  async loadDailyTasks() {
+  async loadDailyTasks(isSilent = false) {
     try {
       const localTasks = this.dailyTasks || []
-      if (localTasks.length > 0) {
+      if (!this._initialDailySyncDone && localTasks.length > 0) {
+        this._initialDailySyncDone = true
         try {
           await fetch(`${this.apiBase}/daily-tasks/sync`, {
             method: 'POST',
@@ -1372,7 +1406,7 @@ export const store = reactive({
             body: JSON.stringify({ tasks: localTasks })
           })
         } catch (syncErr) {
-          console.error('فشل المزامنة الأولية لليوميات السابقة', syncErr)
+          if (!isSilent) console.error('فشل المزامنة الأولية لليوميات السابقة', syncErr)
         }
       }
 
@@ -1382,7 +1416,7 @@ export const store = reactive({
       if (res.ok) {
         const rawTasks = await res.json()
         if (Array.isArray(rawTasks)) {
-          this.dailyTasks = rawTasks.map(t => ({
+          const mapped = rawTasks.map(t => ({
             id: t.id,
             title: t.title,
             category: t.category || 'عام',
@@ -1391,11 +1425,17 @@ export const store = reactive({
             completed: Boolean(t.completed),
             createdAt: t.created_at || new Date().toISOString()
           }))
-          this.saveDailyTasks()
+
+          const currentJson = JSON.stringify(this.dailyTasks)
+          const newJson = JSON.stringify(mapped)
+          if (currentJson !== newJson) {
+            this.dailyTasks = mapped
+            this.saveDailyTasks()
+          }
         }
       }
     } catch (e) {
-      console.error('فشل تحميل اليوميات من السيرفر', e)
+      if (!isSilent) console.error('فشل تحميل اليوميات من السيرفر', e)
     }
   },
 
