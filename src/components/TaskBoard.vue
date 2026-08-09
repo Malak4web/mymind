@@ -1,6 +1,6 @@
 <script setup>
 import { store } from '../store'
-import { computed, ref, onUnmounted } from 'vue'
+import { computed, ref, onUnmounted, onMounted } from 'vue'
 import MentionInput from './MentionInput.vue'
 import MentionText from './MentionText.vue'
 
@@ -550,6 +550,26 @@ const quickDeleteTask = async (task) => {
     await store.deleteTask(task.id)
   }
 }
+
+// 3-Dots Task Card Actions Menu State
+const activeTaskMenuId = ref(null)
+
+const toggleTaskMenu = (taskId, e) => {
+  if (e) e.stopPropagation()
+  activeTaskMenuId.value = activeTaskMenuId.value === taskId ? null : taskId
+}
+
+const closeTaskMenu = () => {
+  activeTaskMenuId.value = null
+}
+
+onMounted(() => {
+  window.addEventListener('click', closeTaskMenu)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('click', closeTaskMenu)
+})
 </script>
 
 <template>
@@ -675,59 +695,84 @@ const quickDeleteTask = async (task) => {
             @dragstart="handleDragStart(task.id)"
             @click="store.openTaskInspector(task.id)"
             @dblclick="openEditTask(task.id)"
-            class="glass-card-hover rounded-xl p-3.5 shadow-sm hover:-translate-y-1 hover:shadow-glass-glow transition-all duration-300 btn-touch-active cursor-grab active:cursor-grabbing select-none relative group space-y-2"
+            class="glass-card-hover rounded-2xl p-3.5 shadow-sm hover:-translate-y-1 hover:shadow-glass-glow transition-all duration-300 btn-touch-active cursor-grab active:cursor-grabbing select-none relative group space-y-2 bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80"
             :title="task.title"
           >
-            <!-- Selection Checkbox (Touch hit target min 44px top-left) -->
-            <div class="absolute top-1 left-1 min-h-[44px] min-w-[44px] flex items-center justify-center" @click.stop>
-              <input 
-                type="checkbox" 
-                v-model="selectedTaskIds" 
-                :value="task.id" 
-                class="rounded border-slate-300 dark:border-slate-855 text-violet-650 focus:ring-violet-500 cursor-pointer h-4 w-4 transition-opacity"
-                :class="[selectedTaskIds.includes(task.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100']"
-              />
-            </div>
-
-            <!-- Card Header & Completion Checkbox -->
-            <div class="pl-7 text-right flex items-center gap-1.5 w-full min-w-0">
-              <div class="min-h-[44px] min-w-[44px] flex items-center justify-center -mr-2 shrink-0" @click.stop>
-                <input 
-                  type="checkbox"
-                  :checked="task.status === 'مكتمل'"
-                  @change="toggleTaskCompletion(task, $event)"
-                  class="rounded-full border-slate-350 dark:border-slate-800 text-emerald-500 focus:ring-emerald-500 cursor-pointer h-5 w-5 transition-all duration-200"
-                  title="تحديد المهمة كمكتملة"
-                />
+            <!-- Card Header Row: Completion Checkbox + Title + Bulk Select + 3-Dots Menu -->
+            <div class="flex items-center justify-between gap-2 w-full min-w-0">
+              <!-- Left: Checkbox + Full Title -->
+              <div class="flex items-center gap-2 flex-1 min-w-0">
+                <div class="shrink-0 flex items-center justify-center min-h-[32px] min-w-[32px]" @click.stop>
+                  <input 
+                    type="checkbox"
+                    :checked="task.status === 'مكتمل'"
+                    @change="toggleTaskCompletion(task, $event)"
+                    class="rounded-full border-slate-350 dark:border-slate-800 text-emerald-500 focus:ring-emerald-500 cursor-pointer h-4.5 w-4.5 transition-all duration-200"
+                    title="تحديد المهمة كمكتملة"
+                  />
+                </div>
+                <h4 
+                  class="text-xs sm:text-sm font-extrabold text-slate-855 dark:text-slate-100 group-hover:text-violet-650 dark:group-hover:text-violet-400 transition duration-150 truncate leading-snug flex-1 min-w-0"
+                  :class="[task.status === 'مكتمل' ? 'line-through text-slate-400 dark:text-slate-500' : '']"
+                  :title="task.title"
+                >
+                  <MentionText :content="task.title" />
+                </h4>
               </div>
-              <h4 
-                class="text-xs font-extrabold text-slate-855 dark:text-slate-100 group-hover:text-violet-650 dark:group-hover:text-violet-400 transition duration-150 truncate leading-relaxed flex-1 min-w-0"
-                :class="[task.status === 'مكتمل' ? 'line-through text-slate-400 dark:text-slate-500' : '']"
-                :title="task.title"
-              >
-                <MentionText :content="task.title" />
-              </h4>
-              <!-- Card Action Buttons: Edit & Quick Delete -->
-              <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" @click.stop>
-                <button 
-                  @click="openEditTask(task.id)"
-                  class="p-1 text-slate-400 hover:text-violet-600 transition cursor-pointer text-xs rounded hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[32px] min-w-[32px] flex items-center justify-center"
-                  title="تعديل المهمة"
-                >
-                  ✏️
-                </button>
-                <button 
-                  @click="quickDeleteTask(task)"
-                  class="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer text-xs rounded hover:bg-rose-50 dark:hover:bg-rose-955/30 min-h-[32px] min-w-[32px] flex items-center justify-center"
-                  title="حذف المهمة سريعا"
-                >
-                  🗑️
-                </button>
+
+              <!-- Right: Bulk Select Checkbox & 3-Dots Action Menu -->
+              <div class="flex items-center gap-1 shrink-0" @click.stop>
+                <!-- Bulk selection checkbox -->
+                <input 
+                  type="checkbox" 
+                  v-model="selectedTaskIds" 
+                  :value="task.id" 
+                  class="rounded border-slate-300 dark:border-slate-855 text-violet-650 focus:ring-violet-500 cursor-pointer h-3.5 w-3.5 transition-opacity"
+                  :class="[selectedTaskIds.includes(task.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100']"
+                  title="تحديد المهمة للعمليات الجماعية"
+                />
+
+                <!-- 3-Dots Action Menu Trigger -->
+                <div class="relative">
+                  <button 
+                    @click="toggleTaskMenu(task.id, $event)"
+                    class="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center min-h-[32px] min-w-[32px]"
+                    title="خيارات المهمة"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                    </svg>
+                  </button>
+
+                  <!-- Floating Dropdown Popover Menu -->
+                  <Transition name="fade">
+                    <div 
+                      v-if="activeTaskMenuId === task.id" 
+                      class="absolute left-0 top-full mt-1 z-30 w-36 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1 text-right animate-fade-in"
+                      @click.stop
+                    >
+                      <button 
+                        @click="closeTaskMenu(); openEditTask(task.id)"
+                        class="w-full text-right px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-2"
+                      >
+                        <span>✏️</span>
+                        <span>تعديل المهمة</span>
+                      </button>
+                      <button 
+                        @click="closeTaskMenu(); quickDeleteTask(task)"
+                        class="w-full text-right px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-955/30 transition cursor-pointer flex items-center gap-2"
+                      >
+                        <span>🗑️</span>
+                        <span>حذف المهمة</span>
+                      </button>
+                    </div>
+                  </Transition>
+                </div>
               </div>
             </div>
 
             <!-- Task Description Mention & Links Preview -->
-            <div v-if="task.description" class="pt-0.5 text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed pr-8" @click.stop>
+            <div v-if="task.description" class="pt-0.5 text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed pr-6" @click.stop>
               <MentionText :content="task.description" />
             </div>
 
