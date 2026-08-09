@@ -1395,45 +1395,102 @@ export const store = reactive({
   },
 
   // Daily Tasks Management Methods (اليوميات)
-  _dailyWritesPending: 0, // count of pending writes - don't overwrite while > 0
+  _dailyWritesPending: 0,
+  _dailySyncing: false, // prevent concurrent syncs
 
   async loadDailyTasks(isSilent = false) {
-    // During write cooldown or pending writes, don't overwrite local state
-
+    // Don't run while writes are pending or another sync is in progress
     if (this._dailyWritesPending > 0) return
+    if (this._dailySyncing) return
+    this._dailySyncing = true
 
     try {
       const res = await fetch(`${this.apiBase}/daily-tasks`, {
         headers: this.getAuthHeaders()
       })
-      if (res.ok) {
-        const rawTasks = await res.json()
-        if (Array.isArray(rawTasks)) {
-          // Re-check after async fetch
-      
-          if (this._dailyWritesPending > 0) return
+      if (!res.ok) {
+        // Server error or unauthenticated - don't touch local data
+        this._dailySyncing = false
+        return
+      }
 
-          const mapped = rawTasks.map(t => ({
-            id: t.id,
-            title: t.title,
-            category: t.category || 'عام',
-            priority: t.priority || 'متوسطة',
-            dueTime: t.due_time || '',
-            completed: Boolean(t.completed),
-            createdAt: t.created_at || new Date().toISOString()
-          }))
+      const rawTasks = await res.json()
+      if (!Array.isArray(rawTasks)) { this._dailySyncing = false; return }
 
-          const currentJson = JSON.stringify(this.dailyTasks)
-          const newJson = JSON.stringify(mapped)
-          if (currentJson !== newJson) {
-            this.dailyTasks = mapped
+      // Re-check pending writes after async fetch
+      if (this._dailyWritesPending > 0) { this._dailySyncing = false; return }
+
+      const serverTasks = rawTasks.map(t => ({
+        id: t.id,
+        title: t.title,
+        category: t.category || 'عام',
+        priority: t.priority || 'متوسطة',
+        dueTime: t.due_time || '',
+        completed: Boolean(t.completed),
+        createdAt: t.created_at || new Date().toISOString()
+      }))
+
+      // MERGE strategy: keep local-only tasks (unsynced) + server tasks
+      // Local-only tasks have timestamp IDs (> 1 billion) and don't exist on server
+      const serverIdSet = new Set(serverTasks.map(t => String(t.id)))
+      const serverTitleSet = new Set(serverTasks.map(t => t.title.trim().toLowerCase()))
+      const localOnlyTasks = (this.dailyTasks || []).filter(t => {
+        const id = Number(t.id)
+        // Keep if: has a timestamp ID AND not already on server (by ID or title)
+        return id > 1_000_000_000 
+          && !serverIdSet.has(String(t.id))
+          && !serverTitleSet.has((t.title || '').trim().toLowerCase())
+      })
+
+      // Merged result: local unsynced tasks first, then server tasks
+      const merged = [...localOnlyTasks, ...serverTasks]
+
+      const currentJson = JSON.stringify(this.dailyTasks)
+      const newJson = JSON.stringify(merged)
+      if (currentJson !== newJson) {
+        this.dailyTasks = merged
+        this.saveDailyTasks()
+      }
+
+      // Push unsynced local tasks to server in the background
+      if (localOnlyTasks.length > 0) {
+        this._pushUnsyncedTasks(localOnlyTasks)
+      }
+    } catch (e) {
+      if (!isSilent) console.error('فشل تحميل اليوميات من السيرفر', e)
+    } finally {
+      this._dailySyncing = false
+    }
+  },
+
+  // Push local-only tasks to the server (fire-and-forget)
+  async _pushUnsyncedTasks(tasks) {
+    for (const task of tasks) {
+      try {
+        const res = await fetch(`${this.apiBase}/daily-tasks`, {
+          method: 'POST',
+          headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            title: task.title,
+            category: task.category,
+            priority: task.priority,
+            due_time: task.dueTime,
+            completed: task.completed
+          })
+        })
+        if (res.ok) {
+          const created = await res.json()
+          // Replace timestamp ID with real server ID
+          const idx = this.dailyTasks.findIndex(t => t.id === task.id)
+          if (idx !== -1 && created.id) {
+            this.dailyTasks[idx].id = created.id
+            this.dailyTasks = [...this.dailyTasks]
             this.saveDailyTasks()
           }
         }
+      } catch (e) {
+        // Will retry on next poll cycle
       }
-      // If not res.ok (401, 500, etc.), just silently skip - don't touch local data
-    } catch (e) {
-      if (!isSilent) console.error('فشل تحميل اليوميات من السيرفر', e)
     }
   },
 
