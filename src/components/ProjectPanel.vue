@@ -6,11 +6,24 @@ const activeProject = computed(() => store.projects.find(p => p.id === store.act
 const deletedProjects = computed(() => store.projects.filter(p => p.isDeleted))
 const activeProjectsList = computed(() => store.projects.filter(p => !p.isDeleted))
 
-// Category-filtered projects
+const projectSearchQuery = ref('')
+
+// Category and search filtered projects
 const filteredProjectsByCategory = computed(() => {
-  if (store.activeCategoryId === null) return activeProjectsList.value
-  if (store.activeCategoryId === 'none') return activeProjectsList.value.filter(p => !p.categoryId)
-  return activeProjectsList.value.filter(p => p.categoryId === store.activeCategoryId)
+  let list = activeProjectsList.value
+  if (store.activeCategoryId === 'none') {
+    list = list.filter(p => !p.categoryId)
+  } else if (store.activeCategoryId !== null) {
+    list = list.filter(p => p.categoryId === store.activeCategoryId)
+  }
+
+  const q = projectSearchQuery.value.trim().toLowerCase()
+  if (!q) return list
+
+  return list.filter(p => 
+    (p.name && p.name.toLowerCase().includes(q)) || 
+    (p.description && p.description.toLowerCase().includes(q))
+  )
 })
 
 // Drag and Drop state for projects reordering
@@ -187,6 +200,16 @@ const getCategoryProjectCount = (catId) => {
 
 const getUncategorizedCount = () => {
   return activeProjectsList.value.filter(p => !p.categoryId).length
+}
+
+const getTaskCountByStatus = (projectId, statusName) => {
+  if (!store.tasks || store.tasks.length === 0) return 0
+  return store.tasks.filter(t => (t.projectId === projectId || t.project_id === projectId) && t.status === statusName).length
+}
+
+const getProjectTotalTaskCount = (projectId) => {
+  if (!store.tasks || store.tasks.length === 0) return 0
+  return store.tasks.filter(t => (t.projectId === projectId || t.project_id === projectId)).length
 }
 
 const changeProjectCategory = (project, newCatId) => {
@@ -543,8 +566,8 @@ const handleTouchEnd = (closeFn) => {
     <!-- ═══════════════════════════════════════════ -->
     <!--  PROJECTS LIST (filtered by category)      -->
     <!-- ═══════════════════════════════════════════ -->
-    <div class="glass-card rounded-2xl p-5 shadow-sm">
-      <div class="flex items-center justify-between mb-4">
+    <div class="glass-card rounded-2xl p-5 shadow-sm space-y-3">
+      <div class="flex items-center justify-between">
         <span class="text-[10px] font-bold text-slate-400">
           {{ filteredProjectsByCategory.length }} مشروع
         </span>
@@ -558,10 +581,31 @@ const handleTouchEnd = (closeFn) => {
         </h3>
       </div>
 
-      <div class="space-y-3">
-        <div v-if="filteredProjectsByCategory.length === 0" class="text-xs text-slate-400 italic py-6 text-center flex flex-col items-center gap-2">
+      <!-- Real-time Instant Search Input -->
+      <div class="relative">
+        <input 
+          v-model="projectSearchQuery"
+          type="text"
+          placeholder="ابحث عن مشروع..."
+          class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl pr-8 pl-8 py-2 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-violet-500 transition"
+        />
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 absolute right-2.5 top-2.5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <button 
+          v-if="projectSearchQuery"
+          @click="projectSearchQuery = ''"
+          class="absolute left-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold transition cursor-pointer"
+          title="مسح البحث"
+        >✕</button>
+      </div>
+
+      <!-- Scrollable Projects List Container with fixed max-height -->
+      <div class="space-y-3 max-h-[480px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+        <div v-if="filteredProjectsByCategory.length === 0" class="text-xs text-slate-400 italic py-8 text-center flex flex-col items-center gap-2">
           <span class="text-2xl opacity-40">📭</span>
-          <span>لا توجد مشاريع في هذا التصنيف حالياً.</span>
+          <span v-if="projectSearchQuery">لا توجد مشاريع تطابق "{{ projectSearchQuery }}"</span>
+          <span v-else>لا توجد مشاريع في هذا التصنيف حالياً.</span>
         </div>
         <div 
           v-for="(p, idx) in filteredProjectsByCategory" 
@@ -600,40 +644,49 @@ const handleTouchEnd = (closeFn) => {
 
           
           <div class="space-y-1.5 pr-1.5 flex-1 min-w-0">
-            <div class="flex items-center gap-2 flex-wrap">
-              <h4 class="text-sm font-bold text-slate-855 dark:text-slate-100 truncate">{{ p.name }}</h4>
-              <!-- Interactive Category Selector Badge on Project Card -->
-              <select
-                :value="p.categoryId || ''"
-                @click.stop
-                @change="changeProjectCategory(p, $event.target.value)"
-                class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border shrink-0 bg-transparent focus:outline-none cursor-pointer transition hover:opacity-80"
-                :style="{ 
-                  backgroundColor: (store.projectCategories.find(c => c.id === p.categoryId)?.color || '#64748b') + '20',
-                  color: store.projectCategories.find(c => c.id === p.categoryId)?.color || '#64748b',
-                  borderColor: (store.projectCategories.find(c => c.id === p.categoryId)?.color || '#64748b') + '40'
-                }"
-                title="انقر لتغيير تصنيف هذا المشروع"
-              >
-                <option value="" class="bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300">📌 بدون تصنيف</option>
-                <option 
-                  v-for="cat in store.projectCategories" 
-                  :key="cat.id" 
-                  :value="cat.id"
-                  class="bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+            <div class="flex items-center gap-2 flex-wrap justify-between">
+              <div class="flex items-center gap-1.5 flex-wrap min-w-0">
+                <h4 class="text-sm font-bold text-slate-855 dark:text-slate-100 truncate">{{ p.name }}</h4>
+                <!-- Interactive Category Selector Badge on Project Card -->
+                <select
+                  :value="p.categoryId || ''"
+                  @click.stop
+                  @change="changeProjectCategory(p, $event.target.value)"
+                  class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border shrink-0 bg-transparent focus:outline-none cursor-pointer transition hover:opacity-80"
+                  :style="{ 
+                    backgroundColor: (store.projectCategories.find(c => c.id === p.categoryId)?.color || '#64748b') + '20',
+                    color: store.projectCategories.find(c => c.id === p.categoryId)?.color || '#64748b',
+                    borderColor: (store.projectCategories.find(c => c.id === p.categoryId)?.color || '#64748b') + '40'
+                  }"
+                  title="انقر لتغيير تصنيف هذا المشروع"
                 >
-                  {{ cat.icon }} {{ cat.name }}
-                </option>
-              </select>
+                  <option value="" class="bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300">📌 بدون تصنيف</option>
+                  <option 
+                    v-for="cat in store.projectCategories" 
+                    :key="cat.id" 
+                    :value="cat.id"
+                    class="bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+                  >
+                    {{ cat.icon }} {{ cat.name }}
+                  </option>
+                </select>
+              </div>
+              <span class="text-[9.5px] font-extrabold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-955/50 px-2 py-0.5 rounded-lg border border-violet-200 dark:border-violet-800/60 shrink-0" title="إجمالي عدد المهام في هذا المشروع">
+                {{ getProjectTotalTaskCount(p.id) }} مهمة
+              </span>
             </div>
             <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">{{ p.description }}</p>
             <div class="flex flex-wrap items-center gap-1.5 pt-2">
               <span 
                 v-for="s in p.statuses" 
                 :key="s" 
-                :class="['text-[9px] font-bold px-1.5 py-0.5 rounded border', getStatusColor(s)]"
+                :class="['text-[9px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1.5', getStatusColor(s)]"
+                :title="`${s}: ${getTaskCountByStatus(p.id, s)} مهمة`"
               >
-                {{ s }}
+                <span>{{ s }}</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[8.5px] font-black bg-slate-900/10 dark:bg-white/15">
+                  {{ getTaskCountByStatus(p.id, s) }}
+                </span>
               </span>
             </div>
 

@@ -69,6 +69,28 @@ describe('TaskBoard.vue Component Tests', () => {
     }
   })
 
+  it('submits new task directly when pressing Enter key in quick add textarea', async () => {
+    store.currentUser = { role: { name: 'مدير' } }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: 104 }) })
+
+    const wrapper = mount(TaskBoard)
+    const quickAddBtn = wrapper.findAll('button').find(b => b.text().includes('إضافة مهمة سريعة'))
+    await quickAddBtn.trigger('click')
+
+    const textarea = wrapper.find('textarea')
+    expect(textarea.exists()).toBe(true)
+
+    await textarea.setValue('مهمة عبر مفتاح الإنتر')
+    await textarea.trigger('keydown', { key: 'Enter' })
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/tasks'),
+      expect.objectContaining({
+        method: 'POST'
+      })
+    )
+  })
+
   it('handles task drag and drop status update payload', async () => {
     store.currentUser = { role: { name: 'مدير' } }
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })

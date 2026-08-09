@@ -26,10 +26,14 @@ const props = defineProps({
   disabled: {
     type: Boolean,
     default: false
+  },
+  autofocus: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'change', 'keydown', 'keyup', 'blur', 'focus', 'submit'])
+const emit = defineEmits(['update:modelValue', 'change', 'keydown', 'keyup', 'blur', 'focus', 'submit', 'paste'])
 
 const inputRef = ref(null)
 const isMenuOpen = ref(false)
@@ -48,6 +52,11 @@ const handleClickOutside = (e) => {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  if (props.autofocus) {
+    nextTick(() => {
+      inputRef.value?.focus()
+    })
+  }
 })
 
 onUnmounted(() => {
@@ -194,7 +203,8 @@ const handleKeydown = (e) => {
   emit('keydown', e)
 
   if (!isMenuOpen.value || filteredSuggestions.value.length === 0) {
-    if (e.key === 'Enter' && !isTextarea) {
+    if (e.key === 'Enter' && (!props.isTextarea || !e.shiftKey)) {
+      e.preventDefault()
       emit('submit')
     }
     return
@@ -262,6 +272,7 @@ const selectItem = (item) => {
       @keyup="e => emit('keyup', e)"
       @blur="e => emit('blur', e)"
       @focus="e => emit('focus', e)"
+      @paste="e => emit('paste', e)"
     ></textarea>
 
     <!-- Single-line Text Input -->
@@ -281,6 +292,7 @@ const selectItem = (item) => {
       @keyup="e => emit('keyup', e)"
       @blur="e => emit('blur', e)"
       @focus="e => emit('focus', e)"
+      @paste="e => emit('paste', e)"
     />
 
     <!-- Floating Mention Autocomplete Popup -->

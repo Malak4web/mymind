@@ -33,6 +33,22 @@ describe('ProjectPanel.vue Component Tests', () => {
     expect(wrapper.text()).toContain('مشروع الإعلانات')
   })
 
+  it('displays correct task count for each project status badge', () => {
+    store.projects[0].statuses = ['بانتظار البدء', 'قيد العمل']
+    store.tasks = [
+      { id: 1, projectId: 1, title: 'تاسك 1', status: 'بانتظار البدء' },
+      { id: 2, projectId: 1, title: 'تاسك 2', status: 'بانتظار البدء' },
+      { id: 3, projectId: 1, title: 'تاسك 3', status: 'قيد العمل' }
+    ]
+    const wrapper = mount(ProjectPanel)
+    const webProjectCard = wrapper.findAll('.glass-card-hover').find(c => c.text().includes('مشروع الويب'))
+    expect(webProjectCard).toBeTruthy()
+    expect(webProjectCard.text()).toContain('بانتظار البدء')
+    expect(webProjectCard.text()).toContain('2')
+    expect(webProjectCard.text()).toContain('قيد العمل')
+    expect(webProjectCard.text()).toContain('1')
+  })
+
   it('filters projects by active category pill', async () => {
     const wrapper = mount(ProjectPanel)
 
@@ -44,6 +60,16 @@ describe('ProjectPanel.vue Component Tests', () => {
     expect(store.activeCategoryId).toBe(2)
     // Only "مشروع الإعلانات" should be shown
     expect(wrapper.text()).toContain('مشروع الإعلانات')
+  })
+
+  it('filters projects in real-time when typing in project search input', async () => {
+    const wrapper = mount(ProjectPanel)
+    const searchInput = wrapper.find('input[placeholder="ابحث عن مشروع..."]')
+    expect(searchInput.exists()).toBe(true)
+
+    await searchInput.setValue('موبايل')
+    expect(wrapper.text()).toContain('مشروع الموبايل')
+    expect(wrapper.text()).not.toContain('مشروع الإعلانات')
   })
 
   it('submits new project form when name is provided', async () => {

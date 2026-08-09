@@ -753,8 +753,11 @@ const bulkDelete = async () => {
               v-model="quickAddTitle"
               :is-textarea="true"
               :rows="2"
-              placeholder="اكتب عنوان المهمة... (استخدم / للملفات، و @ للمنشن)"
+              :autofocus="true"
+              placeholder="اكتب عنوان المهمة... (اضغط Enter للإضافة، و Shift+Enter للسطر الجديد)"
               inputClass="font-extrabold"
+              @paste="e => handlePaste(e, status)"
+              @keydown.esc="cancelQuickAdd"
               @submit="submitQuickAdd(status)"
             />
             <div class="flex items-center gap-1.5 justify-start flex-row-reverse flex-wrap">
