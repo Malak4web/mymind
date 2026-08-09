@@ -1,67 +1,58 @@
-# Handoff Report — Explorer 3 (Milestone 1)
-
-**Project**: mymind — Mobile UX/UI Redesign for Daily Routines & Habits  
-**Working Directory**: `c:\xampp\htdocs\mymind\.agents\teamwork_preview_explorer_m1_3`  
-**Date**: 2026-08-02  
-**Handoff Type**: Hard Handoff  
-
----
+# Handoff Report — Explorer 3 (teamwork_preview_explorer_m1_3)
 
 ## 1. Observation
-
-- **Test Runner & Config**:
-  - `package.json`: Line 10: `"test": "vitest run"`, Line 23: `"vitest": "^4.1.4"`, Line 19: `"@vue/test-utils": "^2.4.6"`, Line 20: `"jsdom": "^29.0.2"`.
-  - `vite.config.js`: Lines 11-14: `test: { globals: true, environment: 'jsdom' }`.
-- **Existing Spec File (`src/__tests__/DailyRoutines.spec.js`)**:
-  - Contains 145 lines with 6 test blocks (`renders routines header and habits list`, `toggles habit completion when check button is clicked`, `opens add habit modal and submits a new habit`, `switches between habits and daily tasks tabs`, `adds and toggles quick daily tasks in journal tab`, `manages daily task categories in store`).
-- **Store & Target Component**:
-  - `src/components/DailyRoutines.vue`: 1523 lines containing view switcher tabs (`activeTab = 'habits' | 'journal'`), date stepper, progress gauge, week day picker strip, habit cards with 56px check button (`min-h-[56px] min-w-[56px]`), quick habit detail bottom sheet (`isQuickDetailOpen`), stats drawer (`isStatsDrawerOpen`), add habit modal, and category manager modal.
-  - `src/components/HabitDetail.vue`: 859 lines containing habit full detail page, 7-day touch strip, sub-tasks checklist (`checklistProgress`), heatmap calendar, and notes list (`handleAddNote`).
-  - `src/store.js`: Reactive singleton managing `store.habits`, `store.dailyTasks`, `store.dailyTaskCategories`, and habit store methods (`addHabit`, `toggleHabitLog`, `addHabitNote`, `addHabitChecklistItem`, `toggleHabitChecklistItem`, `deleteHabitChecklistItem`).
-- **Command Output Observations**:
-  - `npx vitest run`: Passed 10 of 10 test suites (78+ total test cases). `src/__tests__/DailyRoutines.spec.js` passed all 6 tests in 4.28s.
-  - `npm run build`: Vite build completed in 7.82s generating `dist/index.html` (0.45 kB), `dist/assets/index-D3YiGA1G.css` (181.66 kB), `dist/assets/index-DC2E0wic.js` (442.13 kB).
-
----
+- **Component Analyzed**: `src/components/DailyRoutines.vue` (Total 1726 lines, 80,559 bytes).
+- **Supporting Components**: `src/components/MobileBottomNav.vue`, `src/components/MobileBottomSheet.vue`, `src/App.vue`.
+- **Key Lines & Verbatim Utilities Observed in `DailyRoutines.vue`**:
+  - Outer Wrapper (Line 578): `max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 relative overflow-x-hidden` (`py-6` adds 24px top padding).
+  - Segmented Control (Lines 597–641): `sticky top-0 z-30 mb-6 bg-white/80 dark:bg-slate-900/80 p-2 rounded-2xl ... py-2.5 rounded-xl text-sm min-h-[44px]` (`mb-6` margin bloat).
+  - Mobile Sticky Gauge (Lines 644–662): `sticky top-[68px] z-20 mb-6 p-3 rounded-2xl` (duplicate sticky header).
+  - Main Glass Hero Summary (Lines 667–753): `rounded-3xl p-5 md:p-8 ... mb-6 sm:mb-8` + internal date stepper (`p-1.5`) & progress gauge (`p-3.5`) (~260px vertical height).
+  - Weekly Day Picker Bar (Lines 756–809): `mb-6 sm:mb-8 p-2 sm:p-3 ... min-h-[64px]` (~104px vertical height).
+  - Habit Card Container (Lines 834–839): `rounded-3xl p-4 sm:p-5 border ... gap-3` (~150px height per habit card).
+  - Check-in Button (Lines 875–887): `w-14 h-14 min-h-[56px] min-w-[56px] text-2xl font-black` (56px x 56px per button).
+  - Total vertical overhead before reaching the first habit card: **~500px – 530px** out of a typical 667px–844px mobile screen height.
 
 ## 2. Logic Chain
-
-1. **Observation**: `vite.config.js` sets `test.environment = 'jsdom'` and `package.json` installs `@vue/test-utils` and `vitest`.
-2. **Logic**: The test environment enables mounting Vue 3 components in `jsdom` with real DOM interaction simulation without requiring a live browser.
-3. **Observation**: Components directly import `store` from `../store.js`, which is a Vue 3 `reactive({...})` singleton. `beforeEach` in `DailyRoutines.spec.js` resets `store.habits` and `localStorage`.
-4. **Logic**: Store state is fully deterministic per test run. Modifying `store` properties directly in test setup or user event simulation updates Vue template bindings immediately.
-5. **Observation**: Command `npx vitest run` executed all 10 test files with 100% pass rate, and `npm run build` compiled without warnings or errors.
-6. **Logic**: The current codebase and existing test suite are completely healthy and ready for R1, R2, and R3 test suite expansions.
-
----
+1. **Vertical Overhead Problem**: On a 680px mobile viewport, top padding (`py-6`), segmented switcher (`mb-6`), mobile sticky gauge (`mb-6`), hero summary card (~260px), and weekly day picker (~104px) consume over 500px before the first habit card is displayed.
+2. **Target Goal**: Fit **4-5 habit cards visible above the fold** without vertical scrolling.
+3. **Height Budget Calculation**:
+   - Total available mobile viewport height above fixed bottom navigation: `~620px`.
+   - Compact Segmented Switcher (`height: 36px` + `margin-bottom: 8px` = `44px`).
+   - Ultra-Slim Glass Header & Mini Progress Gauge (`height: 48px` + `margin-bottom: 8px` = `56px`).
+   - Total top overhead budget: `100px` (down from ~500px).
+   - Remaining vertical budget for habit cards: `620px - 100px = 520px`.
+   - Budget per habit card: `72px - 78px` per card. 5 habit cards @ 75px + 4 gaps @ 8px = `407px`.
+   - 407px + 100px = `507px` total layout height, which easily fits within 620px!
+4. **Required Class & Structure Changes**:
+   - Container padding: `py-2 sm:py-6`, `px-2 sm:px-4`.
+   - Card padding & gap: `p-2.5 sm:p-4`, `gap-1.5` / `gap-2`.
+   - Check-in button size: `w-8.5 h-8.5` (34px x 34px) on mobile, `w-10 h-10` on desktop.
+   - Micro Floating Action Button (Micro-FAB): Fixed at `bottom-20 left-4 z-40 md:hidden` (`w-11 h-11 rounded-full`).
+   - Compact Segmented Switcher: `min-h-[36px]`, `px-2 py-1.5 text-xs font-extrabold`, concise labels ("⚡ العادات" | "📝 اليوميات").
 
 ## 3. Caveats
-
-- Vitest runs under `jsdom`, which simulates touch events (`touchstart`, `touchend`) via synthetic event dispatches, but does not calculate physical pixel touch coordinates natively unless mocked with `clientX`/`clientY` touch lists.
-- Style class assertions (e.g. `min-h-[44px]`, `min-w-[56px]`, `.btn-touch-active`) verify Tailwind CSS class bindings on elements in `jsdom`, while computed layout rendering is verified during build compilation (`npm run build`).
-
----
+- **Read-Only Scope**: This report provides explicit blueprints and specifications. No source code files in `src/` were modified.
+- **RTL Alignment**: The Micro-FAB is placed at `left-4` (bottom-left) to follow standard RTL FAB ergonomics where action buttons sit on the left side opposite reading orientation, but can be adjusted to `right-4` if preferred by UX guidelines.
+- **Unit Test Environment**: Execution of unit test suites (`npm test` / Vitest) should be run by Implementer after applying the changes.
 
 ## 4. Conclusion
+Daily Routines & Habits mobile layout can achieve high density (4-5 habit cards visible above fold without scrolling) by replacing the bloated vertical header cards with an ultra-slim glassmorphic header bar, compacting card padding to `p-2.5`, resizing check-in buttons to sleek 34px buttons, and introducing a corner Micro-FAB.
 
-The test suite and build verification for `DailyRoutines.vue` are fully operational with a 100% pass rate. Detailed blueprints for required additions covering R1 (segmented control & swipe gestures), R2 (ergonomic touch targets, progress gauge, habit streaks, mobile note submit), and R3 (100% pass rate & edge cases) have been formulated and documented in `analysis.md`.
+Detailed recommendations, code diff blueprints, and responsiveness matrices have been documented in:
+`c:\xampp\htdocs\mymind\.agents\teamwork_preview_explorer_m1_3\analysis.md`
+
+## 5. Verification Method
+1. **Inspection**:
+   - Review `c:\xampp\htdocs\mymind\.agents\teamwork_preview_explorer_m1_3\analysis.md` for class specifications.
+2. **Automated Tests**:
+   - Run `npm test` or `npx vitest src/__tests__/DailyRoutines.spec.js` in `c:\xampp\htdocs\mymind`.
+3. **Visual Viewport Verification**:
+   - Open Developer Tools in browser and set viewport to `375px x 667px` (iPhone SE) or `390px x 844px` (iPhone 12/13/14).
+   - Confirm 4 to 5 habit cards fit within the initial viewport above `MobileBottomNav` without vertical scrolling.
 
 ---
 
-## 5. Verification Method
-
-To independently verify these findings:
-1. Run Vitest suite:
-   ```bash
-   npx vitest run
-   ```
-   *Expected result*: 10 passed test files (including `DailyRoutines.spec.js`), 0 failed tests.
-2. Run Vite build verification:
-   ```bash
-   npm run build
-   ```
-   *Expected result*: Successful build output in `dist/` in ~7-8 seconds.
-3. Inspect analysis document:
-   ```bash
-   view_file c:\xampp\htdocs\mymind\.agents\teamwork_preview_explorer_m1_3\analysis.md
-   ```
+## Remaining Work
+- Implementer to apply class modifications from `analysis.md` to `src/components/DailyRoutines.vue`.
+- Execute test suite `npm test` to verify zero regression on habit toggle logic or component props.

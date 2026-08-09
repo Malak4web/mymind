@@ -1,46 +1,29 @@
-# Master Plan: Mobile UX/UI Redesign for Daily Routines & Habits (اليوميات والعادات)
+# Mobile UI Overhaul Plan — Daily Routines & Habits
 
-## Strategic Objectives
-1. **Segmented Control & Touch Navigation (R1)**:
-   - Mobile segmented control ("اليوميات" | "العادات") visible and intuitive on mobile viewports (< 768px).
-   - Horizontal touch/swipe gesture support for smooth switching between Daily Reflection Notes and Habit Tracking.
+## Project Goal
+Transform the Daily Routines & Habits (`DailyRoutines.vue`) mobile experience (< 768px viewports) into a high-density, compact, sleek interface with ergonomic micro-controls (32-36px), slim glassmorphic header and progress gauge, micro-FAB, and slim segmented tab switcher, while maintaining 100% test pass rates and zero build errors.
 
-2. **Mobile Ergonomics & Habit Cards Redesign (R2)**:
-   - Thumb-friendly habit cards with minimum 44x44px touch target sizes and visual completion feedback.
-   - Compact progress gauge & streak counter top bar on mobile without screen clutter.
-   - Enhanced mobile daily notes with smooth inline journal editing and quick floating/fixed submit action.
+## Milestones & Execution Strategy
 
-3. **Automated Test Coverage & Verification (R3)**:
-   - Update and expand Vitest test suite (`src/__tests__/DailyRoutines.spec.js`) to cover mobile segmented control, swipe gesture handling, habit check-in state logic, and mobile daily notes.
-   - Ensure 100% pass rate on `npm test` / `npx vitest run` and zero build errors on `npm run build`.
+### Phase 1: Exploration & Codebase Analysis
+- Spawn `teamwork_preview_explorer` to inspect `DailyRoutines.vue`, `src/__tests__/DailyRoutines.spec.js`, associated Tailwind classes, existing components, and test setups.
+- Identify current layout paddings, button sizes, header height, progress bar dimensions, and test assertions.
 
-## Milestones & Decomposition
+### Phase 2: Compact Mobile Layout & Sleek Components Overhaul
+- Milestone 1: High-Density Layout & Slim Header/Gauge
+  - Update `DailyRoutines.vue` layout paddings (`p-2 sm:p-3`, `gap-2`, `p-2.5`).
+  - Fit 4-5 habit cards above the fold on mobile screens.
+  - Reduce header padding/height and thin out progress gauge.
+- Milestone 2: Sleek Micro Controls, Micro-FAB & Segmented Switcher
+  - Replace bulky check-in buttons with 32-36px check-in toggles & status badges.
+  - Add/refine compact Micro Floating Action Button (Micro-FAB).
+  - Streamline tab switcher ("اليوميات" | "العادات") into a slim segmented design.
 
-### Milestone 1: Exploration & Codebase Analysis
-- **Goal**: Analyze current `DailyRoutines.vue`, `src/__tests__/DailyRoutines.spec.js`, `store.js`, responsive styles, and touch event handling.
-- **Workers**: 3 Explorers (`teamwork_preview_explorer`) in parallel.
-- **Deliverables**: Comprehensive analysis report detailing existing implementation, structure, gesture integration points, and test expansion strategy.
+### Phase 3: Vitest Test Suite Updates & Build Verification
+- Update `src/__tests__/DailyRoutines.spec.js` and any related component tests to match new classes, structure, and micro controls.
+- Verify `npm test` passes 100% (0 failures).
+- Verify `npm run build` compiles cleanly (0 errors).
 
-### Milestone 2: Segmented Control & Mobile Touch Navigation
-- **Goal**: Implement top segmented control ("اليوميات" | "العادات") and touch swipe gesture logic on mobile screens (< 768px).
-- **Workers**: Implementer (`teamwork_preview_worker`), Reviewers (`teamwork_preview_reviewer`), Challenger (`teamwork_preview_challenger`).
-- **Deliverables**: Updated `DailyRoutines.vue` with mobile segmented tabs and swipe gesture handlers.
-
-### Milestone 3: Mobile Ergonomics & Habit Cards Redesign
-- **Goal**: Redesign habit cards for mobile (min 44x44px touch targets), compact progress gauge & streak bar, and enhanced mobile daily notes UI.
-- **Workers**: Implementer (`teamwork_preview_worker`), Reviewers (`teamwork_preview_reviewer`), Challenger (`teamwork_preview_challenger`).
-- **Deliverables**: Thumb-friendly mobile UI components in `DailyRoutines.vue`.
-
-### Milestone 4: Automated Test Suite Expansion (`DailyRoutines.spec.js`)
-- **Goal**: Expand Vitest unit/component tests to cover segmented control, touch swipe triggers, habit check-in, notes submit, and state updates.
-- **Workers**: Implementer (`teamwork_preview_worker`), Reviewer (`teamwork_preview_reviewer`).
-- **Deliverables**: Passing test suite with 100% pass rate (`npx vitest run`) and clean build (`npm run build`).
-
-### Milestone 5: Review, Stress Testing & Forensic Integrity Audit
-- **Goal**: Independent review, empirical stress testing, and forensic integrity audit.
-- **Workers**: Reviewers (`teamwork_preview_reviewer`), Challenger (`teamwork_preview_challenger`), Forensic Auditor (`teamwork_preview_auditor`).
-- **Deliverables**: CLEAN audit verdict, 0 test failures, verified build.
-
-### Milestone 6: Final Verification & Victory Claim
-- **Goal**: Final verification and victory claim to Sentinel.
-- **Deliverables**: Comprehensive handoff report and victory notification.
+### Phase 4: Review & Forensic Integrity Audit
+- Dispatch `teamwork_preview_reviewer` and `teamwork_preview_challenger` to verify mobile density, component sizing, and functionality.
+- Dispatch `teamwork_preview_auditor` for integrity verification.

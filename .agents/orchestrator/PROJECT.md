@@ -1,29 +1,17 @@
-# Project: Daily Routines ('يومياتي') Redesign
+# Project Scope: Daily Routines & Habits Mobile UI Overhaul
 
-## Architecture & Overview
-Mobile-first UI/UX overhaul of the Daily Routines system in mymind Vue 3 codebase:
-- Glassmorphic Header & Weekly Day Picker Bar (`DailyRoutines.vue`).
-- Modern Routine Cards & Thumb-friendly 56px Check Buttons (`DailyRoutines.vue`).
-- Dedicated Habit Detail View (`HabitDetail.vue` / `#routines/habit-[ID]`):
-  - Progress Ring Header with SVG gauge & Streak Counter 🔥
-  - Interactive Sub-tasks Checklist with % progress bar & inline editing
-  - Habit Journal & Mood Notes Interface (🤩 😃 😐 😫 🚀 ⚡)
-  - Monthly Heatmap Grid with month navigation, RTL headers & 4-level color intensity
-- Mobile Bottom Sheets / Drawers (`MobileBottomSheet.vue`) for checking, stats, details, and habit creation.
+## Overview
+Overhaul the Vue.js mobile UI (`DailyRoutines.vue` and related components/tests) in `mymind` for mobile viewports (< 768px). Transform it into a compact, high-density experience with minimal padding/margins, slim glassmorphic header, slim progress gauge, ergonomic 32-36px micro controls, micro-FAB, and compact tab switcher.
+
+## Architecture & Code Layout
+- Target View: `src/views/DailyRoutines.vue` (or `src/components/DailyRoutines.vue`, to be determined by Explorer)
+- Target Test: `src/__tests__/DailyRoutines.spec.js` (and related test specs)
+- Design tokens / CSS: Tailwind CSS classes (e.g. `p-2.5`, `gap-2`, `p-2 sm:p-3`)
 
 ## Milestones
-
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | Exploration | Codebase investigation for routines & habit details | none | DONE |
-| M2 | Main Screen Redesign | Header glassmorphism, day picker, routine cards, check buttons | M1 | DONE |
-| M3 | Habit Detail View (`HabitDetail.vue`) | Progress ring, streak 🔥, sub-tasks, journal notes, heatmap | M1, M2 | DONE |
-| M4 | Bottom Sheets & Drawers | Bottom sheet drawers for checking, stats, details, creation | M2, M3 | DONE |
-| M5 | Verification & Build Audit | Reviewers, Challengers, Forensic Integrity Audit, npm run build | M2, M3, M4 | DONE |
-
-## Interface Contracts & Layout
-- Framework: Vue 3 (Composition API / Options API), Tailwind CSS / Custom CSS.
-- Route: `#routines` / `#routines/habit-[ID]`.
-- Components: Routines main view (`DailyRoutines.vue`), `HabitDetail.vue`, `MobileBottomSheet.vue`.
-- Zero horizontal overflow on 360px-430px screens.
-- Build output: 100% clean `npm run build`.
+| 1 | Exploration & Analysis | Codebase scan of `DailyRoutines.vue` and tests | none | DONE |
+| 2 | High-Density Compact Cards Layout & Micro Controls | Compact padding (`p-2.5`, `gap-2`, `p-2 sm:p-3`), 4-5 cards above fold, slim header/gauge, 36px toggles, micro-FAB, slim switcher | M1 | DONE |
+| 3 | Vitest Suite Update & Build | Align unit tests with UI updates, achieve 100% test pass & clean build | M2 | DONE |
+| 4 | Review, Challenge & Audit | Verification, review, challenge, and forensic integrity audit | M3 | DONE |
