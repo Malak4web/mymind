@@ -1368,26 +1368,35 @@ export const store = reactive({
   startRealtimeSync() {
     if (this.realtimeSyncTimer) return
 
-    // First load from server (replaces stale localStorage with server truth)
-    this.loadDailyTasks(true)
+    const syncAll = () => {
+      this.loadDailyTasks(true)
+      this.loadHabits(true)
+      this.loadProjects(true)
+      this.loadProjectCategories(true)
+      this.loadNotifications(true)
+      if (this.activeProjectId) {
+        this.loadTasks(true)
+        this.loadNotes(true)
+        this.loadProjectFiles(true)
+        this.loadFolders(true)
+      }
+    }
+
+    syncAll()
 
     this.realtimeSyncTimer = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        this.loadDailyTasks(true)
+        syncAll()
       }
     }, 3000)
 
     if (typeof window !== 'undefined') {
-      const triggerImmediateSync = () => {
-        this.loadDailyTasks(true)
-      }
-
-      window.addEventListener('focus', triggerImmediateSync)
-      window.addEventListener('online', triggerImmediateSync)
+      window.addEventListener('focus', syncAll)
+      window.addEventListener('online', syncAll)
       if (typeof document !== 'undefined') {
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') {
-            triggerImmediateSync()
+            syncAll()
           }
         })
       }
@@ -1637,7 +1646,109 @@ export const store = reactive({
     return true
   },
 
-  // Habits Management Methods (يومياتي)
+  // Habits Management Methods (يومياتي - العادات)
+  _habitWritesPending: 0,
+  _habitSyncing: false,
+
+  async loadHabits(isSilent = false) {
+    if (this._habitWritesPending > 0) return
+    if (this._habitSyncing) return
+    this._habitSyncing = true
+
+    try {
+      const res = await fetch(`${this.apiBase}/habits`, {
+        headers: this.getAuthHeaders()
+      })
+      if (!res.ok) {
+        this._habitSyncing = false
+        return
+      }
+
+      const rawHabits = await res.json()
+      if (!Array.isArray(rawHabits)) { this._habitSyncing = false; return }
+
+      if (this._habitWritesPending > 0) { this._habitSyncing = false; return }
+
+      const serverHabits = rawHabits.map(h => ({
+        id: h.id,
+        title: h.title,
+        category: h.category || 'عام',
+        icon: h.icon || '📌',
+        color: h.color || 'from-blue-500 to-indigo-500',
+        timeOfDay: h.time_of_day || 'anytime',
+        type: h.type || 'boolean',
+        targetValue: h.target_value || 1,
+        unit: h.unit || 'مرة',
+        frequency: h.frequency || [0, 1, 2, 3, 4, 5, 6],
+        logs: h.logs || {},
+        notesList: h.notes_list || [],
+        checklist: h.checklist || []
+      }))
+
+      const serverIdSet = new Set(serverHabits.map(h => String(h.id)))
+      const serverTitleSet = new Set(serverHabits.map(h => (h.title || '').trim().toLowerCase()))
+
+      const localOnlyHabits = (this.habits || []).filter(h => {
+        const id = Number(h.id)
+        return id > 1_000_000_000
+          && !serverIdSet.has(String(h.id))
+          && !serverTitleSet.has((h.title || '').trim().toLowerCase())
+      })
+
+      const merged = [...localOnlyHabits, ...serverHabits]
+      const currentJson = JSON.stringify(this.habits)
+      const newJson = JSON.stringify(merged)
+      if (currentJson !== newJson) {
+        this.habits = merged
+        this.saveHabits()
+      }
+
+      if (localOnlyHabits.length > 0) {
+        this._pushUnsyncedHabits(localOnlyHabits)
+      }
+    } catch (e) {
+      if (!isSilent) console.error('فشل تحميل العادات من السيرفر', e)
+    } finally {
+      this._habitSyncing = false
+    }
+  },
+
+  async _pushUnsyncedHabits(habits) {
+    for (const habit of habits) {
+      try {
+        const res = await fetch(`${this.apiBase}/habits`, {
+          method: 'POST',
+          headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            title: habit.title,
+            category: habit.category,
+            icon: habit.icon,
+            color: habit.color,
+            time_of_day: habit.timeOfDay,
+            type: habit.type,
+            target_value: habit.targetValue,
+            unit: habit.unit,
+            frequency: habit.frequency,
+            logs: habit.logs,
+            notes_list: habit.notesList,
+            checklist: habit.checklist
+          })
+        })
+        if (res.ok) {
+          const created = await res.json()
+          const idx = this.habits.findIndex(h => h.id === habit.id)
+          if (idx !== -1 && created.id) {
+            this.habits[idx].id = created.id
+            this.habits = [...this.habits]
+            this.saveHabits()
+          }
+        }
+      } catch (e) {
+        // Will retry on next sync cycle
+      }
+    }
+  },
+
   saveHabits() {
     try {
       localStorage.setItem('mymind_habits', JSON.stringify(this.habits))
@@ -1646,9 +1757,10 @@ export const store = reactive({
     }
   },
 
-  addHabit(habitData) {
+  async addHabit(habitData) {
+    const tempId = Date.now() + Math.floor(Math.random() * 1000)
     const newHabit = {
-      id: habitData.id || (Date.now() + Math.random()),
+      id: tempId,
       logs: {},
       frequency: [0, 1, 2, 3, 4, 5, 6],
       timeOfDay: 'anytime',
@@ -1659,13 +1771,88 @@ export const store = reactive({
     }
     this.habits = [...this.habits, newHabit]
     this.saveHabits()
+    this._habitWritesPending++
+
+    try {
+      const res = await fetch(`${this.apiBase}/habits`, {
+        method: 'POST',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          title: newHabit.title,
+          category: newHabit.category,
+          icon: newHabit.icon,
+          color: newHabit.color,
+          time_of_day: newHabit.timeOfDay,
+          type: newHabit.type,
+          target_value: newHabit.targetValue,
+          unit: newHabit.unit,
+          frequency: newHabit.frequency,
+          logs: newHabit.logs,
+          notes_list: newHabit.notesList,
+          checklist: newHabit.checklist
+        })
+      })
+      if (res.ok) {
+        const created = await res.json()
+        const idx = this.habits.findIndex(h => h.id === tempId)
+        if (idx !== -1 && created.id) {
+          this.habits[idx].id = created.id
+          this.habits = [...this.habits]
+          this.saveHabits()
+        }
+      }
+    } catch (e) {
+      console.error('فشل حفظ العادة في السيرفر', e)
+    } finally {
+      this._habitWritesPending = Math.max(0, this._habitWritesPending - 1)
+    }
     return newHabit
   },
 
-
-  deleteHabit(id) {
+  async deleteHabit(id) {
     this.habits = this.habits.filter(h => String(h.id) !== String(id))
     this.saveHabits()
+    this._habitWritesPending++
+
+    try {
+      await fetch(`${this.apiBase}/habits/${id}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      })
+    } catch (e) {
+      console.error('فشل حذف العادة من السيرفر', e)
+    } finally {
+      this._habitWritesPending = Math.max(0, this._habitWritesPending - 1)
+    }
+  },
+
+  async _saveHabitToServer(habit) {
+    if (Number(habit.id) > 1_000_000_000) return // unsynced temp habit, _pushUnsyncedHabits will handle it
+    this._habitWritesPending++
+    try {
+      await fetch(`${this.apiBase}/habits/${habit.id}`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          title: habit.title,
+          category: habit.category,
+          icon: habit.icon,
+          color: habit.color,
+          time_of_day: habit.timeOfDay,
+          type: habit.type,
+          target_value: habit.targetValue,
+          unit: habit.unit,
+          frequency: habit.frequency,
+          logs: habit.logs,
+          notes_list: habit.notesList,
+          checklist: habit.checklist
+        })
+      })
+    } catch (e) {
+      console.error('فشل تحديث العادة على السيرفر', e)
+    } finally {
+      this._habitWritesPending = Math.max(0, this._habitWritesPending - 1)
+    }
   },
 
   toggleHabitLog(habitId, dateStr, value = null, note = null) {
@@ -1702,8 +1889,8 @@ export const store = reactive({
     habit.logs = logs
     this.habits = [...this.habits]
     this.saveHabits()
+    this._saveHabitToServer(habit)
   },
-
 
   updateHabitNote(habitId, dateStr, note) {
     const habit = this.habits.find(h => String(h.id) === String(habitId))
@@ -1716,6 +1903,7 @@ export const store = reactive({
     }
     this.habits = [...this.habits]
     this.saveHabits()
+    this._saveHabitToServer(habit)
   },
 
   addHabitNote(habitId, content, dateStr = null) {
@@ -1741,6 +1929,7 @@ export const store = reactive({
     habit.notesList.unshift(newNote)
     this.habits = [...this.habits]
     this.saveHabits()
+    this._saveHabitToServer(habit)
     return newNote
   },
 
@@ -1750,6 +1939,7 @@ export const store = reactive({
     habit.notesList = habit.notesList.filter(n => String(n.id) !== String(noteId))
     this.habits = [...this.habits]
     this.saveHabits()
+    this._saveHabitToServer(habit)
   },
 
   addHabitChecklistItem(habitId, title) {
@@ -1765,6 +1955,7 @@ export const store = reactive({
     habit.checklist.push(newItem)
     this.habits = [...this.habits]
     this.saveHabits()
+    this._saveHabitToServer(habit)
     return newItem
   },
 
@@ -1776,6 +1967,7 @@ export const store = reactive({
       item.completed = !item.completed
       this.habits = [...this.habits]
       this.saveHabits()
+      this._saveHabitToServer(habit)
     }
   },
 
@@ -1785,6 +1977,7 @@ export const store = reactive({
     habit.checklist = habit.checklist.filter(i => String(i.id) !== String(itemId))
     this.habits = [...this.habits]
     this.saveHabits()
+    this._saveHabitToServer(habit)
   }
 })
 

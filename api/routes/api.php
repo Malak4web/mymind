@@ -128,6 +128,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/daily-tasks/sync', [DailyTaskController::class, 'sync']);
     Route::put('/daily-tasks/{id}', [DailyTaskController::class, 'update']);
     Route::delete('/daily-tasks/{id}', [DailyTaskController::class, 'destroy']);
+
+    // Habits routes (العادات)
+    Route::get('/habits', [\App\Http\Controllers\HabitController::class, 'index']);
+    Route::post('/habits', [\App\Http\Controllers\HabitController::class, 'store']);
+    Route::post('/habits/sync', [\App\Http\Controllers\HabitController::class, 'sync']);
+    Route::put('/habits/{id}', [\App\Http\Controllers\HabitController::class, 'update']);
+    Route::delete('/habits/{id}', [\App\Http\Controllers\HabitController::class, 'destroy']);
 });
 
 // One-time migration trigger (run once then remove)
