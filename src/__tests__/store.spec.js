@@ -233,17 +233,17 @@ describe('store.js State & Actions Unit Tests', () => {
       store.habits = []
     })
 
-    it('addHabit() should append new habit and save to localStorage', () => {
+    it('addHabit() should append new habit and save to localStorage', async () => {
       const initialCount = store.habits.length
-      const newHabit = store.addHabit({ title: 'قراءة قرآن', category: 'روحانيات' })
+      const newHabit = await store.addHabit({ title: 'قراءة قرآن', category: 'روحانيات' })
 
       expect(store.habits.length).toBe(initialCount + 1)
       expect(newHabit.title).toBe('قراءة قرآن')
       expect(localStorage.getItem('mymind_habits')).toBeTruthy()
     })
 
-    it('toggleHabitLog() should update numeric and boolean habits', () => {
-      const habit = store.addHabit({ title: 'خطوات', type: 'numeric', targetValue: 1000 })
+    it('toggleHabitLog() should update numeric and boolean habits', async () => {
+      const habit = await store.addHabit({ title: 'خطوات', type: 'numeric', targetValue: 1000 })
       const dateStr = '2026-07-30'
 
       store.toggleHabitLog(habit.id, dateStr, 500)
@@ -253,9 +253,9 @@ describe('store.js State & Actions Unit Tests', () => {
       expect(store.habits.find(h => h.id === habit.id).logs[dateStr].completed).toBe(true)
     })
 
-    it('deleteHabit() should remove habit by ID', () => {
-      const habit = store.addHabit({ title: 'مؤقتة' })
-      store.deleteHabit(habit.id)
+    it('deleteHabit() should remove habit by ID', async () => {
+      const habit = await store.addHabit({ title: 'مؤقتة' })
+      await store.deleteHabit(habit.id)
 
       expect(store.habits.some(h => h.id === habit.id)).toBe(false)
     })
@@ -296,11 +296,15 @@ describe('store.js State & Actions Unit Tests', () => {
   describe('7. Standardized Auth Headers & Coercion Edge Cases', () => {
     it('getAuthHeaders() returns Authorization Bearer when token is present and omits it when empty', () => {
       store.token = ''
-      expect(store.getAuthHeaders({ 'Content-Type': 'application/json' })).toEqual({ 'Content-Type': 'application/json' })
+      expect(store.getAuthHeaders({ 'Content-Type': 'application/json' })).toEqual({
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      })
 
       store.token = 'abc-123'
       expect(store.getAuthHeaders({ 'Content-Type': 'application/json' })).toEqual({
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         'Authorization': 'Bearer abc-123'
       })
     })
@@ -330,8 +334,8 @@ describe('store.js State & Actions Unit Tests', () => {
       )
     })
 
-    it('nested habit mutations reassign store.habits array to trigger Vue reactivity', () => {
-      const habit = store.addHabit({ title: 'عادة باختبار التفرع' })
+    it('nested habit mutations reassign store.habits array to trigger Vue reactivity', async () => {
+      const habit = await store.addHabit({ title: 'عادة باختبار التفرع' })
       const originalHabitsRef = store.habits
 
       const note = store.addHabitNote(String(habit.id), 'ملاحظة جديدة')
