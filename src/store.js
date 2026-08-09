@@ -1363,18 +1363,19 @@ export const store = reactive({
 
   // Real-time synchronization
   realtimeSyncTimer: null,
-  _initialDailySyncDone: false,
+  _dailyWriteCooldownUntil: 0, // timestamp: don't overwrite local state until this time passes
 
   startRealtimeSync() {
     if (this.realtimeSyncTimer) return
 
+    // First load from server (replaces stale localStorage with server truth)
     this.loadDailyTasks(true)
 
     this.realtimeSyncTimer = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         this.loadDailyTasks(true)
       }
-    }, 2500)
+    }, 3000)
 
     if (typeof window !== 'undefined') {
       const triggerImmediateSync = () => {
@@ -1395,27 +1396,22 @@ export const store = reactive({
 
   // Daily Tasks Management Methods (اليوميات)
   async loadDailyTasks(isSilent = false) {
-    try {
-      const localTasks = this.dailyTasks || []
-      if (!this._initialDailySyncDone && localTasks.length > 0) {
-        this._initialDailySyncDone = true
-        try {
-          await fetch(`${this.apiBase}/daily-tasks/sync`, {
-            method: 'POST',
-            headers: this.getAuthHeaders(),
-            body: JSON.stringify({ tasks: localTasks })
-          })
-        } catch (syncErr) {
-          if (!isSilent) console.error('فشل المزامنة الأولية لليوميات السابقة', syncErr)
-        }
-      }
+    // During write cooldown, don't overwrite local state with server data
+    // This prevents the poll from reverting local changes while server is processing
+    if (Date.now() < this._dailyWriteCooldownUntil) {
+      return
+    }
 
+    try {
       const res = await fetch(`${this.apiBase}/daily-tasks`, {
         headers: this.getAuthHeaders()
       })
       if (res.ok) {
         const rawTasks = await res.json()
         if (Array.isArray(rawTasks)) {
+          // Still in cooldown? (async fetch took time, check again)
+          if (Date.now() < this._dailyWriteCooldownUntil) return
+
           const mapped = rawTasks.map(t => ({
             id: t.id,
             title: t.title,
@@ -1447,6 +1443,11 @@ export const store = reactive({
     }
   },
 
+  // Set a cooldown: polls won't overwrite local state for this many seconds
+  _setWriteCooldown(seconds = 5) {
+    this._dailyWriteCooldownUntil = Date.now() + (seconds * 1000)
+  },
+
   async addDailyTask(taskData) {
     const tempId = Date.now()
     const newTask = {
@@ -1460,11 +1461,12 @@ export const store = reactive({
     }
     this.dailyTasks = [newTask, ...this.dailyTasks]
     this.saveDailyTasks()
+    this._setWriteCooldown(6)
 
     try {
       const res = await fetch(`${this.apiBase}/daily-tasks`, {
         method: 'POST',
-        headers: this.getAuthHeaders(),
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           title: newTask.title,
           category: newTask.category,
@@ -1485,6 +1487,9 @@ export const store = reactive({
     } catch (e) {
       console.error('فشل إضافة المهمة اليومية إلى السيرفر', e)
     }
+
+    // After write completes, allow next poll to refresh
+    this._dailyWriteCooldownUntil = Date.now() + 1000
     return newTask
   },
 
@@ -1494,22 +1499,26 @@ export const store = reactive({
       task.completed = !task.completed
       this.dailyTasks = [...this.dailyTasks]
       this.saveDailyTasks()
+      this._setWriteCooldown(5)
 
       try {
         await fetch(`${this.apiBase}/daily-tasks/${id}`, {
           method: 'PUT',
-          headers: this.getAuthHeaders(),
+          headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ completed: task.completed })
         })
       } catch (e) {
         console.error('فشل تحديث المهمة اليومية على السيرفر', e)
       }
+
+      this._dailyWriteCooldownUntil = Date.now() + 1000
     }
   },
 
   async deleteDailyTask(id) {
     this.dailyTasks = this.dailyTasks.filter(t => String(t.id) !== String(id))
     this.saveDailyTasks()
+    this._setWriteCooldown(6)
 
     try {
       await fetch(`${this.apiBase}/daily-tasks/${id}`, {
@@ -1519,6 +1528,8 @@ export const store = reactive({
     } catch (e) {
       console.error('فشل حذف المهمة اليومية من السيرفر', e)
     }
+
+    this._dailyWriteCooldownUntil = Date.now() + 1000
   },
 
   async updateDailyTask(id, data) {
@@ -1527,11 +1538,12 @@ export const store = reactive({
       this.dailyTasks[taskIndex] = { ...this.dailyTasks[taskIndex], ...data }
       this.dailyTasks = [...this.dailyTasks]
       this.saveDailyTasks()
+      this._setWriteCooldown(5)
 
       try {
         await fetch(`${this.apiBase}/daily-tasks/${id}`, {
           method: 'PUT',
-          headers: this.getAuthHeaders(),
+          headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             title: data.title,
             category: data.category,
@@ -1543,6 +1555,8 @@ export const store = reactive({
       } catch (e) {
         console.error('فشل تعديل المهمة اليومية على السيرفر', e)
       }
+
+      this._dailyWriteCooldownUntil = Date.now() + 1000
     }
   },
 
