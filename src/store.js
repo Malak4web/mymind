@@ -211,11 +211,21 @@ export const store = reactive({
         this.isAuthenticated = true
         await this.loadProjectCategories()
         await this.loadProjects()
+        if (this.activeProjectId) {
+          await this.loadTasks()
+          await this.loadFolders()
+          await this.loadProjectFiles()
+          await this.loadNotes()
+          await this.loadMessages()
+        }
         await this.loadNotifications()
         await this.loadDigestInfo()
         await this.loadProjectTemplates()
         await this.loadTaskTemplates()
         await this.loadUsers()
+        await this.loadDailyTasks()
+        await this.loadHabits()
+        this.startRealtimeSync()
       } else {
         // Token expired/invalid
         this.logout();
@@ -350,17 +360,9 @@ export const store = reactive({
 
         // Auto-select active project if not set or deleted
         if (this.projects.length > 0) {
-
           if (!this.activeProjectId || !this.projects.some(p => p.id === this.activeProjectId)) {
             this.activeProjectId = this.projects[0].id
           }
-          await this.loadTasks()
-          await this.loadFolders()
-          await this.loadProjectFiles()
-          await this.loadNotes()
-          await this.loadMessages()
-          await this.loadDailyTasks()
-          this.startRealtimeSync()
         } else {
           this.activeProjectId = null
           this.tasks = []
