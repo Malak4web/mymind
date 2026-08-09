@@ -359,6 +359,7 @@ export const store = reactive({
           await this.loadProjectFiles()
           await this.loadNotes()
           await this.loadMessages()
+          await this.loadDailyTasks()
         } else {
           this.activeProjectId = null
           this.tasks = []
@@ -1360,6 +1361,31 @@ export const store = reactive({
   },
 
   // Daily Tasks Management Methods (اليوميات)
+  async loadDailyTasks() {
+    try {
+      const res = await fetch(`${this.apiBase}/daily-tasks`, {
+        headers: this.getAuthHeaders()
+      })
+      if (res.ok) {
+        const rawTasks = await res.json()
+        if (Array.isArray(rawTasks)) {
+          this.dailyTasks = rawTasks.map(t => ({
+            id: t.id,
+            title: t.title,
+            category: t.category || 'عام',
+            priority: t.priority || 'متوسطة',
+            dueTime: t.due_time || '',
+            completed: Boolean(t.completed),
+            createdAt: t.created_at || new Date().toISOString()
+          }))
+          this.saveDailyTasks()
+        }
+      }
+    } catch (e) {
+      console.error('فشل تحميل اليوميات من السيرفر', e)
+    }
+  },
+
   saveDailyTasks() {
     try {
       localStorage.setItem('mymind_daily_tasks', JSON.stringify(this.dailyTasks))
@@ -1368,9 +1394,10 @@ export const store = reactive({
     }
   },
 
-  addDailyTask(taskData) {
+  async addDailyTask(taskData) {
+    const tempId = Date.now()
     const newTask = {
-      id: Date.now(),
+      id: tempId,
       category: 'عام',
       priority: 'متوسطة',
       dueTime: '',
@@ -1380,29 +1407,89 @@ export const store = reactive({
     }
     this.dailyTasks = [newTask, ...this.dailyTasks]
     this.saveDailyTasks()
+
+    try {
+      const res = await fetch(`${this.apiBase}/daily-tasks`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          title: newTask.title,
+          category: newTask.category,
+          priority: newTask.priority,
+          due_time: newTask.dueTime,
+          completed: newTask.completed
+        })
+      })
+      if (res.ok) {
+        const created = await res.json()
+        const idx = this.dailyTasks.findIndex(t => t.id === tempId)
+        if (idx !== -1 && created.id) {
+          this.dailyTasks[idx].id = created.id
+          this.dailyTasks = [...this.dailyTasks]
+          this.saveDailyTasks()
+        }
+      }
+    } catch (e) {
+      console.error('فشل إضافة المهمة اليومية إلى السيرفر', e)
+    }
     return newTask
   },
 
-  toggleDailyTask(id) {
+  async toggleDailyTask(id) {
     const task = this.dailyTasks.find(t => String(t.id) === String(id))
     if (task) {
       task.completed = !task.completed
       this.dailyTasks = [...this.dailyTasks]
       this.saveDailyTasks()
+
+      try {
+        await fetch(`${this.apiBase}/daily-tasks/${id}`, {
+          method: 'PUT',
+          headers: this.getAuthHeaders(),
+          body: JSON.stringify({ completed: task.completed })
+        })
+      } catch (e) {
+        console.error('فشل تحديث المهمة اليومية على السيرفر', e)
+      }
     }
   },
 
-  deleteDailyTask(id) {
+  async deleteDailyTask(id) {
     this.dailyTasks = this.dailyTasks.filter(t => String(t.id) !== String(id))
     this.saveDailyTasks()
+
+    try {
+      await fetch(`${this.apiBase}/daily-tasks/${id}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      })
+    } catch (e) {
+      console.error('فشل حذف المهمة اليومية من السيرفر', e)
+    }
   },
 
-  updateDailyTask(id, data) {
+  async updateDailyTask(id, data) {
     const taskIndex = this.dailyTasks.findIndex(t => String(t.id) === String(id))
     if (taskIndex !== -1) {
       this.dailyTasks[taskIndex] = { ...this.dailyTasks[taskIndex], ...data }
       this.dailyTasks = [...this.dailyTasks]
       this.saveDailyTasks()
+
+      try {
+        await fetch(`${this.apiBase}/daily-tasks/${id}`, {
+          method: 'PUT',
+          headers: this.getAuthHeaders(),
+          body: JSON.stringify({
+            title: data.title,
+            category: data.category,
+            priority: data.priority,
+            due_time: data.dueTime,
+            completed: data.completed
+          })
+        })
+      } catch (e) {
+        console.error('فشل تعديل المهمة اليومية على السيرفر', e)
+      }
     }
   },
 

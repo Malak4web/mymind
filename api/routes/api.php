@@ -15,6 +15,7 @@ use App\Http\Controllers\TaskTemplateController;
 use App\Http\Controllers\FolderController;
 use App\Http\Controllers\ProjectFileController;
 use App\Http\Controllers\NoteController;
+use App\Http\Controllers\DailyTaskController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Artisan;
 use App\Models\EmailDigestQueue;
@@ -120,4 +121,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/task-templates/{id}', [TaskTemplateController::class, 'update']);
     Route::delete('/task-templates/{id}', [TaskTemplateController::class, 'destroy']);
     Route::post('/task-templates/{id}/set-default', [TaskTemplateController::class, 'setDefault']);
+
+    // Daily Tasks routes
+    Route::get('/daily-tasks', [DailyTaskController::class, 'index']);
+    Route::post('/daily-tasks', [DailyTaskController::class, 'store']);
+    Route::put('/daily-tasks/{id}', [DailyTaskController::class, 'update']);
+    Route::delete('/daily-tasks/{id}', [DailyTaskController::class, 'destroy']);
+    Route::post('/daily-tasks/sync', [DailyTaskController::class, 'sync']);
 });
