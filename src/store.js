@@ -326,6 +326,8 @@ export const store = reactive({
           memberIds: p.member_ids || [],
           categoryId: p.category_id || null,
           categoryName: p.category_name || null,
+          task_counts: p.task_counts || {},
+          total_tasks_count: p.total_tasks_count || 0,
           isDeleted: p.is_deleted
         }))
 
@@ -397,10 +399,25 @@ export const store = reactive({
               customFieldValues: values
             }
           })
+          this.updateProjectTaskCounts()
         }
       }
     } catch (e) {
       console.error("فشل تحميل المهام", e)
+    }
+  },
+
+  updateProjectTaskCounts() {
+    if (!this.activeProjectId) return
+    const activeProj = this.projects.find(p => p.id === this.activeProjectId)
+    if (activeProj) {
+      const counts = {}
+      (activeProj.statuses || []).forEach(s => { counts[s] = 0 })
+      this.tasks.forEach(t => {
+        counts[t.status] = (counts[t.status] || 0) + 1
+      })
+      activeProj.task_counts = counts
+      activeProj.total_tasks_count = this.tasks.length
     }
   },
 

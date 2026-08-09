@@ -544,6 +544,12 @@ const bulkDelete = async () => {
     console.error(e)
   }
 }
+const quickDeleteTask = async (task) => {
+  if (!task) return
+  if (confirm(`هل أنت متأكد من حذف المهمة "${task.title}"؟`)) {
+    await store.deleteTask(task.id)
+  }
+}
 </script>
 
 <template>
@@ -684,8 +690,8 @@ const bulkDelete = async () => {
             </div>
 
             <!-- Card Header & Completion Checkbox -->
-            <div class="pl-8 text-right flex items-center gap-2">
-              <div class="min-h-[44px] min-w-[44px] flex items-center justify-center -mr-2" @click.stop>
+            <div class="pl-7 text-right flex items-center gap-1.5 w-full min-w-0">
+              <div class="min-h-[44px] min-w-[44px] flex items-center justify-center -mr-2 shrink-0" @click.stop>
                 <input 
                   type="checkbox"
                   :checked="task.status === 'مكتمل'"
@@ -695,18 +701,29 @@ const bulkDelete = async () => {
                 />
               </div>
               <h4 
-                class="text-xs font-extrabold text-slate-855 dark:text-slate-100 group-hover:text-violet-650 dark:group-hover:text-violet-400 transition duration-150 truncate leading-relaxed flex-1"
+                class="text-xs font-extrabold text-slate-855 dark:text-slate-100 group-hover:text-violet-650 dark:group-hover:text-violet-400 transition duration-150 truncate leading-relaxed flex-1 min-w-0"
                 :class="[task.status === 'مكتمل' ? 'line-through text-slate-400 dark:text-slate-500' : '']"
+                :title="task.title"
               >
                 <MentionText :content="task.title" />
               </h4>
-              <button 
-                @click.stop="openEditTask(task.id)"
-                class="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-violet-600 transition cursor-pointer text-xs shrink-0"
-                title="تعديل المهمة (فتح النموذج الكامل)"
-              >
-                ✏️
-              </button>
+              <!-- Card Action Buttons: Edit & Quick Delete -->
+              <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" @click.stop>
+                <button 
+                  @click="openEditTask(task.id)"
+                  class="p-1 text-slate-400 hover:text-violet-600 transition cursor-pointer text-xs rounded hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[32px] min-w-[32px] flex items-center justify-center"
+                  title="تعديل المهمة"
+                >
+                  ✏️
+                </button>
+                <button 
+                  @click="quickDeleteTask(task)"
+                  class="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer text-xs rounded hover:bg-rose-50 dark:hover:bg-rose-955/30 min-h-[32px] min-w-[32px] flex items-center justify-center"
+                  title="حذف المهمة سريعا"
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
 
             <!-- Task Description Mention & Links Preview -->

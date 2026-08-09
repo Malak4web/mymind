@@ -29,6 +29,16 @@ class ProjectController extends Controller
             $pData['member_ids'] = $p->users->pluck('id')->all();
             $pData['category_id'] = $p->category_id;
             $pData['category_name'] = $p->category?->name;
+
+            // Compute task status counts for this project
+            $statusCounts = Task::where('project_id', $p->id)
+                ->select('status', DB::raw('count(*) as total'))
+                ->groupBy('status')
+                ->pluck('total', 'status')
+                ->all();
+            $pData['task_counts'] = $statusCounts;
+            $pData['total_tasks_count'] = (int)array_sum($statusCounts);
+
             return $pData;
         });
 

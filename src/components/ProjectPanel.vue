@@ -203,12 +203,26 @@ const getUncategorizedCount = () => {
 }
 
 const getTaskCountByStatus = (projectId, statusName) => {
-  if (!store.tasks || store.tasks.length === 0) return 0
+  if (projectId === store.activeProjectId && store.tasks) {
+    return store.tasks.filter(t => (t.projectId === projectId || t.project_id === projectId) && t.status === statusName).length
+  }
+  const p = store.projects.find(proj => proj.id === projectId)
+  if (p && p.task_counts && p.task_counts[statusName] !== undefined) {
+    return p.task_counts[statusName]
+  }
+  if (!store.tasks) return 0
   return store.tasks.filter(t => (t.projectId === projectId || t.project_id === projectId) && t.status === statusName).length
 }
 
 const getProjectTotalTaskCount = (projectId) => {
-  if (!store.tasks || store.tasks.length === 0) return 0
+  if (projectId === store.activeProjectId && store.tasks) {
+    return store.tasks.filter(t => (t.projectId === projectId || t.project_id === projectId)).length
+  }
+  const p = store.projects.find(proj => proj.id === projectId)
+  if (p && p.total_tasks_count !== undefined) {
+    return p.total_tasks_count
+  }
+  if (!store.tasks) return 0
   return store.tasks.filter(t => (t.projectId === projectId || t.project_id === projectId)).length
 }
 
