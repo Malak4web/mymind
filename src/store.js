@@ -576,6 +576,64 @@ export const store = reactive({
     ]
   },
 
+  // Impersonate User Methods (الدخول كـ مستخدم آخر)
+  async impersonateUser(userId) {
+    if (!this.hasPermission('manage-users')) {
+      alert('غير مصرح لك بمحاكاة الدخول كـ مستخدمين آخرين.')
+      return false
+    }
+
+    try {
+      const res = await fetch(`${this.apiBase}/users/${userId}/impersonate`, {
+        method: 'POST',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' })
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        // Save original admin token if not currently impersonating
+        if (!localStorage.getItem('mymind_admin_token')) {
+          localStorage.setItem('mymind_admin_token', this.token)
+        }
+        localStorage.setItem('mymind_impersonated_user_name', data.user.name)
+        localStorage.setItem('mymind_token', data.token)
+        this.token = data.token
+        this.currentUser = data.user
+        
+        // Re-initialize store with target user's context
+        await this.init()
+        return true
+      } else {
+        const err = await res.json()
+        alert(err.message || 'فشل تسجيل الدخول كـ هذا المستخدم')
+        return false
+      }
+    } catch (e) {
+      console.error('خطأ أثناء محاكاة المستخدم', e)
+      alert('حدث خطأ أثناء الاتصال بالسيرفر')
+      return false
+    }
+  },
+
+  async stopImpersonating() {
+    const adminToken = localStorage.getItem('mymind_admin_token')
+    if (adminToken) {
+      localStorage.setItem('mymind_token', adminToken)
+      localStorage.removeItem('mymind_admin_token')
+      localStorage.removeItem('mymind_impersonated_user_name')
+      this.token = adminToken
+      await this.init()
+    }
+  },
+
+  isImpersonating() {
+    return Boolean(localStorage.getItem('mymind_admin_token'))
+  },
+
+  getImpersonatedUserName() {
+    return localStorage.getItem('mymind_impersonated_user_name') || ''
+  },
+
   // Create Project
   async createProject(name, description, projectTemplateId = null, memberIds = [], categoryId = null) {
     if (!this.hasPermission('manage-projects')) {

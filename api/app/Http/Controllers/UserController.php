@@ -83,4 +83,20 @@ class UserController extends Controller
 
         return response()->json(['message' => 'تم حذف المستخدم بنجاح']);
     }
+
+    public function impersonate(Request $request, $id)
+    {
+        $this->authorizeAdmin($request);
+
+        $targetUser = User::with('role')->findOrFail($id);
+
+        // Create Sanctum token for target user
+        $token = $targetUser->createToken('impersonated_by_' . $request->user()->id)->plainTextToken;
+
+        return response()->json([
+            'message' => 'تم تسجيل الدخول بنجاح كـ ' . $targetUser->name,
+            'token' => $token,
+            'user' => $targetUser
+        ]);
+    }
 }

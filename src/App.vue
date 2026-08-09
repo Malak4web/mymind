@@ -207,9 +207,22 @@ watch(() => store.projects, (newProjects) => {
     ]"
   >
     
-    <!-- Ambient Radial Gradient Background in Focus Mode -->
-    <div v-if="store.isFocusMode" class="absolute inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-violet-600/[0.03] dark:bg-violet-500/[0.02] blur-3xl"></div>
+    <!-- Impersonation Active Banner -->
+    <div 
+      v-if="store.isImpersonating()" 
+      class="bg-amber-500 text-slate-950 px-4 py-2 flex items-center justify-between shadow-md text-xs sm:text-sm sticky top-0 z-50 font-bold border-b border-amber-600"
+    >
+      <div class="flex items-center gap-2">
+        <span class="text-base">🔑</span>
+        <span>أنت تصفح النظام الآن بصفتك: <strong>{{ store.getImpersonatedUserName() }}</strong></span>
+      </div>
+      <button 
+        @click="store.stopImpersonating()" 
+        class="bg-slate-950 hover:bg-slate-900 text-white px-3 py-1.5 rounded-xl font-bold transition cursor-pointer text-xs flex items-center gap-1.5 shadow"
+      >
+        <span>↩️</span>
+        <span>إنهاء المحاكاة والعودة لحساب الأدمن</span>
+      </button>
     </div>
 
     <!-- Top Glassmorphic Navigation Header (Non-sticky, Hidden in Focus Mode) -->

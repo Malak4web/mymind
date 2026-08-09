@@ -264,6 +264,16 @@ const deleteUser = async (user) => {
   }
 }
 
+const handleImpersonate = async (user) => {
+  if (user.id === store.currentUser?.id) return
+  if (confirm(`هل ترغب في تسجيل الدخول بصفة "${user.name}"؟`)) {
+    const success = await store.impersonateUser(user.id)
+    if (success) {
+      window.location.hash = '#project-' + (store.activeProjectId || '')
+    }
+  }
+}
+
 const resetForm = () => {
   isEditing.value = false
   userIdToEdit.value = null
@@ -552,6 +562,15 @@ const handleSaveTaskTemplate = async () => {
                         </span>
                       </td>
                       <td class="py-3 px-4 text-left space-x-2 space-x-reverse">
+                        <button 
+                          v-if="u.id !== store.currentUser?.id"
+                          @click="handleImpersonate(u)"
+                          title="تسجيل الدخول كـ هذا المستخدم"
+                          class="px-2.5 py-1 text-xs bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 font-bold rounded-xl transition cursor-pointer min-h-[36px] inline-flex items-center gap-1 border border-indigo-200/50 dark:border-indigo-800/50"
+                        >
+                          <span>🔑</span>
+                          <span>دخول كـ</span>
+                        </button>
                         <button @click="editUser(u)" class="px-3 py-2 text-xs text-rose-600 font-bold transition cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center">تعديل</button>
                         <button @click="deleteUser(u)" :disabled="u.id === store.currentUser.id" class="px-3 py-2 text-xs text-rose-500 font-bold transition disabled:opacity-40 cursor-pointer min-h-[44px] min-w-[44px] inline-flex items-center justify-center">حذف</button>
                       </td>
@@ -573,6 +592,15 @@ const handleSaveTaskTemplate = async () => {
                     </span>
                   </div>
                   <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-100/60 dark:border-slate-800/40">
+                    <button 
+                      v-if="u.id !== store.currentUser?.id"
+                      @click="handleImpersonate(u)"
+                      title="تسجيل الدخول كـ هذا المستخدم"
+                      class="px-2.5 py-1 text-xs bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 font-bold rounded-xl transition cursor-pointer min-h-[36px] flex items-center gap-1 border border-indigo-200/50 dark:border-indigo-800/50"
+                    >
+                      <span>🔑</span>
+                      <span>دخول كـ</span>
+                    </button>
                     <button @click="editUser(u)" class="px-3 py-2 text-xs text-rose-600 font-bold transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center">تعديل</button>
                     <button @click="deleteUser(u)" :disabled="u.id === store.currentUser.id" class="px-3 py-2 text-xs text-rose-500 font-bold transition disabled:opacity-40 cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center">حذف</button>
                   </div>
