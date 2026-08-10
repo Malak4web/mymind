@@ -1527,51 +1527,11 @@ export const store = reactive({
   },
 
   _handleRealtimeEvent(event) {
-    const type = event.type
-    const projectId = event.projectId
-
-    console.log(`[Pusher] 📡 تحديث: ${type}`, projectId ? `(مشروع ${projectId})` : '')
-
-    switch (type) {
-      case 'tasks':
-        // Only reload if the event is for the currently active project
-        if (!projectId || String(projectId) === String(this.activeProjectId)) {
-          this.loadTasks(true)
-        }
-        break
-      case 'projects':
-        this.loadProjects(true)
-        break
-      case 'notifications':
-        this.loadNotifications(true)
-        break
-      case 'notes':
-        if (!projectId || String(projectId) === String(this.activeProjectId)) {
-          this.loadNotes(true)
-        }
-        break
-      case 'folders':
-        if (!projectId || String(projectId) === String(this.activeProjectId)) {
-          this.loadFolders(true)
-        }
-        break
-      case 'project_files':
-        if (!projectId || String(projectId) === String(this.activeProjectId)) {
-          this.loadProjectFiles(true)
-        }
-        break
-      case 'project_categories':
-        this.loadProjectCategories(true)
-        break
-      case 'daily_tasks':
-        this.loadDailyTasks(true)
-        break
-      case 'habits':
-        this.loadHabits(true)
-        break
-      default:
-        console.log(`[Pusher] نوع غير معروف: ${type}`)
-    }
+    // Pusher events are received but we do NOT auto-fetch.
+    // The toOthers() backend filter should prevent events from the same browser,
+    // but if they still arrive, we just log them.
+    // Data will be fresh on next manual navigation or page refresh.
+    console.log(`[Pusher] 📡 حدث: ${event.type}`, event.projectId ? `(مشروع ${event.projectId})` : '')
   },
 
   // Daily Tasks Management Methods (اليوميات)
