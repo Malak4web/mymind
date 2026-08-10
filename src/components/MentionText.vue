@@ -207,7 +207,7 @@ const handleFileClick = (token, e) => {
         <span v-if="token.type !== 'user'" class="text-[9px] opacity-60 group-hover/pill:opacity-100 transition">🔗</span>
       </span>
 
-      <span v-else class="whitespace-pre-wrap">{{ token.text }}</span>
+      <span v-else>{{ token.text }}</span>
     </template>
   </span>
 </template>

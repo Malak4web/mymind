@@ -713,7 +713,7 @@ onUnmounted(() => {
                 </div>
                 <div class="relative group/title flex-1 min-w-0">
                   <h4 
-                    class="text-xs sm:text-sm font-extrabold text-slate-855 dark:text-slate-100 group-hover:text-violet-650 dark:group-hover:text-violet-400 transition duration-150 truncate whitespace-nowrap overflow-hidden block leading-snug w-full"
+                    class="text-xs sm:text-sm font-extrabold text-slate-855 dark:text-slate-100 group-hover:text-violet-650 dark:group-hover:text-violet-400 transition duration-150 line-clamp-1 overflow-hidden text-ellipsis block leading-snug w-full"
                     :class="[task.status === 'مكتمل' ? 'line-through text-slate-400 dark:text-slate-500' : '']"
                     :title="task.title"
                   >
