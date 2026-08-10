@@ -206,6 +206,7 @@ class ProjectController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'statuses' => 'nullable|array',
             'category_id' => 'nullable|exists:project_categories,id'
         ]);
 

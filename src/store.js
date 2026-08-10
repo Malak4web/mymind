@@ -693,6 +693,90 @@ export const store = reactive({
     }
   },
 
+  // Update Project Statuses (إعادة ترتيب أو تعديل حالات المشروع)
+  async updateProjectStatuses(projectId, newStatuses) {
+    const project = this.projects.find(p => p.id === projectId)
+    if (!project) return
+    project.statuses = [...newStatuses]
+
+    try {
+      const res = await fetch(`${this.apiBase}/projects/${projectId}`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          name: project.name,
+          description: project.description,
+          member_ids: project.memberIds,
+          category_id: project.categoryId,
+          statuses: newStatuses
+        })
+      })
+
+      if (res.ok) {
+        await this.loadProjects()
+      } else {
+        await this.loadProjects()
+      }
+    } catch (e) {
+      console.error("خطأ في تحديث حالات المشروع", e)
+      await this.loadProjects()
+    }
+  },
+
+  async addProjectStatus(projectId, statusName) {
+    const project = this.projects.find(p => p.id === projectId)
+    if (!project || !statusName) return
+    const trimmed = String(statusName).trim()
+    if (!trimmed) return
+
+    if ((project.statuses || []).includes(trimmed)) {
+      alert('هذه الحالة موجودة بالفعل في المشروع.')
+      return
+    }
+
+    const updatedStatuses = [...(project.statuses || []), trimmed]
+    await this.updateProjectStatuses(projectId, updatedStatuses)
+    this.addNotification('حالة جديدة', `تمت إضافة الحالة "${trimmed}" إلى المشروع.`)
+  },
+
+  async renameProjectStatus(projectId, oldStatus, newStatus) {
+    const project = this.projects.find(p => p.id === projectId)
+    if (!project || !newStatus) return
+    const trimmed = String(newStatus).trim()
+    if (!trimmed || oldStatus === trimmed) return
+
+    const updatedStatuses = (project.statuses || []).map(s => s === oldStatus ? trimmed : s)
+    await this.updateProjectStatuses(projectId, updatedStatuses)
+
+    // Update tasks with oldStatus to newStatus
+    const affectedTasks = this.tasks.filter(t => t.projectId === projectId && t.status === oldStatus)
+    for (const task of affectedTasks) {
+      await this.updateTask(task.id, { status: trimmed })
+    }
+    this.addNotification('تعديل حالة', `تمت إعادة تسمية الحالة إلى "${trimmed}".`)
+  },
+
+  async deleteProjectStatus(projectId, statusToDelete, fallbackStatus = null) {
+    const project = this.projects.find(p => p.id === projectId)
+    if (!project) return
+
+    const updatedStatuses = (project.statuses || []).filter(s => s !== statusToDelete)
+    if (updatedStatuses.length === 0) {
+      alert('يجب أن يحتوي المشروع على حالة واحدة على الأقل.')
+      return
+    }
+
+    const targetStatus = fallbackStatus || updatedStatuses[0]
+    const affectedTasks = this.tasks.filter(t => t.projectId === projectId && t.status === statusToDelete)
+
+    for (const task of affectedTasks) {
+      await this.updateTask(task.id, { status: targetStatus })
+    }
+
+    await this.updateProjectStatuses(projectId, updatedStatuses)
+    this.addNotification('حذف حالة', `تم حذف الحالة ونقل مهامها إلى "${targetStatus}".`)
+  },
+
   // Soft Delete Project
   async deleteProject(id) {
     if (!this.hasPermission('manage-projects')) {

@@ -614,11 +614,108 @@ const closeTaskMenu = () => {
 
 onMounted(() => {
   window.addEventListener('click', closeTaskMenu)
+  window.addEventListener('click', closeColumnMenu)
 })
 
 onUnmounted(() => {
   window.removeEventListener('click', closeTaskMenu)
+  window.removeEventListener('click', closeColumnMenu)
 })
+
+// Column Drag & Drop Reordering and Status Customization
+const draggedColumnIndex = ref(null)
+const activeColumnMenu = ref(null)
+
+const onColumnDragStart = (index, e) => {
+  draggedColumnIndex.value = index
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(index))
+  }
+}
+
+const onColumnDragOver = (index, e) => {
+  e.preventDefault()
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = 'move'
+  }
+}
+
+const onColumnDrop = async (dropIndex, e) => {
+  e.preventDefault()
+  const fromIndex = draggedColumnIndex.value !== null 
+    ? draggedColumnIndex.value 
+    : parseInt(e.dataTransfer?.getData('text/plain'))
+  draggedColumnIndex.value = null
+
+  if (fromIndex === null || isNaN(fromIndex) || fromIndex === dropIndex) return
+
+  const currentStatuses = [...(activeProject.value?.statuses || [])]
+  if (fromIndex < 0 || fromIndex >= currentStatuses.length || dropIndex < 0 || dropIndex >= currentStatuses.length) return
+
+  const [movedStatus] = currentStatuses.splice(fromIndex, 1)
+  currentStatuses.splice(dropIndex, 0, movedStatus)
+
+  await store.updateProjectStatuses(store.activeProjectId, currentStatuses)
+}
+
+const toggleColumnMenu = (status, e) => {
+  if (e) e.stopPropagation()
+  activeColumnMenu.value = activeColumnMenu.value === status ? null : status
+}
+
+const closeColumnMenu = () => {
+  activeColumnMenu.value = null
+}
+
+const promptAddStatus = async () => {
+  const name = prompt('أدخل اسم الحالة الجديدة للمشروع:')
+  if (name && name.trim()) {
+    await store.addProjectStatus(store.activeProjectId, name.trim())
+  }
+}
+
+const promptRenameStatus = async (oldStatus) => {
+  const newName = prompt(`أدخل الاسم الجديد للحالة "${oldStatus}":`, oldStatus)
+  if (newName && newName.trim() && newName.trim() !== oldStatus) {
+    await store.renameProjectStatus(store.activeProjectId, oldStatus, newName.trim())
+  }
+}
+
+const promptDeleteStatus = async (statusToDelete) => {
+  const statuses = activeProject.value?.statuses || []
+  if (statuses.length <= 1) {
+    alert('لا يمكن حذف الحالة الأخيرة. يجب أن يحتوي المشروع على حالة واحدة على الأقل.')
+    return
+  }
+
+  const remaining = statuses.filter(s => s !== statusToDelete)
+  const taskCount = getTasksByStatus(statusToDelete).length
+
+  if (taskCount > 0) {
+    const fallback = prompt(`تحتوي هذه الحالة على (${taskCount}) مهام.\nيرجى كتابة اسم الحالة البديلة لنقل المهام إليها:\nالخيارات: ${remaining.join(' - ')}`, remaining[0])
+    if (!fallback || !remaining.includes(fallback.trim())) {
+      alert('تم إلغاء حذف الحالة لأن اسم الحالة البديلة غير صحيح.')
+      return
+    }
+    await store.deleteProjectStatus(store.activeProjectId, statusToDelete, fallback.trim())
+  } else {
+    if (confirm(`هل أنت متأكد من حذف الحالة "${statusToDelete}"؟`)) {
+      await store.deleteProjectStatus(store.activeProjectId, statusToDelete)
+    }
+  }
+}
+
+const moveColumnLeftOrRight = async (index, direction) => {
+  const currentStatuses = [...(activeProject.value?.statuses || [])]
+  const targetIndex = direction === 'left' ? index + 1 : index - 1
+  if (targetIndex < 0 || targetIndex >= currentStatuses.length) return
+
+  const [movedStatus] = currentStatuses.splice(index, 1)
+  currentStatuses.splice(targetIndex, 0, movedStatus)
+
+  await store.updateProjectStatuses(store.activeProjectId, currentStatuses)
+}
 </script>
 
 <template>
@@ -692,46 +789,101 @@ onUnmounted(() => {
       class="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 scrollbar-hide lg:grid lg:grid-cols-4 lg:overflow-visible items-start"
     >
       <div 
-        v-for="status in activeProject.statuses" 
+        v-for="(status, colIdx) in activeProject.statuses" 
         :key="status"
         @dragover="handleDragOver($event, status)"
         @dragleave="handleDragLeave"
         @drop="handleDrop(status)"
         :class="[
-          'bg-slate-100/40 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200/50 dark:border-slate-800/60 rounded-2xl p-4 flex flex-col space-y-4 min-h-[480px] transition-all duration-300 w-[85vw] sm:w-80 shrink-0 lg:w-full snap-center shadow-sm',
+          'bg-slate-100/40 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200/50 dark:border-slate-800/60 rounded-2xl p-4 flex flex-col space-y-4 min-h-[480px] transition-all duration-300 w-[85vw] sm:w-80 shrink-0 lg:w-80 snap-center shadow-sm relative group/column',
           activeDragOverColumn === status ? 'border-violet-500/80 bg-violet-500/[0.03] dark:bg-violet-900/[0.04]' : '',
           getColumnColorClass(status),
           selectedMobileStatus !== 'all' && selectedMobileStatus !== status ? 'hidden lg:flex' : 'flex'
         ]"
       >
 
-        <!-- Column Header -->
-        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-2">
+        <!-- Column Header with Drag Handle & Actions Menu -->
+        <div 
+          draggable="true"
+          @dragstart="onColumnDragStart(colIdx, $event)"
+          @dragover.prevent="onColumnDragOver(colIdx, $event)"
+          @drop="onColumnDrop(colIdx, $event)"
+          class="flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-2 cursor-grab active:cursor-grabbing select-none"
+        >
           <div class="flex items-center space-x-2 space-x-reverse">
+            <!-- Drag handle icon -->
+            <span class="text-slate-400 dark:text-slate-600 text-xs font-mono group-hover/column:text-violet-500 transition cursor-grab" title="اسحب لترتيب الحالات">⠿</span>
             <span class="text-xs font-extrabold text-slate-855 dark:text-slate-205 uppercase tracking-wider">{{ status }}</span>
             <span class="bg-slate-150 dark:bg-slate-855 text-slate-700 dark:text-slate-350 font-sans text-xs font-extrabold px-2 py-0.5 rounded-full">
               {{ getTasksByStatus(status).length }}
             </span>
           </div>
-          <div class="flex items-center space-x-1 space-x-reverse">
-            <div class="min-h-[44px] min-w-[44px] flex items-center justify-center">
-              <input 
-                type="checkbox"
-                :checked="isColumnAllSelected(status)"
-                @change="toggleSelectColumn(status, $event)"
-                class="rounded border-slate-300 dark:border-slate-805 text-violet-650 focus:ring-violet-500 cursor-pointer h-4 w-4"
-                title="تحديد كل مهام هذا العمود"
-              />
-            </div>
+
+          <div class="flex items-center space-x-1 space-x-reverse" @click.stop>
+            <input 
+              type="checkbox"
+              :checked="isColumnAllSelected(status)"
+              @change="toggleSelectColumn(status, $event)"
+              class="rounded border-slate-300 dark:border-slate-805 text-violet-650 focus:ring-violet-500 cursor-pointer h-4 w-4"
+              title="تحديد كل مهام هذا العمود"
+            />
             <button 
               @click="triggerQuickAdd(status)"
-              class="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-455 hover:text-violet-600 dark:hover:text-violet-400 p-2.5 rounded-xl hover:bg-white dark:hover:bg-slate-900 transition cursor-pointer"
-              title="إضافة مهمة سريعة كـ Trello"
+              class="min-h-[36px] min-w-[36px] flex items-center justify-center text-slate-455 hover:text-violet-600 dark:hover:text-violet-400 p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-900 transition cursor-pointer text-xs"
+              title="إضافة مهمة سريعة"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
+              ➕
             </button>
+
+            <!-- Column 3-dots actions menu -->
+            <div class="relative">
+              <button 
+                @click="toggleColumnMenu(status, $event)"
+                class="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center text-xs"
+                title="خيارات الحالة"
+              >
+                ⚙️
+              </button>
+
+              <Transition name="fade">
+                <div 
+                  v-if="activeColumnMenu === status" 
+                  class="absolute left-0 top-full mt-1 z-40 w-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1 text-right animate-fade-in"
+                  @click.stop
+                >
+                  <button 
+                    @click="closeColumnMenu(); promptRenameStatus(status)"
+                    class="w-full text-right px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-2"
+                  >
+                    <span>✏️</span>
+                    <span>إعادة تسمية</span>
+                  </button>
+                  <button 
+                    v-if="colIdx > 0"
+                    @click="closeColumnMenu(); moveColumnLeftOrRight(colIdx, 'right')"
+                    class="w-full text-right px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-2"
+                  >
+                    <span>➡️</span>
+                    <span>تحريك لليمين</span>
+                  </button>
+                  <button 
+                    v-if="colIdx < (activeProject.statuses || []).length - 1"
+                    @click="closeColumnMenu(); moveColumnLeftOrRight(colIdx, 'left')"
+                    class="w-full text-right px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-2"
+                  >
+                    <span>⬅️</span>
+                    <span>تحريك لليسار</span>
+                  </button>
+                  <button 
+                    @click="closeColumnMenu(); promptDeleteStatus(status)"
+                    class="w-full text-right px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-955/30 transition cursor-pointer flex items-center gap-2 border-t border-slate-100 dark:border-slate-800/60"
+                  >
+                    <span>🗑️</span>
+                    <span>حذف الحالة</span>
+                  </button>
+                </div>
+              </Transition>
+            </div>
           </div>
         </div>
 
@@ -908,6 +1060,19 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Add New Status Column Card -->
+      <div 
+        @click="promptAddStatus"
+        class="border-2 border-dashed border-slate-300/70 dark:border-slate-800/80 hover:border-violet-500/80 dark:hover:border-violet-500/80 rounded-2xl p-6 flex flex-col items-center justify-center space-y-2 min-h-[200px] sm:min-h-[480px] w-full sm:w-64 shrink-0 cursor-pointer transition-all duration-300 text-slate-500 hover:text-violet-600 dark:hover:text-violet-400 bg-slate-50/20 dark:bg-slate-900/20 hover:bg-violet-50/20 dark:hover:bg-violet-950/20 group/addcol select-none"
+        title="إضافة حالة جديدة للمشروع"
+      >
+        <div class="w-10 h-10 rounded-full bg-violet-100 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 flex items-center justify-center text-lg font-bold group-hover/addcol:scale-110 transition shadow-sm">
+          +
+        </div>
+        <span class="text-xs font-extrabold text-slate-700 dark:text-slate-300 group-hover/addcol:text-violet-600 dark:group-hover/addcol:text-violet-400 transition">إضافة حالة جديدة</span>
+        <span class="text-[11px] text-slate-400 text-center">تخصيص أعمدة هذا المشروع</span>
       </div>
     </div>
 
