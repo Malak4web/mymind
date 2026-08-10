@@ -260,6 +260,63 @@ const processSelectedFiles = async (files) => {
   }
 }
 
+// Attachments display & Lightbox helpers
+const lightboxUrl = ref('')
+const lightboxTitle = ref('')
+
+const openLightbox = (url, title) => {
+  if (!url) return
+  lightboxUrl.value = url
+  lightboxTitle.value = title || 'معاينة الصورة'
+}
+
+const closeLightbox = () => {
+  lightboxUrl.value = ''
+  lightboxTitle.value = ''
+}
+
+const allAttachments = computed(() => {
+  if (taskToEdit.value) {
+    return taskToEdit.value.attachments || []
+  }
+  return taskAttachments.value || []
+})
+
+const getAttachmentUrl = (file) => {
+  if (!file) return ''
+  if (file.url) return file.url
+  if (file.fileObj) {
+    try {
+      return URL.createObjectURL(file.fileObj)
+    } catch (e) {}
+  }
+  if (file.path) {
+    if (file.path.startsWith('http://') || file.path.startsWith('https://') || file.path.startsWith('data:')) {
+      return file.path
+    }
+    const cleanPath = file.path.replace(/^public\//, '')
+    return `${store.apiBase.replace(/\/api\/?$/, '')}/storage/${cleanPath}`
+  }
+  return ''
+}
+
+const isImageFile = (file) => {
+  if (!file) return false
+  if (file.type && file.type.startsWith('image/')) return true
+  const name = file.name || file.path || ''
+  return /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(name)
+}
+
+const handleDeleteAttachment = async (file, idx) => {
+  if (!confirm(`هل أنت تأكد من حذف المرفق "${file?.name || 'هذا الملف'}"؟`)) return
+  if (file?.id) {
+    await store.deleteAttachment(file.id)
+  } else {
+    taskAttachments.value.splice(idx, 1)
+  }
+  store.addNotification('حذف مرفق', 'تم حذف المرفق بنجاح.')
+}
+
 // Compute legacy custom fields
 const legacyFields = computed(() => {
   if (!taskToEdit.value) return []
@@ -603,36 +660,72 @@ onUnmounted(() => {
               <p class="text-[10.5px] text-slate-400">يدعم الصور والملفات المختلفة</p>
             </div>
             
-            <div v-if="taskToEdit" class="space-y-2">
-              <div v-if="taskToEdit.attachments.length === 0" class="text-sm text-slate-400 italic">
-                لم يتم إرفاق ملفات لهذه المهمة بعد.
+            <div class="space-y-2">
+              <div v-if="allAttachments.length === 0" class="text-xs text-slate-400 italic text-center py-2">
+                لا توجد مرفقات لهذه المهمة بعد.
               </div>
               <div 
-                v-for="(file, idx) in taskToEdit.attachments" 
+                v-for="(file, idx) in allAttachments" 
                 :key="idx" 
-                class="flex items-center justify-between p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-850 flex-row-reverse"
+                class="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 shadow-2xs gap-2"
               >
-                <div class="min-w-0 flex-1 pr-2 text-right">
-                  <div class="flex items-center justify-between pr-2 text-xs flex-row-reverse">
-                    <span class="font-semibold text-slate-750 dark:text-slate-350 truncate">{{ file.name }}</span>
-                    <span class="text-xs text-slate-455 font-mono">{{ file.size }}</span>
+                <!-- Thumbnail Preview if image -->
+                <div 
+                  v-if="isImageFile(file) && getAttachmentUrl(file)" 
+                  @click="openLightbox(getAttachmentUrl(file), file.name)"
+                  class="relative shrink-0 group/thumb cursor-pointer overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800"
+                >
+                  <img 
+                    :src="getAttachmentUrl(file)" 
+                    :alt="file.name"
+                    class="w-12 h-12 object-cover group-hover/thumb:scale-110 transition duration-200" 
+                  />
+                  <div class="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition text-white text-xs">
+                    🔍
                   </div>
-                  
-                  <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                    <div 
-                      :class="[
-                        'h-full transition-all duration-300',
-                        file.status === 'failed' ? 'bg-rose-500' : 'bg-violet-650'
-                      ]" 
-                      :style="{ width: file.progress + '%' }"
-                    ></div>
+                </div>
+                <div v-else class="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-base shrink-0">
+                  📄
+                </div>
+
+                <!-- Details -->
+                <div class="min-w-0 flex-1 text-right">
+                  <div 
+                    @click="isImageFile(file) && getAttachmentUrl(file) ? openLightbox(getAttachmentUrl(file), file.name) : null"
+                    :class="[
+                      'font-bold text-xs truncate text-slate-800 dark:text-slate-200',
+                      isImageFile(file) && getAttachmentUrl(file) ? 'hover:text-violet-600 dark:hover:text-violet-400 cursor-pointer' : ''
+                    ]"
+                  >
+                    {{ file.name || 'ملف بدون اسم' }}
+                  </div>
+                  <div class="flex items-center justify-between mt-1 text-[10px] text-slate-400 font-mono">
+                    <span>{{ file.size || '' }}</span>
+                    <span v-if="file.status === 'done' || !file.status" class="text-emerald-500 font-bold">جاهز</span>
+                    <span v-else-if="file.status === 'failed'" class="text-rose-500 font-bold">فشل</span>
+                    <span v-else class="text-violet-500 font-bold animate-pulse">{{ file.progress || 100 }}%</span>
                   </div>
                 </div>
 
-                <div class="pl-2">
-                  <span v-if="file.status === 'done'" class="text-[10.5px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">جاهز</span>
-                  <span v-else-if="file.status === 'failed'" class="text-[10.5px] font-bold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded">فشل الرفع</span>
-                  <span v-else class="text-[10.5px] font-bold text-violet-550 animate-pulse">{{ file.progress }}%</span>
+                <!-- Actions (Delete button) -->
+                <div class="flex items-center gap-1 shrink-0">
+                  <a 
+                    v-if="getAttachmentUrl(file)" 
+                    :href="getAttachmentUrl(file)" 
+                    target="_blank"
+                    download
+                    class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                    title="تحميل الملف"
+                  >
+                    ⬇️
+                  </a>
+                  <button 
+                    @click.stop="handleDeleteAttachment(file, idx)"
+                    class="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-955/40 transition cursor-pointer"
+                    title="حذف هذا المرفق"
+                  >
+                    🗑️
+                  </button>
                 </div>
               </div>
             </div>
@@ -700,4 +793,44 @@ onUnmounted(() => {
     </div>
   </div>
 </Transition>
+
+<!-- Image Lightbox Modal -->
+<Teleport to="body">
+  <Transition name="fade">
+    <div 
+      v-if="lightboxUrl" 
+      class="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+      dir="rtl"
+      @click="closeLightbox"
+    >
+      <div class="relative max-w-4xl max-h-[90vh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col" @click.stop>
+        <!-- Header -->
+        <div class="p-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+          <span class="text-sm font-bold text-slate-200 truncate pr-2">{{ lightboxTitle }}</span>
+          <div class="flex items-center gap-2">
+            <a 
+              :href="lightboxUrl" 
+              download 
+              target="_blank"
+              class="px-3 py-1 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition flex items-center gap-1"
+            >
+              <span>⬇️</span>
+              <span>تحميل</span>
+            </a>
+            <button 
+              @click="closeLightbox"
+              class="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+        <!-- Image Body -->
+        <div class="p-2 flex items-center justify-center overflow-auto max-h-[80vh]">
+          <img :src="lightboxUrl" :alt="lightboxTitle" class="max-w-full max-h-[75vh] object-contain rounded-xl shadow-lg" />
+        </div>
+      </div>
+    </div>
+  </Transition>
+</Teleport>
 </template>

@@ -83,6 +83,56 @@ const processInspectorFiles = async (files) => {
   }
 }
 
+// Attachments & Lightbox helpers for Quick Inspector
+const lightboxUrl = ref('')
+const lightboxTitle = ref('')
+
+const openLightbox = (url, title) => {
+  if (!url) return
+  lightboxUrl.value = url
+  lightboxTitle.value = title || 'معاينة الصورة'
+}
+
+const closeLightbox = () => {
+  lightboxUrl.value = ''
+  lightboxTitle.value = ''
+}
+
+const getAttachmentUrl = (file) => {
+  if (!file) return ''
+  if (file.url) return file.url
+  if (file.fileObj) {
+    try {
+      return URL.createObjectURL(file.fileObj)
+    } catch (e) {}
+  }
+  if (file.path) {
+    if (file.path.startsWith('http://') || file.path.startsWith('https://') || file.path.startsWith('data:')) {
+      return file.path
+    }
+    const cleanPath = file.path.replace(/^public\//, '')
+    return `${store.apiBase.replace(/\/api\/?$/, '')}/storage/${cleanPath}`
+  }
+  return ''
+}
+
+const isImageFile = (file) => {
+  if (!file) return false
+  if (file.type && file.type.startsWith('image/')) return true
+  const name = file.name || file.path || ''
+  return /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(name)
+}
+
+const handleDeleteInspectorAttachment = async (file, idx) => {
+  if (!confirm(`هل أنت متاكد من حذف المرفق "${file?.name || 'هذا الملف'}"؟`)) return
+  if (file?.id) {
+    await store.deleteAttachment(file.id)
+  } else if (activeTask.value && activeTask.value.attachments) {
+    activeTask.value.attachments.splice(idx, 1)
+  }
+  store.addNotification('حذف مرفق', 'تم حذف المرفق بنجاح.')
+}
+
 // Sync task data into local refs when activeTask changes
 watch(activeTask, (task) => {
   if (task) {
@@ -280,29 +330,6 @@ const addQuickComment = () => {
           />
         </div>
       </div>
-
-      <!-- Assigned Members -->
-      <div>
-        <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">الأعضاء المكلفون</label>
-        <div class="flex flex-wrap gap-1.5 items-center">
-          <div 
-            v-for="user in store.users" 
-            :key="user.id"
-            @click="toggleMemberAssignment(user.id)"
-            :class="[
-              'px-2.5 py-1 rounded-xl text-xs font-semibold border transition cursor-pointer flex items-center gap-1 select-none',
-              activeTask.memberIds?.includes(user.id)
-                ? 'bg-violet-600 text-white border-violet-600 shadow-sm'
-                : 'bg-slate-50 dark:bg-slate-955 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-violet-400'
-            ]"
-            :title="user.name"
-          >
-            <span>👤</span>
-            <span>{{ user.name }}</span>
-          </div>
-        </div>
-      </div>
-
       <!-- Description -->
       <div>
         <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">الوصف والتفاصيل</label>
@@ -343,14 +370,64 @@ const addQuickComment = () => {
           </div>
         </div>
 
-        <div v-if="activeTask.attachments && activeTask.attachments.filter(Boolean).length > 0" class="space-y-1.5 max-h-36 overflow-y-auto">
+        <div v-if="activeTask.attachments && activeTask.attachments.filter(Boolean).length > 0" class="space-y-1.5 max-h-48 overflow-y-auto">
           <div 
             v-for="(file, idx) in activeTask.attachments.filter(Boolean)" 
             :key="idx"
-            class="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 text-xs"
+            class="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 text-xs gap-2"
           >
-            <span class="font-bold truncate text-slate-700 dark:text-slate-300 max-w-[180px]">{{ file?.name || 'ملف بدون اسم' }}</span>
-            <span class="text-[10px] font-mono text-slate-400">{{ file?.size || '' }}</span>
+            <!-- Thumbnail if image -->
+            <div 
+              v-if="isImageFile(file) && getAttachmentUrl(file)" 
+              @click="openLightbox(getAttachmentUrl(file), file.name)"
+              class="relative shrink-0 group/inspectthumb cursor-pointer overflow-hidden rounded-md border border-slate-200 dark:border-slate-800"
+            >
+              <img 
+                :src="getAttachmentUrl(file)" 
+                :alt="file.name"
+                class="w-9 h-9 object-cover group-hover/inspectthumb:scale-110 transition duration-200" 
+              />
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover/inspectthumb:opacity-100 flex items-center justify-center transition text-white text-[10px]">
+                🔍
+              </div>
+            </div>
+            <div v-else class="w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs shrink-0">
+              📄
+            </div>
+
+            <div class="min-w-0 flex-1 text-right">
+              <div 
+                @click="isImageFile(file) && getAttachmentUrl(file) ? openLightbox(getAttachmentUrl(file), file.name) : null"
+                :class="[
+                  'font-bold truncate text-slate-700 dark:text-slate-300 text-xs',
+                  isImageFile(file) && getAttachmentUrl(file) ? 'hover:text-violet-600 dark:hover:text-violet-400 cursor-pointer' : ''
+                ]"
+              >
+                {{ file?.name || 'ملف بدون اسم' }}
+              </div>
+              <span class="text-[9.5px] font-mono text-slate-400 block">{{ file?.size || '' }}</span>
+            </div>
+
+            <!-- Actions (Download & Delete) -->
+            <div class="flex items-center gap-1 shrink-0">
+              <a 
+                v-if="getAttachmentUrl(file)" 
+                :href="getAttachmentUrl(file)" 
+                target="_blank"
+                download
+                class="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer text-xs"
+                title="تحميل"
+              >
+                ⬇️
+              </a>
+              <button 
+                @click.stop="handleDeleteInspectorAttachment(file, idx)"
+                class="p-1 text-rose-500 hover:text-rose-700 transition cursor-pointer text-xs"
+                title="حذف هذا المرفق"
+              >
+                🗑️
+              </button>
+            </div>
           </div>
         </div>
         <div v-else class="text-[11px] text-slate-400 italic">لا توجد مرفقات.</div>
@@ -410,4 +487,44 @@ const addQuickComment = () => {
 
     </div>
   </aside>
+
+  <!-- Image Lightbox Modal -->
+  <Teleport to="body">
+    <Transition name="fade">
+      <div 
+        v-if="lightboxUrl" 
+        class="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+        dir="rtl"
+        @click="closeLightbox"
+      >
+        <div class="relative max-w-4xl max-h-[90vh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col" @click.stop>
+          <!-- Header -->
+          <div class="p-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+            <span class="text-sm font-bold text-slate-200 truncate pr-2">{{ lightboxTitle }}</span>
+            <div class="flex items-center gap-2">
+              <a 
+                :href="lightboxUrl" 
+                download 
+                target="_blank"
+                class="px-3 py-1 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition flex items-center gap-1"
+              >
+                <span>⬇️</span>
+                <span>تحميل</span>
+              </a>
+              <button 
+                @click="closeLightbox"
+                class="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+          <!-- Image Body -->
+          <div class="p-2 flex items-center justify-center overflow-auto max-h-[80vh]">
+            <img :src="lightboxUrl" :alt="lightboxTitle" class="max-w-full max-h-[75vh] object-contain rounded-xl shadow-lg" />
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
