@@ -60,9 +60,17 @@ const handleImagePaste = (e) => {
   }
 }
 
-const handleGlobalPaste = (e) => {
+let isPastingInspector = false
+
+const handleGlobalPaste = async (e) => {
   if (!store.activeInspectorTaskId) return
-  handleImagePaste(e)
+  if (isPastingInspector) return
+  isPastingInspector = true
+  try {
+    await handleImagePaste(e)
+  } finally {
+    setTimeout(() => { isPastingInspector = false }, 400)
+  }
 }
 
 onMounted(() => {
@@ -105,6 +113,9 @@ const getAttachmentUrl = (file) => {
     try {
       return URL.createObjectURL(file.fileObj)
     } catch (e) {}
+  }
+  if (file.id) {
+    return `${store.apiBase}/attachments/${file.id}/file`
   }
   if (file.path) {
     if (file.path.startsWith('http://') || file.path.startsWith('https://') || file.path.startsWith('data:')) {
@@ -231,7 +242,6 @@ const addQuickComment = () => {
 
 <template>
   <aside 
-    @paste="handleImagePaste"
     class="bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl border-l border-white/30 dark:border-slate-800/60 rounded-3xl p-5 shadow-2xl space-y-4 text-right transition-all duration-300 flex flex-col max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-hide sticky top-20"
     dir="rtl"
   >

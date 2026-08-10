@@ -234,9 +234,17 @@ const handleImagePaste = (e) => {
   }
 }
 
-const handleGlobalPaste = (e) => {
+let isPastingModal = false
+
+const handleGlobalPaste = async (e) => {
   if (!store.isTaskModalOpen) return
-  handleImagePaste(e)
+  if (isPastingModal) return
+  isPastingModal = true
+  try {
+    await handleImagePaste(e)
+  } finally {
+    setTimeout(() => { isPastingModal = false }, 400)
+  }
 }
 
 const processSelectedFiles = async (files) => {
@@ -289,6 +297,9 @@ const getAttachmentUrl = (file) => {
     try {
       return URL.createObjectURL(file.fileObj)
     } catch (e) {}
+  }
+  if (file.id) {
+    return `${store.apiBase}/attachments/${file.id}/file`
   }
   if (file.path) {
     if (file.path.startsWith('http://') || file.path.startsWith('https://') || file.path.startsWith('data:')) {
@@ -374,7 +385,6 @@ onUnmounted(() => {
         @touchstart="handleTouchStart"
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
-        @paste="handleImagePaste"
         class="relative z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/30 dark:border-slate-700/60 shadow-2xl rounded-3xl w-full max-w-2xl max-h-[88vh] sm:max-h-[90vh] overflow-y-auto p-5 sm:p-8 space-y-5 text-right transform transition-all duration-300"
       >
         <!-- Mobile Drag Handle Bar -->

@@ -68,6 +68,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Attachments uploads and deletes
     Route::post('/tasks/{taskId}/attachments', [AttachmentController::class, 'store']);
+    Route::get('/attachments/{id}/file', [AttachmentController::class, 'getFile']);
     Route::delete('/attachments/{id}', [AttachmentController::class, 'destroy']);
 
     // Folders routes

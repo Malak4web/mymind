@@ -49,6 +49,16 @@ class AttachmentController extends Controller
         return response()->json($attachment, 201);
     }
 
+    public function getFile($id)
+    {
+        $attachment = Attachment::findOrFail($id);
+        if (!$attachment->path || !Storage::disk('public')->exists($attachment->path)) {
+            return response()->json(['message' => 'الملف غير موجود'], 404);
+        }
+        $fullPath = Storage::disk('public')->path($attachment->path);
+        return response()->file($fullPath);
+    }
+
     public function destroy($id)
     {
         $attachment = Attachment::findOrFail($id);
