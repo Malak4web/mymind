@@ -7,9 +7,25 @@ use Illuminate\Http\Request;
 
 class ProjectCategoryController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $categories = ProjectCategory::withCount('projects')
+        $user = $request->user();
+        
+        $categories = ProjectCategory::where(function ($query) use ($user) {
+                if ($user) {
+                    $query->where('user_id', $user->id)
+                          ->orWhereNull('user_id');
+                } else {
+                    $query->whereNull('user_id');
+                }
+            })
+            ->withCount(['projects' => function ($q) use ($user) {
+                if ($user && (!$user->role || $user->role->name !== 'مدير')) {
+                    $q->whereHas('users', function ($uq) use ($user) {
+                        $uq->where('users.id', $user->id);
+                    });
+                }
+            }])
             ->orderBy('sort_order')
             ->get();
 
@@ -26,6 +42,10 @@ class ProjectCategoryController extends Controller
             'sort_order' => 'nullable|integer',
         ]);
 
+        if ($request->user()) {
+            $validated['user_id'] = $request->user()->id;
+        }
+
         $category = ProjectCategory::create($validated);
 
         return response()->json($category, 201);
@@ -34,6 +54,11 @@ class ProjectCategoryController extends Controller
     public function update(Request $request, $id)
     {
         $category = ProjectCategory::findOrFail($id);
+        $user = $request->user();
+
+        if ($user && $category->user_id && $category->user_id !== $user->id && (!$user->role || $user->role->name !== 'مدير')) {
+            return response()->json(['message' => 'غير مصرح بتعديل هذا التصنيف'], 403);
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -48,9 +73,15 @@ class ProjectCategoryController extends Controller
         return response()->json($category);
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         $category = ProjectCategory::findOrFail($id);
+        $user = $request->user();
+
+        if ($user && $category->user_id && $category->user_id !== $user->id && (!$user->role || $user->role->name !== 'مدير')) {
+            return response()->json(['message' => 'غير مصرح بحذف هذا التصنيف'], 403);
+        }
+
         $category->delete();
 
         return response()->json(null, 204);

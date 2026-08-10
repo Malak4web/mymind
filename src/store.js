@@ -127,16 +127,8 @@ export const store = reactive({
     ]
   })(),
 
-  // Dynamic Categories for Daily Tasks & Routines
-  dailyTaskCategories: (() => {
-    try {
-      const saved = localStorage.getItem('mymind_daily_task_categories')
-      if (saved) return JSON.parse(saved)
-    } catch (e) {
-      console.error('فشل تحميل تصنيفات اليوميات من التخزين المحلي', e)
-    }
-    return ['عام', 'عمل', 'شخصي', 'صحة', 'دراسة', 'عاجل']
-  })(),
+  // Dynamic Categories for Daily Tasks & Routines (User Scoped)
+  dailyTaskCategories: ['عام', 'عمل', 'شخصي', 'صحة', 'دراسة', 'عاجل'],
 
 
 
@@ -209,6 +201,7 @@ export const store = reactive({
       if (res.ok) {
         this.currentUser = await res.json()
         this.isAuthenticated = true
+        this.loadDailyTaskCategories()
         await this.loadProjectCategories()
         await this.loadProjects()
         if (this.activeProjectId) {
@@ -240,6 +233,8 @@ export const store = reactive({
     this.token = ''
     this.isAuthenticated = false
     this.currentUser = null
+    this.projectCategories = []
+    this.dailyTaskCategories = ['عام', 'عمل', 'شخصي', 'صحة', 'دراسة', 'عاجل']
     this.projects = []
     this.tasks = []
     this.folders = []
@@ -1765,10 +1760,30 @@ export const store = reactive({
     }
   },
 
-  // Daily Task Categories Management
+  // Daily Task Categories Management (User Scoped)
+  getDailyCategoriesStorageKey() {
+    const userId = this.currentUser?.id || 'guest'
+    return `mymind_daily_task_categories_user_${userId}`
+  },
+
+  loadDailyTaskCategories() {
+    try {
+      const key = this.getDailyCategoriesStorageKey()
+      const saved = localStorage.getItem(key)
+      if (saved) {
+        this.dailyTaskCategories = JSON.parse(saved)
+        return
+      }
+    } catch (e) {
+      console.error('فشل تحميل تصنيفات اليوميات للمستخدم', e)
+    }
+    this.dailyTaskCategories = ['عام', 'عمل', 'شخصي', 'صحة', 'دراسة', 'عاجل']
+  },
+
   saveDailyTaskCategories() {
     try {
-      localStorage.setItem('mymind_daily_task_categories', JSON.stringify(this.dailyTaskCategories))
+      const key = this.getDailyCategoriesStorageKey()
+      localStorage.setItem(key, JSON.stringify(this.dailyTaskCategories))
     } catch (e) {
       console.error('فشل حفظ تصنيفات اليوميات في التخزين المحلي', e)
     }

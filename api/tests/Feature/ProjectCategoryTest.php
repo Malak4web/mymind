@@ -85,12 +85,38 @@ class ProjectCategoryTest extends TestCase
 
     public function test_can_delete_project_category()
     {
-        $category = ProjectCategory::create(['name' => 'تصنيف للحذف']);
+        $category = ProjectCategory::create(['name' => 'تصنيف للحذف', 'user_id' => $this->user->id]);
 
         $response = $this->deleteJson("/api/project-categories/{$category->id}");
 
         $response->assertStatus(204);
 
         $this->assertDatabaseMissing('project_categories', ['id' => $category->id]);
+    }
+
+    public function test_user_only_sees_own_and_system_categories()
+    {
+        $otherRole = Role::create(['name' => 'عضو', 'description' => 'عضو عادي']);
+        $otherUser = User::create([
+            'name' => 'عضو آخر',
+            'email' => 'other@mymind.com',
+            'password' => bcrypt('password123'),
+            'role_id' => $otherRole->id
+        ]);
+
+        // Category by current user
+        ProjectCategory::create(['name' => 'تصنيفي الخاص', 'user_id' => $this->user->id]);
+        // Category by other user
+        ProjectCategory::create(['name' => 'تصنيف عضو آخر', 'user_id' => $otherUser->id]);
+        // System category
+        ProjectCategory::create(['name' => 'تصنيف عام للنظام', 'user_id' => null]);
+
+        // Authenticate as otherUser
+        $this->authenticateUser($otherUser);
+
+        $response = $this->getJson('/api/project-categories');
+
+        $response->assertStatus(200)
+                 ->assertJsonCount(2); // Sees own + system, but not current user's
     }
 }
