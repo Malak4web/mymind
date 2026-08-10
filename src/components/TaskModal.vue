@@ -206,6 +206,52 @@ const triggerFileUpload = () => {
   fileToUploadName.value = ''
   simulateFailure.value = false
 }
+const fileInputRef = ref(null)
+
+const handleFileSelect = (e) => {
+  const files = e.target.files
+  if (!files || files.length === 0) return
+  processSelectedFiles(files)
+}
+
+const handleImagePaste = (e) => {
+  const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items
+  if (!items) return
+
+  const imageFiles = []
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) imageFiles.push(file)
+    }
+  }
+
+  if (imageFiles.length > 0) {
+    e.preventDefault()
+    processSelectedFiles(imageFiles)
+  }
+}
+
+const processSelectedFiles = async (files) => {
+  for (const file of files) {
+    const timestamp = new Date().getTime()
+    const fileName = file.name || `pasted_image_${timestamp}.png`
+    const sizeFormatted = (file.size / 1024).toFixed(1) + ' KB'
+
+    if (taskToEdit.value && taskToEdit.value.id) {
+      await store.uploadFileToTask(taskToEdit.value.id, fileName, sizeFormatted, file)
+    } else {
+      if (!taskForm.value.attachments) taskForm.value.attachments = []
+      taskForm.value.attachments.push({
+        name: fileName,
+        size: sizeFormatted,
+        progress: 100,
+        status: 'done'
+      })
+      store.addNotification('مرفق جديد', `تم إرفاق الملف "${fileName}" بنجاح.`)
+    }
+  }
+}
 
 // Compute legacy custom fields
 const legacyFields = computed(() => {
@@ -256,6 +302,7 @@ const handleTouchEnd = () => {
         @touchstart="handleTouchStart"
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
+        @paste="handleImagePaste"
         class="relative z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/30 dark:border-slate-700/60 shadow-2xl rounded-3xl w-full max-w-2xl max-h-[88vh] sm:max-h-[90vh] overflow-y-auto p-5 sm:p-8 space-y-5 text-right transform transition-all duration-300"
       >
         <!-- Mobile Drag Handle Bar -->
@@ -515,10 +562,33 @@ const handleTouchEnd = () => {
           </div>
 
           <!-- Attachments Panel -->
-          <div v-if="taskToEdit" class="bg-slate-50/50 dark:bg-slate-955/20 border border-slate-100 dark:border-slate-855 rounded-2xl p-4 space-y-4">
-            <h4 class="text-sm font-semibold text-slate-850 dark:text-slate-100 uppercase tracking-wider text-right">المرفقات والرفع في الخلفية</h4>
+          <div class="bg-slate-50/50 dark:bg-slate-955/20 border border-slate-100 dark:border-slate-855 rounded-2xl p-4 space-y-4">
+            <div class="flex items-center justify-between">
+              <h4 class="text-sm font-semibold text-slate-850 dark:text-slate-100 uppercase tracking-wider text-right">المرفقات والصور</h4>
+              <span class="text-[11px] text-violet-600 dark:text-violet-400 font-extrabold">📋 يمكنك لصق الصورة (Ctrl+V)</span>
+            </div>
+
+            <!-- Image Paste & File Picker Drop Zone -->
+            <div 
+              @click="$refs.fileInputRef?.click()"
+              class="border-2 border-dashed border-violet-200 dark:border-violet-900/50 hover:border-violet-500 rounded-xl p-3.5 text-center cursor-pointer transition bg-violet-50/30 dark:bg-violet-950/20 space-y-1 group/pastezone"
+            >
+              <input 
+                ref="fileInputRef"
+                type="file"
+                accept="image/*"
+                multiple
+                class="hidden"
+                @change="handleFileSelect"
+              />
+              <div class="text-xs font-extrabold text-violet-700 dark:text-violet-300 flex items-center justify-center gap-1.5 group-hover/pastezone:scale-105 transition">
+                <span>📋</span>
+                <span>اضغط لاختيار صورة أو استخدم (Ctrl+V) للصق صورة مباشرة</span>
+              </div>
+              <p class="text-[10.5px] text-slate-400">يدعم الصور والملفات المختلفة</p>
+            </div>
             
-            <div class="space-y-2">
+            <div v-if="taskToEdit" class="space-y-2">
               <div v-if="taskToEdit.attachments.length === 0" class="text-sm text-slate-400 italic">
                 لم يتم إرفاق ملفات لهذه المهمة بعد.
               </div>
@@ -581,16 +651,8 @@ const handleTouchEnd = () => {
               </div>
             </div>
           </div>
-
-          <div v-else class="text-sm text-slate-450 italic p-3 bg-slate-50 dark:bg-slate-950/20 border border-dashed border-slate-205 rounded-xl text-center">
-            يرجى حفظ المهمة أولاً لتمكين رفع المرفقات.
-          </div>
-
         </div>
-
       </div>
-
-      <!-- Action buttons -->
       <div v-if="validationError" class="text-sm text-rose-500 text-right font-bold">
         {{ validationError }}
       </div>

@@ -970,9 +970,8 @@ export const store = reactive({
   },
 
   // Upload File Attachment
-  async uploadFileToTask(taskId, name, size, simulateFailure) {
-    // Generate dummy file blob to perform a real multipart upload to backend database validation
-    const fileBlob = new Blob(['mymind file content dummy'], { type: 'image/png' })
+  async uploadFileToTask(taskId, name, size, fileObj = null, simulateFailure = false) {
+    const fileBlob = fileObj || new Blob(['mymind file content dummy'], { type: 'image/png' })
     const formData = new FormData()
     formData.append('file', fileBlob, name)
     if (simulateFailure) {

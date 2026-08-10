@@ -34,6 +34,42 @@ const simulateFailure = ref(false)
 const newCommentText = ref('')
 const localComments = ref([])
 
+const inspectorFileInputRef = ref(null)
+
+const handleInspectorFileSelect = (e) => {
+  const files = e.target.files
+  if (!files || files.length === 0) return
+  processInspectorFiles(files)
+}
+
+const handleImagePaste = (e) => {
+  const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items
+  if (!items) return
+
+  const imageFiles = []
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) imageFiles.push(file)
+    }
+  }
+
+  if (imageFiles.length > 0) {
+    e.preventDefault()
+    processInspectorFiles(imageFiles)
+  }
+}
+
+const processInspectorFiles = async (files) => {
+  if (!activeTask.value) return
+  for (const file of files) {
+    const timestamp = new Date().getTime()
+    const fileName = file.name || `pasted_image_${timestamp}.png`
+    const sizeFormatted = (file.size / 1024).toFixed(1) + ' KB'
+    await store.uploadFileToTask(activeTask.value.id, fileName, sizeFormatted, file)
+  }
+}
+
 // Sync task data into local refs when activeTask changes
 watch(activeTask, (task) => {
   if (task) {
@@ -132,6 +168,7 @@ const addQuickComment = () => {
 
 <template>
   <aside 
+    @paste="handleImagePaste"
     class="bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl border-l border-white/30 dark:border-slate-800/60 rounded-3xl p-5 shadow-2xl space-y-4 text-right transition-all duration-300 flex flex-col max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-hide sticky top-20"
     dir="rtl"
   >
@@ -272,6 +309,25 @@ const addQuickComment = () => {
         <div class="flex items-center justify-between">
           <span class="text-xs font-extrabold text-slate-700 dark:text-slate-300">المرفقات والملفات</span>
           <span class="text-[10px] text-slate-400 font-bold">{{ activeTask.attachments?.length || 0 }} مرفق</span>
+        </div>
+
+        <!-- Image Paste Drop Zone -->
+        <div 
+          @click="$refs.inspectorFileInputRef?.click()"
+          class="border border-dashed border-violet-300/80 dark:border-violet-800/80 hover:border-violet-500 rounded-xl p-2.5 text-center cursor-pointer transition bg-violet-50/40 dark:bg-violet-955/20 group/inspectpaste"
+        >
+          <input 
+            ref="inspectorFileInputRef"
+            type="file"
+            accept="image/*"
+            multiple
+            class="hidden"
+            @change="handleInspectorFileSelect"
+          />
+          <div class="text-[11px] font-extrabold text-violet-700 dark:text-violet-300 flex items-center justify-center gap-1 group-hover/inspectpaste:scale-105 transition">
+            <span>📋</span>
+            <span>لصق صورة (Ctrl+V) أو اختيار صورة</span>
+          </div>
         </div>
 
         <div v-if="activeTask.attachments && activeTask.attachments.filter(Boolean).length > 0" class="space-y-1.5 max-h-36 overflow-y-auto">
