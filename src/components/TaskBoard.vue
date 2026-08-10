@@ -716,23 +716,114 @@ const moveColumnLeftOrRight = async (index, direction) => {
 
   await store.updateProjectStatuses(store.activeProjectId, currentStatuses)
 }
+
+// Side Drawer State & Actions for Status Customization
+const isStatusDrawerOpen = ref(false)
+const drawerStatuses = ref([])
+const newDrawerStatusName = ref('')
+const draggedDrawerIdx = ref(null)
+
+const openStatusDrawer = () => {
+  drawerStatuses.value = [...(activeProject.value?.statuses || [])]
+  newDrawerStatusName.value = ''
+  isStatusDrawerOpen.value = true
+}
+
+const closeStatusDrawer = () => {
+  isStatusDrawerOpen.value = false
+}
+
+const addDrawerStatus = () => {
+  const name = newDrawerStatusName.value.trim()
+  if (!name) return
+  if (drawerStatuses.value.includes(name)) {
+    alert('هذه الحالة موجودة بالفعل.')
+    return
+  }
+  drawerStatuses.value.push(name)
+  newDrawerStatusName.value = ''
+}
+
+const removeDrawerStatus = (idx) => {
+  if (drawerStatuses.value.length <= 1) {
+    alert('يجب الإبقاء على حالة واحدة على الأقل.')
+    return
+  }
+  drawerStatuses.value.splice(idx, 1)
+}
+
+const moveDrawerItem = (idx, direction) => {
+  const target = direction === 'up' ? idx - 1 : idx + 1
+  if (target < 0 || target >= drawerStatuses.value.length) return
+  const [item] = drawerStatuses.value.splice(idx, 1)
+  drawerStatuses.value.splice(target, 0, item)
+}
+
+const onDrawerDragStart = (idx, e) => {
+  draggedDrawerIdx.value = idx
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+  }
+}
+
+const onDrawerDragOver = (e) => {
+  e.preventDefault()
+}
+
+const onDrawerDrop = (dropIdx, e) => {
+  e.preventDefault()
+  if (draggedDrawerIdx.value === null || draggedDrawerIdx.value === dropIdx) return
+  const [item] = drawerStatuses.value.splice(draggedDrawerIdx.value, 1)
+  drawerStatuses.value.splice(dropIdx, 0, item)
+  draggedDrawerIdx.value = null
+}
+
+const saveDrawerStatuses = async () => {
+  const cleaned = drawerStatuses.value.map(s => s.trim()).filter(Boolean)
+  if (cleaned.length === 0) {
+    alert('يجب الإبقاء على حالة واحدة على الأقل.')
+    return
+  }
+  await store.updateProjectStatuses(store.activeProjectId, cleaned)
+  isStatusDrawerOpen.value = false
+}
 </script>
 
 <template>
   <div class="space-y-6 text-right" v-if="activeProject">
     <!-- Kanban Header Actions -->
-    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-4">
+    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-4 flex-wrap gap-2">
       <div>
-        <h2 class="text-base font-extrabold text-slate-850 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
+        <h2 class="text-base font-extrabold text-slate-855 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
           لوحة المهام (Kanban)
           <span class="text-xs font-bold text-slate-400 font-sans">({{ projectTasks.length }} مهام)</span>
         </h2>
       </div>
 
-      <div class="flex items-center space-x-2 space-x-reverse">
+      <div class="flex items-center space-x-2 space-x-reverse flex-wrap gap-2">
+        <!-- Add New Status Button Top Option -->
+        <button 
+          @click="promptAddStatus"
+          class="bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/40 dark:hover:bg-violet-900/50 text-violet-600 dark:text-violet-400 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer min-h-[40px] flex items-center gap-1.5 border border-violet-200/50 dark:border-violet-800/50"
+          title="إضافة حالة جديدة للمشروع"
+        >
+          <span>➕</span>
+          <span>إضافة حالة جديدة</span>
+        </button>
+
+        <!-- Reorder & Customize Statuses Side Drawer Trigger -->
+        <button 
+          @click="openStatusDrawer"
+          class="bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer min-h-[40px] flex items-center gap-1.5 border border-indigo-200/50 dark:border-indigo-800/50 shadow-2xs"
+          title="ترتيب وتخصيص الحالات في نافذة سريعة"
+        >
+          <span>⚙️</span>
+          <span>ترتيب وتخصيص الحالات</span>
+        </button>
+
         <button 
           @click="toggleSelectAllKanban"
-          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer min-h-[40px] flex items-center justify-center border border-slate-200/60 dark:border-slate-700/60"
         >
           {{ isAllSelected ? 'إلغاء تحديد الكل' : 'تحديد جميع المهام' }}
         </button>
@@ -786,7 +877,7 @@ const moveColumnLeftOrRight = async (index, direction) => {
 
     <!-- Columns Container -->
     <div 
-      class="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 scrollbar-hide lg:grid lg:grid-cols-4 lg:overflow-visible items-start"
+      class="flex overflow-x-auto gap-5 pb-6 items-start w-full min-w-full select-none"
     >
       <div 
         v-for="(status, colIdx) in activeProject.statuses" 
@@ -795,7 +886,7 @@ const moveColumnLeftOrRight = async (index, direction) => {
         @dragleave="handleDragLeave"
         @drop="handleDrop(status)"
         :class="[
-          'bg-slate-100/40 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200/50 dark:border-slate-800/60 rounded-2xl p-4 flex flex-col space-y-4 min-h-[480px] transition-all duration-300 w-[85vw] sm:w-80 shrink-0 lg:w-80 snap-center shadow-sm relative group/column',
+          'bg-slate-100/40 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200/50 dark:border-slate-800/60 rounded-2xl p-4 flex flex-col space-y-4 min-h-[480px] transition-all duration-300 w-80 min-w-[310px] max-w-[340px] shrink-0 shadow-sm relative group/column',
           activeDragOverColumn === status ? 'border-violet-500/80 bg-violet-500/[0.03] dark:bg-violet-900/[0.04]' : '',
           getColumnColorClass(status),
           selectedMobileStatus !== 'all' && selectedMobileStatus !== status ? 'hidden lg:flex' : 'flex'
@@ -1168,6 +1259,125 @@ const moveColumnLeftOrRight = async (index, direction) => {
               إلغاء
             </button>
           </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Side Drawer for Status Reordering & Customization -->
+    <Transition name="drawer">
+      <div v-if="isStatusDrawerOpen" class="fixed inset-0 z-50 flex justify-start" dir="rtl">
+        <!-- Backdrop overlay -->
+        <div @click="closeStatusDrawer" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"></div>
+
+        <!-- Drawer Content Panel -->
+        <div class="relative z-10 w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col justify-between overflow-hidden animate-slide-left">
+          
+          <!-- Header -->
+          <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-955/40">
+            <div class="flex items-center gap-2.5">
+              <span class="text-xl">⚙️</span>
+              <div>
+                <h3 class="text-sm font-extrabold text-slate-855 dark:text-slate-100">ترتيب وتخصيص الحالات</h3>
+                <p class="text-[11px] text-slate-400 font-semibold">اسحب الحالات لترتيبها أو قم بتعديل أسمائها</p>
+              </div>
+            </div>
+            <button 
+              @click="closeStatusDrawer"
+              class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center font-bold text-sm"
+            >
+              ✕
+            </button>
+          </div>
+
+          <!-- Body List -->
+          <div class="p-5 space-y-4 flex-1 overflow-y-auto">
+            <!-- Add New Status Input Form inside Drawer -->
+            <div class="flex items-center gap-2">
+              <input 
+                v-model="newDrawerStatusName"
+                @keyup.enter="addDrawerStatus"
+                type="text"
+                placeholder="إضافة حالة جديدة... (مثل: قيد الاختبار)"
+                class="flex-1 bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+              <button 
+                @click="addDrawerStatus"
+                class="bg-violet-600 hover:bg-violet-700 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition cursor-pointer shrink-0 shadow-sm"
+              >
+                + إضافة
+              </button>
+            </div>
+
+            <div class="text-xs font-bold text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span>حالات المشروع الحالية:</span>
+              <span class="text-[10px] text-violet-600 dark:text-violet-400 font-normal">يمكنك السحب لإعادة الترتيب ⠿</span>
+            </div>
+
+            <!-- Reorderable List Items -->
+            <div class="space-y-2.5">
+              <div 
+                v-for="(st, idx) in drawerStatuses" 
+                :key="'drawer-st-' + idx"
+                draggable="true"
+                @dragstart="onDrawerDragStart(idx, $event)"
+                @dragover="onDrawerDragOver"
+                @drop="onDrawerDrop(idx, $event)"
+                class="flex items-center justify-between p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 hover:border-violet-500/80 transition cursor-grab active:cursor-grabbing group/ditem shadow-2xs"
+              >
+                <div class="flex items-center gap-2.5 flex-1 min-w-0">
+                  <span class="text-slate-400 dark:text-slate-600 text-sm font-mono cursor-grab group-hover/ditem:text-violet-500 transition">⠿</span>
+                  <input 
+                    v-model="drawerStatuses[idx]"
+                    type="text"
+                    class="bg-transparent text-xs font-extrabold text-slate-800 dark:text-slate-200 focus:outline-none focus:bg-white dark:focus:bg-slate-850 px-2 py-1 rounded-lg border border-transparent focus:border-violet-500 flex-1 min-w-0"
+                  />
+                </div>
+
+                <div class="flex items-center gap-1 shrink-0">
+                  <button 
+                    v-if="idx > 0"
+                    @click="moveDrawerItem(idx, 'up')"
+                    class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 text-xs font-bold"
+                    title="تحريك لأعلى"
+                  >
+                    ▲
+                  </button>
+                  <button 
+                    v-if="idx < drawerStatuses.length - 1"
+                    @click="moveDrawerItem(idx, 'down')"
+                    class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 text-xs font-bold"
+                    title="تحريك لأسفل"
+                  >
+                    ▼
+                  </button>
+                  <button 
+                    @click="removeDrawerStatus(idx)"
+                    class="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/30 transition text-xs font-bold"
+                    title="حذف هذه الحالة"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer Actions -->
+          <div class="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/40 flex items-center justify-between gap-3">
+            <button 
+              @click="saveDrawerStatuses"
+              class="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-extrabold py-3 px-4 rounded-xl text-xs transition cursor-pointer shadow-lg shadow-violet-500/20 text-center"
+            >
+              حفظ الترتيب والحالات
+            </button>
+            <button 
+              @click="closeStatusDrawer"
+              class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-extrabold py-3 px-4 rounded-xl text-xs transition cursor-pointer"
+            >
+              إلغاء
+            </button>
+          </div>
+
         </div>
       </div>
     </Transition>
