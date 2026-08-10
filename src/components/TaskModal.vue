@@ -1,6 +1,6 @@
 <script setup>
 import { store } from '../store'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import MentionInput from './MentionInput.vue'
 import MentionText from './MentionText.vue'
 
@@ -206,6 +206,8 @@ const triggerFileUpload = () => {
   fileToUploadName.value = ''
   simulateFailure.value = false
 }
+const taskAttachments = ref([])
+
 const fileInputRef = ref(null)
 
 const handleFileSelect = (e) => {
@@ -232,6 +234,11 @@ const handleImagePaste = (e) => {
   }
 }
 
+const handleGlobalPaste = (e) => {
+  if (!store.isTaskModalOpen) return
+  handleImagePaste(e)
+}
+
 const processSelectedFiles = async (files) => {
   for (const file of files) {
     const timestamp = new Date().getTime()
@@ -241,12 +248,12 @@ const processSelectedFiles = async (files) => {
     if (taskToEdit.value && taskToEdit.value.id) {
       await store.uploadFileToTask(taskToEdit.value.id, fileName, sizeFormatted, file)
     } else {
-      if (!taskForm.value.attachments) taskForm.value.attachments = []
-      taskForm.value.attachments.push({
+      taskAttachments.value.push({
         name: fileName,
         size: sizeFormatted,
         progress: 100,
-        status: 'done'
+        status: 'done',
+        fileObj: file
       })
       store.addNotification('مرفق جديد', `تم إرفاق الملف "${fileName}" بنجاح.`)
     }
@@ -289,6 +296,14 @@ const handleTouchEnd = () => {
   touchStartY.value = 0
   touchCurrentY.value = 0
 }
+
+onMounted(() => {
+  window.addEventListener('paste', handleGlobalPaste)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('paste', handleGlobalPaste)
+})
 </script>
 
 <template>

@@ -299,5 +299,32 @@ h1, h2, h3, h4, h5, h6 {
   transform: scale(0.95);
 }
 
+/* Custom Easy-to-grab Scrollbar for Kanban Board */
+.custom-kanban-scroll::-webkit-scrollbar {
+  height: 14px !important;
+}
+
+.custom-kanban-scroll::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.8) !important;
+  border-radius: 9999px !important;
+}
+
+.dark .custom-kanban-scroll::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.8) !important;
+}
+
+.custom-kanban-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #8b5cf6, #6366f1) !important;
+  border-radius: 9999px !important;
+  border: 2px solid transparent !important;
+  background-clip: padding-box !important;
+  cursor: grab !important;
+}
+
+.custom-kanban-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, #7c3aed, #4f46e5) !important;
+  cursor: grabbing !important;
+}
+
 
 

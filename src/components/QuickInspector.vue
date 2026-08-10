@@ -1,6 +1,6 @@
 <script setup>
 import { store } from '../store'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import MentionInput from './MentionInput.vue'
 import MentionText from './MentionText.vue'
 
@@ -59,6 +59,19 @@ const handleImagePaste = (e) => {
     processInspectorFiles(imageFiles)
   }
 }
+
+const handleGlobalPaste = (e) => {
+  if (!store.activeInspectorTaskId) return
+  handleImagePaste(e)
+}
+
+onMounted(() => {
+  window.addEventListener('paste', handleGlobalPaste)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('paste', handleGlobalPaste)
+})
 
 const processInspectorFiles = async (files) => {
   if (!activeTask.value) return

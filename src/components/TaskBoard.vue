@@ -787,6 +787,42 @@ const saveDrawerStatuses = async () => {
   await store.updateProjectStatuses(store.activeProjectId, cleaned)
   isStatusDrawerOpen.value = false
 }
+
+// Easy Kanban Canvas Scroll & Navigation Controls
+const kanbanScrollContainer = ref(null)
+const isMouseDown = ref(false)
+const startX = ref(0)
+const scrollLeft = ref(0)
+
+const scrollKanban = (direction) => {
+  if (!kanbanScrollContainer.value) return
+  const amount = direction === 'left' ? -350 : 350
+  kanbanScrollContainer.value.scrollBy({ left: amount, behavior: 'smooth' })
+}
+
+const onKanbanMouseDown = (e) => {
+  if (!kanbanScrollContainer.value) return
+  if (e.target.closest('button, input, textarea, select, a, [draggable="true"]')) return
+  isMouseDown.value = true
+  startX.value = e.pageX - kanbanScrollContainer.value.offsetLeft
+  scrollLeft.value = kanbanScrollContainer.value.scrollLeft
+}
+
+const onKanbanMouseLeave = () => {
+  isMouseDown.value = false
+}
+
+const onKanbanMouseUp = () => {
+  isMouseDown.value = false
+}
+
+const onKanbanMouseMove = (e) => {
+  if (!isMouseDown.value || !kanbanScrollContainer.value) return
+  e.preventDefault()
+  const x = e.pageX - kanbanScrollContainer.value.offsetLeft
+  const walk = (x - startX.value) * 1.8
+  kanbanScrollContainer.value.scrollLeft = scrollLeft.value - walk
+}
 </script>
 
 <template>
@@ -801,6 +837,26 @@ const saveDrawerStatuses = async () => {
       </div>
 
       <div class="flex items-center space-x-2 space-x-reverse flex-wrap gap-2">
+        <!-- Kanban Scroll Navigation Buttons -->
+        <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-855 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60" title="التنقل السريع بين الحالات">
+          <button 
+            @click="scrollKanban('left')"
+            class="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 transition cursor-pointer min-h-[36px] flex items-center gap-1"
+            title="التمرير للحالة السابقة"
+          >
+            <span>◀️</span>
+            <span class="hidden sm:inline">السابق</span>
+          </button>
+          <button 
+            @click="scrollKanban('right')"
+            class="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 transition cursor-pointer min-h-[36px] flex items-center gap-1"
+            title="التمرير للحالة التالية"
+          >
+            <span class="hidden sm:inline">التالي</span>
+            <span>▶️</span>
+          </button>
+        </div>
+
         <!-- Add New Status Button Top Option -->
         <button 
           @click="promptAddStatus"
@@ -875,9 +931,14 @@ const saveDrawerStatuses = async () => {
       </button>
     </div>
 
-    <!-- Columns Container -->
+    <!-- Columns Container with Mouse Drag & Touch Scroll + Custom Scrollbar -->
     <div 
-      class="flex overflow-x-auto gap-5 pb-6 items-start w-full min-w-full select-none"
+      ref="kanbanScrollContainer"
+      @mousedown="onKanbanMouseDown"
+      @mouseleave="onKanbanMouseLeave"
+      @mouseup="onKanbanMouseUp"
+      @mousemove="onKanbanMouseMove"
+      class="flex overflow-x-auto gap-5 pb-6 items-start w-full min-w-full select-none custom-kanban-scroll"
     >
       <div 
         v-for="(status, colIdx) in activeProject.statuses" 
