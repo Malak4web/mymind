@@ -274,10 +274,20 @@ const bulkDelete = async () => {
           </div>
         </div>
 
-        <!-- Task Title with Mention Preview -->
-        <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100 leading-snug break-words">
-          <MentionText :content="task.title" />
-        </h3>
+        <!-- Task Title with Mention Preview & Floating Tooltip -->
+        <div class="relative group/title min-w-0 flex-1">
+          <h3 
+            class="text-sm font-extrabold text-slate-900 dark:text-slate-100 leading-snug truncate whitespace-nowrap overflow-hidden block w-full"
+            :title="task.title"
+          >
+            <MentionText :content="task.title" />
+          </h3>
+          <div class="absolute bottom-full right-0 mb-1.5 hidden group-hover/title:block z-50 pointer-events-none max-w-xs sm:max-w-sm">
+            <div class="bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-medium px-3 py-1.5 rounded-xl shadow-xl border border-slate-700/50 backdrop-blur-md whitespace-normal break-words text-right dir-rtl">
+              {{ task.title }}
+            </div>
+          </div>
+        </div>
         
         <!-- Description Preview -->
         <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed break-words" v-if="task.description">
@@ -392,7 +402,19 @@ const bulkDelete = async () => {
                 />
               </td>
               <td class="py-4 px-5 max-w-xs">
-                <div class="font-extrabold text-slate-855 dark:text-slate-205 line-clamp-1 leading-relaxed text-sm"><MentionText :content="task.title" /></div>
+                <div class="relative group/title min-w-0">
+                  <div 
+                    class="font-extrabold text-slate-855 dark:text-slate-205 truncate whitespace-nowrap overflow-hidden leading-relaxed text-sm block cursor-pointer"
+                    :title="task.title"
+                  >
+                    <MentionText :content="task.title" />
+                  </div>
+                  <div class="absolute bottom-full right-0 mb-1.5 hidden group-hover/title:block z-50 pointer-events-none max-w-xs sm:max-w-sm">
+                    <div class="bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-medium px-3 py-1.5 rounded-xl shadow-xl border border-slate-700/50 backdrop-blur-md whitespace-normal break-words text-right dir-rtl">
+                      {{ task.title }}
+                    </div>
+                  </div>
+                </div>
                 <div class="text-xs text-slate-455 line-clamp-1 mt-1" @click.stop>
                   <MentionText v-if="task.description" :content="task.description" />
                   <span v-else class="text-slate-400 italic">لا توجد ملاحظات تفصيلية.</span>

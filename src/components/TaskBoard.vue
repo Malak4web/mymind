@@ -711,13 +711,21 @@ onUnmounted(() => {
                     title="تحديد المهمة كمكتملة"
                   />
                 </div>
-                <h4 
-                  class="text-xs sm:text-sm font-extrabold text-slate-855 dark:text-slate-100 group-hover:text-violet-650 dark:group-hover:text-violet-400 transition duration-150 truncate leading-snug flex-1 min-w-0"
-                  :class="[task.status === 'مكتمل' ? 'line-through text-slate-400 dark:text-slate-500' : '']"
-                  :title="task.title"
-                >
-                  <MentionText :content="task.title" />
-                </h4>
+                <div class="relative group/title flex-1 min-w-0">
+                  <h4 
+                    class="text-xs sm:text-sm font-extrabold text-slate-855 dark:text-slate-100 group-hover:text-violet-650 dark:group-hover:text-violet-400 transition duration-150 truncate whitespace-nowrap overflow-hidden block leading-snug w-full"
+                    :class="[task.status === 'مكتمل' ? 'line-through text-slate-400 dark:text-slate-500' : '']"
+                    :title="task.title"
+                  >
+                    <MentionText :content="task.title" />
+                  </h4>
+                  <!-- Custom Floating Tooltip on Hover -->
+                  <div class="absolute bottom-full right-0 mb-1.5 hidden group-hover/title:block z-50 pointer-events-none max-w-xs sm:max-w-sm">
+                    <div class="bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-medium px-3 py-1.5 rounded-xl shadow-xl border border-slate-700/50 backdrop-blur-md whitespace-normal break-words text-right dir-rtl">
+                      {{ task.title }}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <!-- Right: Bulk Select Checkbox & 3-Dots Action Menu -->
