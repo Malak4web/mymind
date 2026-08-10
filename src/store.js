@@ -217,13 +217,8 @@ export const store = reactive({
         this.loadDailyTaskCategories()
         await this.loadProjectCategories()
         await this.loadProjects()
-        if (this.activeProjectId) {
-          await this.loadTasks()
-          await this.loadFolders()
-          await this.loadProjectFiles()
-          await this.loadNotes()
-          await this.loadMessages()
-        }
+        // Project-scoped data (tasks, folders, files, notes) is loaded
+        // automatically by the watch(activeProjectId) at the bottom of the file
         await this.loadNotifications()
         await this.loadDigestInfo()
         await this.loadProjectTemplates()
@@ -286,7 +281,6 @@ export const store = reactive({
         body: JSON.stringify({ name, description, color, icon })
       })
       if (res.ok) {
-        await this.loadProjectCategories()
         this.addNotification('تصنيف جديد', `تم إنشاء التصنيف "${name}" بنجاح.`)
       }
     } catch (e) {
@@ -303,7 +297,6 @@ export const store = reactive({
         body: JSON.stringify(data)
       })
       if (res.ok) {
-        await this.loadProjectCategories()
       }
     } catch (e) {
       console.error("خطأ في تحديث التصنيف", e)
@@ -319,8 +312,6 @@ export const store = reactive({
       })
       if (res.ok) {
         if (this.activeCategoryId === id) this.activeCategoryId = null
-        await this.loadProjectCategories()
-        await this.loadProjects()
         this.addNotification('حذف تصنيف', 'تم حذف التصنيف بنجاح.')
       }
     } catch (e) {
@@ -672,8 +663,6 @@ export const store = reactive({
 
       if (res.ok) {
         const data = await res.json()
-        await this.loadProjects()
-        await this.loadProjectCategories()
         this.activeProjectId = data.id
         this.addNotification('إنشاء مشروع جديد', `تم إنشاء المشروع "${name}" بنجاح.`)
       }
@@ -701,7 +690,6 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadProjects()
         this.addNotification('تعديل مشروع', `تم تحديث تفاصيل المشروع "${name}" بنجاح.`)
       }
     } catch (e) {
@@ -729,13 +717,10 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadProjects()
       } else {
-        await this.loadProjects()
       }
     } catch (e) {
       console.error("خطأ في تحديث حالات المشروع", e)
-      await this.loadProjects()
     }
   },
 
@@ -808,7 +793,6 @@ export const store = reactive({
 
       if (res.ok) {
         const project = this.projects.find(p => p.id === id)
-        await this.loadProjects()
         this.addNotification('نقل للمهملات', `تم نقل المشروع "${project?.name}" إلى سلة المهملات.`)
       }
     } catch (e) {
@@ -830,7 +814,6 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadProjects()
         const project = this.projects.find(p => p.id === id)
         this.addNotification('استعادة مشروع', `تمت استعادة المشروع "${project?.name}" بنجاح.`)
       }
@@ -867,8 +850,6 @@ export const store = reactive({
           }
         }
 
-        await this.loadTasks()
-        await this.loadDigestInfo()
         this.addNotification('مهمة جديدة', `تمت إضافة المهمة "${title}" إلى قائمة المهام.`)
       }
     } catch (e) {
@@ -912,8 +893,6 @@ export const store = reactive({
           }
         }
 
-        await this.loadTasks()
-        await this.loadDigestInfo()
       }
     } catch (e) {
       console.error("خطأ في تعديل المهمة", e)
@@ -935,7 +914,6 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadTasks()
         this.addNotification('حذف مهمة', `تمت إزالة المهمة "${task?.title}" نهائياً.`)
       }
     } catch (e) {
@@ -958,7 +936,6 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadProjects()
       }
     } catch (e) {
       console.error("خطأ في إضافة الحقل المخصص", e)
@@ -978,7 +955,6 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadProjects()
       }
     } catch (e) {
       console.error("خطأ في حذف الحقل المخصص", e)
@@ -1032,11 +1008,9 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadTasks()
         this.addNotification('مرفق جديد', `تم إرفاق الملف "${name}" بنجاح في المهمة.`)
       } else {
         // Failed simulation response mapping
-        await this.loadTasks()
       }
     } catch (e) {
       console.error("خطأ في رفع المرفق", e)
@@ -1057,7 +1031,6 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadTasks()
       }
     } catch (e) {
       console.error("خطأ في حذف المرفق", e)
@@ -1074,7 +1047,6 @@ export const store = reactive({
         body: JSON.stringify({ name, parent_id: parentId })
       })
       if (res.ok) {
-        await this.loadFolders()
         this.addNotification('إنشاء مجلد', `تم إنشاء المجلد "${name}" بنجاح.`)
       }
     } catch (e) {
@@ -1090,9 +1062,6 @@ export const store = reactive({
         headers: this.getAuthHeaders()
       })
       if (res.ok) {
-        await this.loadFolders()
-        await this.loadProjectFiles()
-        await this.loadNotes()
         this.addNotification('حذف مجلد', 'تم حذف المجلد وكافة محتوياته بنجاح.')
       }
     } catch (e) {
@@ -1116,7 +1085,6 @@ export const store = reactive({
         body: formData
       })
       if (res.ok) {
-        await this.loadProjectFiles()
         this.addNotification('ملف جديد', `تم رفع الملف "${file.name}" بنجاح.`)
       }
     } catch (e) {
@@ -1132,7 +1100,6 @@ export const store = reactive({
         headers: this.getAuthHeaders()
       })
       if (res.ok) {
-        await this.loadProjectFiles()
         this.addNotification('حذف ملف', 'تم حذف الملف بنجاح.')
       }
     } catch (e) {
@@ -1150,7 +1117,6 @@ export const store = reactive({
         body: JSON.stringify({ title, content, folder_id: folderId })
       })
       if (res.ok) {
-        await this.loadNotes()
         this.addNotification('ملاحظة جديدة', `تم حفظ الملاحظة "${title}" بنجاح.`)
       }
     } catch (e) {
@@ -1167,7 +1133,6 @@ export const store = reactive({
         body: JSON.stringify({ title, content, folder_id: folderId })
       })
       if (res.ok) {
-        await this.loadNotes()
         this.addNotification('تعديل ملاحظة', `تم تحديث الملاحظة "${title}" بنجاح.`)
       }
     } catch (e) {
@@ -1183,7 +1148,6 @@ export const store = reactive({
         headers: this.getAuthHeaders()
       })
       if (res.ok) {
-        await this.loadNotes()
         this.addNotification('حذف ملاحظة', 'تم حذف الملاحظة بنجاح.')
       }
     } catch (e) {
@@ -1200,7 +1164,6 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadNotifications()
       }
     } catch (e) {
       console.error("خطأ في تحديث الإشعار", e)
@@ -1216,7 +1179,6 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadNotifications()
       }
     } catch (e) {
       console.error("خطأ في تحديث الإشعارات", e)
@@ -1232,7 +1194,6 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadDigestInfo()
       }
     } catch (e) {
       console.error("خطأ في إرسال الملخص المجمع", e)
@@ -1249,7 +1210,6 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadNotifications()
         // Trigger browser push simulation
         if (this.pushPermission === 'granted') {
           console.log(`[إشعار سطح المكتب]: ${title} - ${text}`)
@@ -1312,7 +1272,6 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadProjects()
         this.addNotification('حذف حالة', `تم إزالة الحالة "${status}" وتحديث مهام المشروع.`)
       } else {
         const data = await res.json()
@@ -1338,7 +1297,6 @@ export const store = reactive({
       })
 
       if (res.ok) {
-        await this.loadProjects()
         this.addNotification('إضافة حالة', `تم إضافة الحالة الجديدة "${status}" للمشروع.`)
       }
     } catch (e) {
@@ -1552,35 +1510,7 @@ export const store = reactive({
 
       console.log(`[Pusher] ✅ متصل بقناة user.${userId}`)
     } catch (e) {
-      console.error('[Pusher] ❌ فشل الاتصال بـ Pusher، الرجوع للتزامن اليدوي', e)
-    }
-
-    // Fallback: sync on visibility change, focus, and online events (no polling)
-    if (!this._syncListenersAttached && typeof window !== 'undefined') {
-      this._syncListenersAttached = true
-
-      const syncAllOnce = () => {
-        this.loadDailyTasks(true)
-        this.loadHabits(true)
-        this.loadProjects(true)
-        this.loadProjectCategories(true)
-        this.loadNotifications(true)
-        if (this.activeProjectId) {
-          this.loadTasks(true)
-          this.loadNotes(true)
-          this.loadProjectFiles(true)
-          this.loadFolders(true)
-        }
-      }
-
-      window.addEventListener('online', syncAllOnce)
-      if (typeof document !== 'undefined') {
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') {
-            syncAllOnce()
-          }
-        })
-      }
+      console.error('[Pusher] ❌ فشل الاتصال بـ Pusher', e)
     }
   },
 
