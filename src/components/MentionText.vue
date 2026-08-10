@@ -10,6 +10,10 @@ const props = defineProps({
   tagClass: {
     type: String,
     default: ''
+  },
+  singleLine: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -155,7 +159,7 @@ const handleFileClick = (token, e) => {
 </script>
 
 <template>
-  <span class="inline leading-relaxed">
+  <span :class="[singleLine ? 'inline-block max-w-full whitespace-nowrap overflow-hidden text-ellipsis align-bottom' : 'inline leading-relaxed']">
     <template v-for="(token, idx) in tokens" :key="idx">
       <!-- File mentions: use explicit window.open click handler -->
       <span

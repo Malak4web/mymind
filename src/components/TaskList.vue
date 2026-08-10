@@ -277,10 +277,10 @@ const bulkDelete = async () => {
         <!-- Task Title with Mention Preview & Floating Tooltip -->
         <div class="relative group/title min-w-0 flex-1">
           <h3 
-            class="text-sm font-extrabold text-slate-900 dark:text-slate-100 leading-snug truncate whitespace-nowrap overflow-hidden block w-full"
+            class="text-sm font-extrabold text-slate-900 dark:text-slate-100 leading-snug whitespace-nowrap overflow-hidden text-ellipsis block max-w-full"
             :title="task.title"
           >
-            <MentionText :content="task.title" />
+            <MentionText :content="task.title" singleLine />
           </h3>
           <div class="absolute bottom-full right-0 mb-1.5 hidden group-hover/title:block z-50 pointer-events-none max-w-xs sm:max-w-sm">
             <div class="bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-medium px-3 py-1.5 rounded-xl shadow-xl border border-slate-700/50 backdrop-blur-md whitespace-normal break-words text-right dir-rtl">

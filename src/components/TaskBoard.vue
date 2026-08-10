@@ -713,11 +713,11 @@ onUnmounted(() => {
                 </div>
                 <div class="relative group/title flex-1 min-w-0">
                   <h4 
-                    class="text-xs sm:text-sm font-extrabold text-slate-855 dark:text-slate-100 group-hover:text-violet-650 dark:group-hover:text-violet-400 transition duration-150 line-clamp-1 overflow-hidden text-ellipsis block leading-snug w-full"
+                    class="text-xs sm:text-sm font-extrabold text-slate-855 dark:text-slate-100 group-hover:text-violet-650 dark:group-hover:text-violet-400 transition duration-150 whitespace-nowrap overflow-hidden text-ellipsis block leading-snug max-w-full"
                     :class="[task.status === 'مكتمل' ? 'line-through text-slate-400 dark:text-slate-500' : '']"
                     :title="task.title"
                   >
-                    <MentionText :content="task.title" />
+                    <MentionText :content="task.title" singleLine />
                   </h4>
                   <!-- Custom Floating Tooltip on Hover -->
                   <div class="absolute bottom-full right-0 mb-1.5 hidden group-hover/title:block z-50 pointer-events-none max-w-xs sm:max-w-sm">
