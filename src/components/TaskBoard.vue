@@ -1265,15 +1265,15 @@ const saveDrawerStatuses = async () => {
 
     <!-- Side Drawer for Status Reordering & Customization -->
     <Transition name="drawer">
-      <div v-if="isStatusDrawerOpen" class="fixed inset-0 z-50 flex justify-start" dir="rtl">
+      <div v-if="isStatusDrawerOpen" class="fixed inset-0 z-[9999] flex justify-start" dir="rtl">
         <!-- Backdrop overlay -->
-        <div @click="closeStatusDrawer" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"></div>
+        <div @click="closeStatusDrawer" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md transition-opacity"></div>
 
-        <!-- Drawer Content Panel -->
-        <div class="relative z-10 w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col justify-between overflow-hidden animate-slide-left">
+        <!-- Drawer Content Panel (Solid 100% opaque background, z-[10000]) -->
+        <div class="relative z-[10000] w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col justify-between overflow-hidden animate-slide-left">
           
-          <!-- Header -->
-          <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-955/40">
+          <!-- Header (Solid opaque background) -->
+          <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900">
             <div class="flex items-center gap-2.5">
               <span class="text-xl">⚙️</span>
               <div>
@@ -1290,7 +1290,7 @@ const saveDrawerStatuses = async () => {
           </div>
 
           <!-- Body List -->
-          <div class="p-5 space-y-4 flex-1 overflow-y-auto">
+          <div class="p-5 space-y-4 flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/50">
             <!-- Add New Status Input Form inside Drawer -->
             <div class="flex items-center gap-2">
               <input 
@@ -1298,7 +1298,7 @@ const saveDrawerStatuses = async () => {
                 @keyup.enter="addDrawerStatus"
                 type="text"
                 placeholder="إضافة حالة جديدة... (مثل: قيد الاختبار)"
-                class="flex-1 bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                class="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-2xs"
               />
               <button 
                 @click="addDrawerStatus"
@@ -1308,7 +1308,7 @@ const saveDrawerStatuses = async () => {
               </button>
             </div>
 
-            <div class="text-xs font-bold text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div class="text-xs font-bold text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
               <span>حالات المشروع الحالية:</span>
               <span class="text-[10px] text-violet-600 dark:text-violet-400 font-normal">يمكنك السحب لإعادة الترتيب ⠿</span>
             </div>
@@ -1322,14 +1322,14 @@ const saveDrawerStatuses = async () => {
                 @dragstart="onDrawerDragStart(idx, $event)"
                 @dragover="onDrawerDragOver"
                 @drop="onDrawerDrop(idx, $event)"
-                class="flex items-center justify-between p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 hover:border-violet-500/80 transition cursor-grab active:cursor-grabbing group/ditem shadow-2xs"
+                class="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-violet-500/80 transition cursor-grab active:cursor-grabbing group/ditem shadow-xs"
               >
                 <div class="flex items-center gap-2.5 flex-1 min-w-0">
-                  <span class="text-slate-400 dark:text-slate-600 text-sm font-mono cursor-grab group-hover/ditem:text-violet-500 transition">⠿</span>
+                  <span class="text-slate-400 dark:text-slate-500 text-sm font-mono cursor-grab group-hover/ditem:text-violet-500 transition">⠿</span>
                   <input 
                     v-model="drawerStatuses[idx]"
                     type="text"
-                    class="bg-transparent text-xs font-extrabold text-slate-800 dark:text-slate-200 focus:outline-none focus:bg-white dark:focus:bg-slate-850 px-2 py-1 rounded-lg border border-transparent focus:border-violet-500 flex-1 min-w-0"
+                    class="bg-transparent text-xs font-extrabold text-slate-800 dark:text-slate-200 focus:outline-none focus:bg-slate-100 dark:focus:bg-slate-800 px-2 py-1 rounded-lg border border-transparent focus:border-violet-500 flex-1 min-w-0"
                   />
                 </div>
 
@@ -1337,7 +1337,7 @@ const saveDrawerStatuses = async () => {
                   <button 
                     v-if="idx > 0"
                     @click="moveDrawerItem(idx, 'up')"
-                    class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 text-xs font-bold"
+                    class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold"
                     title="تحريك لأعلى"
                   >
                     ▲
@@ -1345,7 +1345,7 @@ const saveDrawerStatuses = async () => {
                   <button 
                     v-if="idx < drawerStatuses.length - 1"
                     @click="moveDrawerItem(idx, 'down')"
-                    class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 text-xs font-bold"
+                    class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold"
                     title="تحريك لأسفل"
                   >
                     ▼
@@ -1362,8 +1362,8 @@ const saveDrawerStatuses = async () => {
             </div>
           </div>
 
-          <!-- Footer Actions -->
-          <div class="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/40 flex items-center justify-between gap-3">
+          <!-- Footer Actions (Solid opaque background) -->
+          <div class="p-5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3">
             <button 
               @click="saveDrawerStatuses"
               class="flex-1 bg-violet-600 hover:bg-violet-700 text-white font-extrabold py-3 px-4 rounded-xl text-xs transition cursor-pointer shadow-lg shadow-violet-500/20 text-center"
