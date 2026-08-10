@@ -1,6 +1,18 @@
 import { reactive, watch } from 'vue'
 import { initEcho, disconnectEcho } from './echo.js'
 
+// Dedup/throttle: prevents the same load function from firing twice within 2 seconds
+// This eliminates duplicate fetches when local code + Pusher event both trigger reload
+const _loadTimestamps = {}
+function shouldSkipLoad(key, cooldownMs = 2000) {
+  const now = Date.now()
+  if (_loadTimestamps[key] && (now - _loadTimestamps[key]) < cooldownMs) {
+    return true // skip — was called recently
+  }
+  _loadTimestamps[key] = now
+  return false
+}
+
 export const store = reactive({
   // Connection and Authentication
   apiBase: import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && window.location && window.location.origin ? `${window.location.origin}/api` : 'https://mind.zadians.com/api'),
@@ -248,6 +260,7 @@ export const store = reactive({
 
   // Load Project Categories
   async loadProjectCategories() {
+    if (shouldSkipLoad('projectCategories')) return
     try {
       const res = await fetch(`${this.apiBase}/project-categories`, {
         headers: this.getAuthHeaders()
@@ -317,6 +330,7 @@ export const store = reactive({
 
   // Load Projects
   async loadProjects() {
+    if (shouldSkipLoad('projects')) return
     try {
       const res = await fetch(`${this.apiBase}/projects`, {
         headers: this.getAuthHeaders()
@@ -374,6 +388,7 @@ export const store = reactive({
   // Load Tasks
   async loadTasks() {
     if (!this.activeProjectId) return
+    if (shouldSkipLoad('tasks')) return
     try {
       const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/tasks`, {
         headers: this.getAuthHeaders()
@@ -425,6 +440,7 @@ export const store = reactive({
   // Load Folders
   async loadFolders() {
     if (!this.activeProjectId) return
+    if (shouldSkipLoad('folders')) return
     try {
       const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/folders`, {
         headers: this.getAuthHeaders()
@@ -440,6 +456,7 @@ export const store = reactive({
   // Load Project Files
   async loadProjectFiles() {
     if (!this.activeProjectId) return
+    if (shouldSkipLoad('projectFiles')) return
     try {
       const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/project-files`, {
         headers: this.getAuthHeaders()
@@ -471,6 +488,7 @@ export const store = reactive({
 
   async loadNotes() {
     if (!this.activeProjectId) return
+    if (shouldSkipLoad('notes')) return
     try {
       const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/notes`, {
         headers: this.getAuthHeaders()
@@ -502,6 +520,7 @@ export const store = reactive({
 
   // Load Notifications
   async loadNotifications() {
+    if (shouldSkipLoad('notifications')) return
     try {
       const res = await fetch(`${this.apiBase}/notifications`, {
         headers: this.getAuthHeaders()
@@ -2225,6 +2244,11 @@ store.init()
 
 watch(() => store.activeProjectId, (newVal) => {
   if (newVal) {
+    // Reset dedup for project-scoped data so new project loads immediately
+    delete _loadTimestamps['tasks']
+    delete _loadTimestamps['folders']
+    delete _loadTimestamps['projectFiles']
+    delete _loadTimestamps['notes']
     store.loadTasks()
     store.loadFolders()
     store.loadProjectFiles()
