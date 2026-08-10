@@ -348,6 +348,7 @@ const addQuickComment = () => {
           :is-textarea="true"
           :rows="3"
           placeholder="إضافة وصف تفصيلي..."
+          @blur="saveFieldUpdates"
         />
         <div v-if="description" class="mt-1.5 p-2 bg-slate-50 dark:bg-slate-955 rounded-xl border border-slate-200/60 dark:border-slate-800 text-xs">
           <MentionText :content="description" />

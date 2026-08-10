@@ -41,6 +41,7 @@ const triggerType = ref('') // '@' or '/'
 const searchQuery = ref('')
 const selectedIndex = ref(0)
 const triggerIndex = ref(-1)
+const lastCursorPos = ref(0) // Store cursor position before focus loss
 
 // Close menu on click outside
 const containerRef = ref(null)
@@ -179,6 +180,7 @@ const handleInput = (e) => {
   emit('update:modelValue', val)
 
   const cursor = e.target.selectionStart
+  lastCursorPos.value = cursor // Store cursor position for selectItem
   const textBeforeCursor = val.slice(0, cursor)
 
   // Match `@name` or `/filename` at end of text before cursor
@@ -233,7 +235,9 @@ const selectItem = (item) => {
   if (!inputEl) return
 
   const val = props.modelValue || ''
-  const cursor = inputEl.selectionStart
+  // Use stored cursor position instead of current selectionStart
+  // (clicking popup steals focus and resets selectionStart to 0)
+  const cursor = lastCursorPos.value || inputEl.selectionStart
 
   const beforeTrigger = val.slice(0, triggerIndex.value)
   const afterCursor = val.slice(cursor)
@@ -248,6 +252,7 @@ const selectItem = (item) => {
     inputEl.focus()
     const newCursor = triggerIndex.value + item.insertText.length
     inputEl.setSelectionRange(newCursor, newCursor)
+    lastCursorPos.value = newCursor
   })
 }
 </script>
@@ -316,6 +321,7 @@ const selectItem = (item) => {
           <div
             v-for="(item, idx) in filteredSuggestions"
             :key="item.id"
+            @mousedown.prevent
             @click="selectItem(item)"
             @mouseenter="selectedIndex = idx"
             :class="[
