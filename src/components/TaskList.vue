@@ -193,6 +193,54 @@ const bulkDelete = async () => {
     console.error(e)
   }
 }
+const fallbackCopyText = (text, message = 'تم نسخ عنوان المهمة إلى الحافظة') => {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  try {
+    document.execCommand('copy')
+    store.addNotification('تم النسخ', message)
+  } catch (e) {
+    console.error('فشل النسخ إلى الحافظة', e)
+  }
+  document.body.removeChild(textarea)
+}
+
+const copyTaskTitle = (title) => {
+  if (!title) return
+  const textToCopy = String(title).trim()
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      store.addNotification('تم النسخ', 'تم نسخ عنوان المهمة إلى الحافظة')
+    }).catch(() => {
+      fallbackCopyText(textToCopy)
+    })
+  } else {
+    fallbackCopyText(textToCopy)
+  }
+}
+
+const bulkCopyTitles = () => {
+  if (selectedTaskIds.value.length === 0) return
+  const selectedTasks = store.tasks.filter(t => selectedTaskIds.value.includes(t.id))
+  const titles = selectedTasks.map(t => t.title).filter(Boolean)
+  if (titles.length === 0) return
+
+  const textToCopy = titles.join('\n')
+  const msg = `تم نسخ عناوين (${titles.length}) مهام كـ أسطر منفصلة إلى الحافظة`
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      store.addNotification('تم النسخ الجماعي', msg)
+    }).catch(() => {
+      fallbackCopyText(textToCopy, msg)
+    })
+  } else {
+    fallbackCopyText(textToCopy, msg)
+  }
+}
 </script>
 
 <template>
@@ -312,6 +360,15 @@ const bulkDelete = async () => {
           <div class="flex items-center gap-1 mr-auto">
             <span v-if="task.attachments?.length > 0" class="text-[11px] text-slate-400 ml-1 font-bold">📎 {{ task.attachments.length }}</span>
             
+            <!-- Copy Title Button -->
+            <button
+              @click="copyTaskTitle(task.title)"
+              class="min-h-[44px] min-w-[44px] p-2.5 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center text-xs"
+              title="نسخ عنوان المهمة"
+            >
+              📋
+            </button>
+
             <!-- Quick Edit Button (min 44px hit target) -->
             <button
               @click="openEditTask(task.id)"
@@ -447,7 +504,14 @@ const bulkDelete = async () => {
                 </div>
                 <span v-else class="text-xs text-slate-400">—</span>
               </td>
-              <td class="py-4 px-4 text-center" @click.stop>
+              <td class="py-4 px-4 text-center space-x-1 space-x-reverse" @click.stop>
+                <button 
+                  @click="copyTaskTitle(task.title)"
+                  class="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                  title="نسخ عنوان المهمة"
+                >
+                  📋
+                </button>
                 <button 
                   @click="openEditTask(task.id)"
                   class="p-1.5 rounded-lg text-slate-500 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-slate-800 transition cursor-pointer"
@@ -494,6 +558,16 @@ const bulkDelete = async () => {
             <option v-for="p in otherProjects" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </div>
+
+        <!-- Bulk Copy Titles Button -->
+        <button 
+          @click="bulkCopyTitles"
+          class="bg-indigo-50 hover:bg-indigo-100 text-indigo-650 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold px-3 py-2 rounded-xl text-xs transition cursor-pointer min-h-[44px] flex items-center justify-center gap-1.5 shrink-0 border border-indigo-200/50 dark:border-indigo-800/50"
+          title="نسخ عناوين المهام المحددة كـ أسطر منفصلة"
+        >
+          <span>📋</span>
+          <span>نسخ العناوين</span>
+        </button>
 
         <!-- Bulk Delete Button -->
         <button 

@@ -551,6 +551,55 @@ const quickDeleteTask = async (task) => {
   }
 }
 
+const fallbackCopyText = (text, message = 'تم نسخ عنوان المهمة إلى الحافظة') => {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  try {
+    document.execCommand('copy')
+    store.addNotification('تم النسخ', message)
+  } catch (e) {
+    console.error('فشل النسخ إلى الحافظة', e)
+  }
+  document.body.removeChild(textarea)
+}
+
+const copyTaskTitle = (title) => {
+  if (!title) return
+  const textToCopy = String(title).trim()
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      store.addNotification('تم النسخ', 'تم نسخ عنوان المهمة إلى الحافظة')
+    }).catch(() => {
+      fallbackCopyText(textToCopy)
+    })
+  } else {
+    fallbackCopyText(textToCopy)
+  }
+}
+
+const bulkCopyTitles = () => {
+  if (selectedTaskIds.value.length === 0) return
+  const selectedTasks = store.tasks.filter(t => selectedTaskIds.value.includes(t.id))
+  const titles = selectedTasks.map(t => t.title).filter(Boolean)
+  if (titles.length === 0) return
+
+  const textToCopy = titles.join('\n')
+  const msg = `تم نسخ عناوين (${titles.length}) مهام كـ أسطر منفصلة إلى الحافظة`
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      store.addNotification('تم النسخ الجماعي', msg)
+    }).catch(() => {
+      fallbackCopyText(textToCopy, msg)
+    })
+  } else {
+    fallbackCopyText(textToCopy, msg)
+  }
+}
+
 // 3-Dots Task Card Actions Menu State
 const activeTaskMenuId = ref(null)
 
@@ -760,6 +809,13 @@ onUnmounted(() => {
                       @click.stop
                     >
                       <button 
+                        @click="closeTaskMenu(); copyTaskTitle(task.title)"
+                        class="w-full text-right px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition cursor-pointer flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60"
+                      >
+                        <span>📋</span>
+                        <span>نسخ العنوان</span>
+                      </button>
+                      <button 
                         @click="closeTaskMenu(); openEditTask(task.id)"
                         class="w-full text-right px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-2"
                       >
@@ -887,6 +943,16 @@ onUnmounted(() => {
             <option v-for="p in otherProjects" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </div>
+
+        <!-- Bulk Copy Titles Button -->
+        <button 
+          @click="bulkCopyTitles"
+          class="bg-indigo-50 hover:bg-indigo-100 text-indigo-650 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold px-3 py-2 rounded-xl text-xs transition cursor-pointer min-h-[44px] flex items-center justify-center gap-1.5 shrink-0 border border-indigo-200/50 dark:border-indigo-800/50"
+          title="نسخ عناوين المهام المحددة كـ أسطر منفصلة"
+        >
+          <span>📋</span>
+          <span>نسخ العناوين</span>
+        </button>
 
         <!-- Bulk Delete Button -->
         <button 
