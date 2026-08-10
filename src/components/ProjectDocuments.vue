@@ -1,6 +1,6 @@
 <script setup>
 import { store } from '../store'
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 import MentionInput from './MentionInput.vue'
 import MentionText from './MentionText.vue'
 
@@ -16,14 +16,8 @@ const noteContent = ref('')
 // File Upload ref
 const fileInputRef = ref(null)
 
-// Load data initially on mount
-onMounted(async () => {
-  if (store.activeProjectId) {
-    await store.loadFolders()
-    await store.loadProjectFiles()
-    await store.loadNotes()
-  }
-})
+// Data is loaded by the watch(activeProjectId) in store.js
+// No need to reload here on mount
 
 // Recursive Breadcrumbs Builder
 const breadcrumbs = computed(() => {

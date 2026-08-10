@@ -176,19 +176,21 @@ onUnmounted(() => {
 })
 
 // Watch when projects list finishes loading, to select the project based on hash
-watch(() => store.projects, (newProjects) => {
-  if (newProjects.length > 0) {
+watch(() => store.projects.length, (newLen) => {
+  if (newLen > 0) {
     const hash = window.location.hash
     if (hash.startsWith('#project-')) {
       const projId = parseInt(hash.replace('#project-', ''))
-      if (!isNaN(projId) && newProjects.some(p => p.id === projId)) {
-        store.activeProjectId = projId
+      if (!isNaN(projId) && store.projects.some(p => p.id === projId)) {
+        if (store.activeProjectId !== projId) {
+          store.activeProjectId = projId
+        }
       }
     } else if (hash.startsWith('#routines') || hash.startsWith('#habit-')) {
       handleHashChange()
     }
   }
-}, { deep: true })
+})
 
 </script>
 
