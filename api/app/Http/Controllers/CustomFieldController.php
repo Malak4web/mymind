@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\DataChanged;
 use App\Models\CustomFieldDefinition;
 use App\Models\CustomFieldValue;
 use App\Models\Project;
@@ -26,6 +27,8 @@ class CustomFieldController extends Controller
             'active' => true
         ]);
 
+        broadcast(new DataChanged($request->user()->id, 'tasks', (int)$projectId));
+
         return response()->json($field, 201);
     }
 
@@ -34,12 +37,14 @@ class CustomFieldController extends Controller
         $field = CustomFieldDefinition::where('project_id', $projectId)->findOrFail($fieldId);
         $field->update(['active' => false]);
 
+        broadcast(new DataChanged(request()->user()->id, 'tasks', (int)$projectId));
+
         return response()->json(['message' => 'تم إلغاء تفعيل الحقل المخصص بنجاح']);
     }
 
     public function setValue(Request $request, $taskId)
     {
-        Task::findOrFail($taskId);
+        $task = Task::findOrFail($taskId);
 
         $validated = $request->validate([
             'custom_field_definition_id' => 'required|exists:custom_field_definitions,id',
@@ -55,6 +60,8 @@ class CustomFieldController extends Controller
                 'value' => $validated['value']
             ]
         );
+
+        broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id));
 
         return response()->json($value);
     }

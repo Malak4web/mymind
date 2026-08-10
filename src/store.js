@@ -1,4 +1,5 @@
 import { reactive, watch } from 'vue'
+import { initEcho, disconnectEcho } from './echo.js'
 
 export const store = reactive({
   // Connection and Authentication
@@ -229,6 +230,7 @@ export const store = reactive({
   },
 
   logout() {
+    this.stopRealtimeSync()
     localStorage.removeItem('mymind_token')
     this.token = ''
     this.isAuthenticated = false
@@ -1510,45 +1512,111 @@ export const store = reactive({
     }
   },
 
-  // Real-time synchronization
-  realtimeSyncTimer: null,
-
+  // Real-time synchronization via Pusher WebSocket
+  _echoChannel: null,
+  _syncListenersAttached: false,
 
   startRealtimeSync() {
-    if (this.realtimeSyncTimer) return
+    if (this._echoChannel) return
+    if (!this.currentUser || !this.currentUser.id) return
 
-    const syncAll = () => {
-      this.loadDailyTasks(true)
-      this.loadHabits(true)
-      this.loadProjects(true)
-      this.loadProjectCategories(true)
-      this.loadNotifications(true)
-      if (this.activeProjectId) {
-        this.loadTasks(true)
-        this.loadNotes(true)
-        this.loadProjectFiles(true)
-        this.loadFolders(true)
-      }
+    const userId = this.currentUser.id
+
+    // Initialize Echo WebSocket connection
+    try {
+      const echo = initEcho(this.token, this.apiBase)
+
+      this._echoChannel = echo.private(`user.${userId}`)
+        .listen('.data.changed', (event) => {
+          this._handleRealtimeEvent(event)
+        })
+
+      console.log(`[Pusher] ✅ متصل بقناة user.${userId}`)
+    } catch (e) {
+      console.error('[Pusher] ❌ فشل الاتصال بـ Pusher، الرجوع للتزامن اليدوي', e)
     }
 
-    syncAll()
+    // Fallback: sync on visibility change, focus, and online events (no polling)
+    if (!this._syncListenersAttached && typeof window !== 'undefined') {
+      this._syncListenersAttached = true
 
-    this.realtimeSyncTimer = setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        syncAll()
+      const syncAllOnce = () => {
+        this.loadDailyTasks(true)
+        this.loadHabits(true)
+        this.loadProjects(true)
+        this.loadProjectCategories(true)
+        this.loadNotifications(true)
+        if (this.activeProjectId) {
+          this.loadTasks(true)
+          this.loadNotes(true)
+          this.loadProjectFiles(true)
+          this.loadFolders(true)
+        }
       }
-    }, 3000)
 
-    if (typeof window !== 'undefined') {
-      window.addEventListener('focus', syncAll)
-      window.addEventListener('online', syncAll)
+      window.addEventListener('online', syncAllOnce)
       if (typeof document !== 'undefined') {
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') {
-            syncAll()
+            syncAllOnce()
           }
         })
       }
+    }
+  },
+
+  stopRealtimeSync() {
+    if (this._echoChannel) {
+      this._echoChannel = null
+    }
+    disconnectEcho()
+  },
+
+  _handleRealtimeEvent(event) {
+    const type = event.type
+    const projectId = event.projectId
+
+    console.log(`[Pusher] 📡 تحديث: ${type}`, projectId ? `(مشروع ${projectId})` : '')
+
+    switch (type) {
+      case 'tasks':
+        // Only reload if the event is for the currently active project
+        if (!projectId || String(projectId) === String(this.activeProjectId)) {
+          this.loadTasks(true)
+        }
+        break
+      case 'projects':
+        this.loadProjects(true)
+        break
+      case 'notifications':
+        this.loadNotifications(true)
+        break
+      case 'notes':
+        if (!projectId || String(projectId) === String(this.activeProjectId)) {
+          this.loadNotes(true)
+        }
+        break
+      case 'folders':
+        if (!projectId || String(projectId) === String(this.activeProjectId)) {
+          this.loadFolders(true)
+        }
+        break
+      case 'project_files':
+        if (!projectId || String(projectId) === String(this.activeProjectId)) {
+          this.loadProjectFiles(true)
+        }
+        break
+      case 'project_categories':
+        this.loadProjectCategories(true)
+        break
+      case 'daily_tasks':
+        this.loadDailyTasks(true)
+        break
+      case 'habits':
+        this.loadHabits(true)
+        break
+      default:
+        console.log(`[Pusher] نوع غير معروف: ${type}`)
     }
   },
 

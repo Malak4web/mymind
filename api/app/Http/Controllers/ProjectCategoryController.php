@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\DataChanged;
 use App\Models\ProjectCategory;
 use Illuminate\Http\Request;
 
@@ -48,6 +49,8 @@ class ProjectCategoryController extends Controller
 
         $category = ProjectCategory::create($validated);
 
+        broadcast(new DataChanged($request->user()->id, 'project_categories'));
+
         return response()->json($category, 201);
     }
 
@@ -70,6 +73,8 @@ class ProjectCategoryController extends Controller
 
         $category->update($validated);
 
+        broadcast(new DataChanged($request->user()->id, 'project_categories'));
+
         return response()->json($category);
     }
 
@@ -83,6 +88,8 @@ class ProjectCategoryController extends Controller
         }
 
         $category->delete();
+
+        broadcast(new DataChanged($request->user()->id, 'project_categories'));
 
         return response()->json(null, 204);
     }

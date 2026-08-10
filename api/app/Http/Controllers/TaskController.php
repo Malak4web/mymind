@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\DataChanged;
 use App\Models\Project;
 use App\Models\Task;
 use Illuminate\Http\Request;
@@ -60,6 +61,8 @@ class TaskController extends Controller
             'deadline' => $validated['deadline'] ?? null
         ]);
 
+        broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id));
+
         return response()->json($task, 201);
     }
 
@@ -106,13 +109,18 @@ class TaskController extends Controller
 
         $task->update($validated);
 
+        broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id));
+
         return response()->json($task);
     }
 
     public function destroy($id)
     {
         $task = Task::findOrFail($id);
+        $projectId = $task->project_id;
         $task->delete();
+
+        broadcast(new DataChanged(request()->user()->id, 'tasks', $projectId));
 
         return response()->json(['message' => 'تم حذف المهمة بنجاح']);
     }

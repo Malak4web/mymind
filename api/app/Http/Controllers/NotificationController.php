@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\DataChanged;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 
@@ -25,6 +26,8 @@ class NotificationController extends Controller
             'is_read' => false
         ]);
 
+        broadcast(new DataChanged($request->user()->id, 'notifications'));
+
         return response()->json($notification, 201);
     }
 
@@ -33,12 +36,16 @@ class NotificationController extends Controller
         $notification = Notification::findOrFail($id);
         $notification->update(['is_read' => true]);
 
+        broadcast(new DataChanged(request()->user()->id, 'notifications'));
+
         return response()->json($notification);
     }
 
     public function markAllRead()
     {
         Notification::where('is_read', false)->update(['is_read' => true]);
+
+        broadcast(new DataChanged(request()->user()->id, 'notifications'));
 
         return response()->json(['message' => 'تم تحديد جميع الإشعارات كمقروءة']);
     }
@@ -50,6 +57,8 @@ class NotificationController extends Controller
             'text' => 'محتوى تنبيه اختبار TDD',
             'is_read' => false
         ]);
+
+        broadcast(new DataChanged(request()->user()->id, 'notifications'));
 
         return response()->json($notification, 201);
     }

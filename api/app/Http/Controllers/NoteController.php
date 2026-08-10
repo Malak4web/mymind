@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\DataChanged;
 use App\Models\Note;
 use Illuminate\Http\Request;
 
@@ -28,6 +29,8 @@ class NoteController extends Controller
             'content' => $request->content
         ]);
 
+        broadcast(new DataChanged($request->user()->id, 'notes', $note->project_id));
+
         return response()->json($note, 201);
     }
 
@@ -47,13 +50,19 @@ class NoteController extends Controller
             'content' => $request->content
         ]);
 
+        broadcast(new DataChanged($request->user()->id, 'notes', $note->project_id));
+
         return response()->json($note);
     }
 
     public function destroy($id)
     {
         $note = Note::findOrFail($id);
+        $projectId = $note->project_id;
         $note->delete();
+
+        broadcast(new DataChanged(request()->user()->id, 'notes', $projectId));
+
         return response()->json(['message' => 'تم حذف الملاحظة بنجاح']);
     }
 }

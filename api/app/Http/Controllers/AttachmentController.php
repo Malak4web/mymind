@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\DataChanged;
 use App\Models\Attachment;
 use App\Models\Task;
 use Illuminate\Http\Request;
@@ -11,7 +12,7 @@ class AttachmentController extends Controller
 {
     public function store(Request $request, $taskId)
     {
-        Task::findOrFail($taskId);
+        $task = Task::findOrFail($taskId);
 
         $request->validate([
             'file' => 'required|file',
@@ -32,6 +33,8 @@ class AttachmentController extends Controller
                 'status' => 'failed'
             ]);
 
+            broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id));
+
             return response()->json($attachment, 200);
         }
 
@@ -45,6 +48,8 @@ class AttachmentController extends Controller
             'progress' => 100,
             'status' => 'done'
         ]);
+
+        broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id));
 
         return response()->json($attachment, 201);
     }
@@ -61,11 +66,15 @@ class AttachmentController extends Controller
 
     public function destroy($id)
     {
-        $attachment = Attachment::findOrFail($id);
+        $attachment = Attachment::with('task')->findOrFail($id);
+        $projectId = $attachment->task?->project_id;
+
         if ($attachment->path) {
             Storage::disk('public')->delete($attachment->path);
         }
         $attachment->delete();
+
+        broadcast(new DataChanged(request()->user()->id, 'tasks', $projectId));
 
         return response()->json(['message' => 'تم حذف المرفق بنجاح']);
     }

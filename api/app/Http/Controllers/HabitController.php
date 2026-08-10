@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Habit;
+use App\Events\DataChanged;
 use Illuminate\Http\Request;
 
 class HabitController extends Controller
@@ -78,6 +79,10 @@ class HabitController extends Controller
 
         $habit->update(array_filter($validated, fn($val) => $val !== null));
 
+        if ($request->user()) {
+            broadcast(new DataChanged($request->user()->id, 'habits'));
+        }
+
         return response()->json($habit);
     }
 
@@ -85,6 +90,10 @@ class HabitController extends Controller
     {
         $habit = Habit::findOrFail($id);
         $habit->delete();
+
+        if ($request->user()) {
+            broadcast(new DataChanged($request->user()->id, 'habits'));
+        }
 
         return response()->json(['message' => 'تم حذف العادة بنجاح']);
     }

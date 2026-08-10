@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\DataChanged;
 use App\Models\ProjectFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -48,18 +49,24 @@ class ProjectFileController extends Controller
             'type' => $type
         ]);
 
+        broadcast(new DataChanged($request->user()->id, 'project_files', $file->project_id));
+
         return response()->json($file, 201);
     }
 
     public function destroy($id)
     {
         $file = ProjectFile::findOrFail($id);
+        $projectId = $file->project_id;
         
         // Extract relative storage path and delete physical file
         $relativePath = str_replace('/storage/', '', $file->path);
         Storage::disk('public')->delete($relativePath);
 
         $file->delete();
+
+        broadcast(new DataChanged(request()->user()->id, 'project_files', $projectId));
+
         return response()->json(['message' => 'تم حذف الملف بنجاح']);
     }
 

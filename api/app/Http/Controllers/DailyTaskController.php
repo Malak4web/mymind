@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DailyTask;
+use App\Events\DataChanged;
 use Illuminate\Http\Request;
 
 class DailyTaskController extends Controller
@@ -57,6 +58,10 @@ class DailyTaskController extends Controller
 
         $task->update(array_filter($validated, fn($val) => $val !== null));
 
+        if ($request->user()) {
+            broadcast(new DataChanged($request->user()->id, 'daily_tasks'));
+        }
+
         return response()->json($task);
     }
 
@@ -64,6 +69,10 @@ class DailyTaskController extends Controller
     {
         $task = DailyTask::findOrFail($id);
         $task->delete();
+
+        if ($request->user()) {
+            broadcast(new DataChanged($request->user()->id, 'daily_tasks'));
+        }
 
         return response()->json(['message' => 'تم حذف المهمة اليومية بنجاح']);
     }

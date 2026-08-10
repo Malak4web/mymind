@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\DataChanged;
 use App\Models\Folder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,16 +36,21 @@ class FolderController extends Controller
             'name' => $request->name
         ]);
 
+        broadcast(new DataChanged($request->user()->id, 'folders', $folder->project_id));
+
         return response()->json($folder, 201);
     }
 
     public function destroy($id)
     {
         $folder = Folder::findOrFail($id);
+        $projectId = $folder->project_id;
 
         DB::transaction(function () use ($folder) {
             $this->deleteFolderRecursive($folder);
         });
+
+        broadcast(new DataChanged(request()->user()->id, 'folders', $projectId));
 
         return response()->json(['message' => 'تم حذف المجلد بنجاح']);
     }

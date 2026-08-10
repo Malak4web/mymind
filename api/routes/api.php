@@ -18,6 +18,7 @@ use App\Http\Controllers\NoteController;
 use App\Http\Controllers\DailyTaskController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Broadcast;
 use App\Models\EmailDigestQueue;
 use App\Models\BatchedEmail;
 
@@ -26,6 +27,9 @@ Route::post('/login', [AuthController::class, 'login']);
 
 // Public file serving (no auth needed - accessed via <img src>)
 Route::get('/attachments/{id}/file', [AttachmentController::class, 'getFile']);
+
+// Pusher private channel auth (must be behind auth:sanctum)
+Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 // Protected API routes
 Route::middleware('auth:sanctum')->group(function () {
