@@ -24,6 +24,9 @@ use App\Models\BatchedEmail;
 // Public Auth endpoint
 Route::post('/login', [AuthController::class, 'login']);
 
+// Public file serving (no auth needed - accessed via <img src>)
+Route::get('/attachments/{id}/file', [AttachmentController::class, 'getFile']);
+
 // Protected API routes
 Route::middleware('auth:sanctum')->group(function () {
     // User Management & Profile routes
@@ -68,7 +71,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Attachments uploads and deletes
     Route::post('/tasks/{taskId}/attachments', [AttachmentController::class, 'store']);
-    Route::get('/attachments/{id}/file', [AttachmentController::class, 'getFile']);
+
     Route::delete('/attachments/{id}', [AttachmentController::class, 'destroy']);
 
     // Folders routes

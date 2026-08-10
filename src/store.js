@@ -966,7 +966,11 @@ export const store = reactive({
 
   // Upload File Attachment
   async uploadFileToTask(taskId, name, size, fileObj = null, simulateFailure = false) {
-    const fileBlob = fileObj || new Blob(['mymind file content dummy'], { type: 'image/png' })
+    let fileBlob = fileObj || new Blob(['mymind file content dummy'], { type: 'image/png' })
+    // Ensure the blob is wrapped as a proper File with a name
+    if (fileBlob instanceof Blob && !(fileBlob instanceof File)) {
+      fileBlob = new File([fileBlob], name, { type: fileBlob.type || 'image/png' })
+    }
     const formData = new FormData()
     formData.append('file', fileBlob, name)
     if (simulateFailure) {
@@ -993,9 +997,16 @@ export const store = reactive({
     }
 
     try {
+      // For FormData upload, do NOT set Content-Type header — browser sets it with boundary
+      const uploadHeaders = {}
+      if (this.token) {
+        uploadHeaders['Authorization'] = `Bearer ${this.token}`
+      }
+      uploadHeaders['Accept'] = 'application/json'
+
       const res = await fetch(`${this.apiBase}/tasks/${taskId}/attachments`, {
         method: 'POST',
-        headers: this.getAuthHeaders(),
+        headers: uploadHeaders,
         body: formData
       })
 
