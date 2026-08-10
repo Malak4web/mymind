@@ -49,7 +49,7 @@ class ProjectFileController extends Controller
             'type' => $type
         ]);
 
-        broadcast(new DataChanged($request->user()->id, 'project_files', $file->project_id));
+        broadcast(new DataChanged($request->user()->id, 'project_files', $file->project_id))->toOthers();
 
         return response()->json($file, 201);
     }
@@ -65,7 +65,7 @@ class ProjectFileController extends Controller
 
         $file->delete();
 
-        broadcast(new DataChanged(request()->user()->id, 'project_files', $projectId));
+        broadcast(new DataChanged(request()->user()->id, 'project_files', $projectId))->toOthers();
 
         return response()->json(['message' => 'تم حذف الملف بنجاح']);
     }

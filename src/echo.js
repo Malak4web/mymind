@@ -53,3 +53,15 @@ export function disconnectEcho() {
     echoInstance = null
   }
 }
+
+/**
+ * Get the current Pusher socket ID.
+ * Used for X-Socket-ID header so broadcast()->toOthers() works.
+ * @returns {string|null}
+ */
+export function getSocketId() {
+  if (echoInstance && echoInstance.socketId) {
+    return echoInstance.socketId()
+  }
+  return null
+}

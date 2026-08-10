@@ -80,7 +80,7 @@ class HabitController extends Controller
         $habit->update(array_filter($validated, fn($val) => $val !== null));
 
         if ($request->user()) {
-            broadcast(new DataChanged($request->user()->id, 'habits'));
+            broadcast(new DataChanged($request->user()->id, 'habits'))->toOthers();
         }
 
         return response()->json($habit);
@@ -92,7 +92,7 @@ class HabitController extends Controller
         $habit->delete();
 
         if ($request->user()) {
-            broadcast(new DataChanged($request->user()->id, 'habits'));
+            broadcast(new DataChanged($request->user()->id, 'habits'))->toOthers();
         }
 
         return response()->json(['message' => 'تم حذف العادة بنجاح']);

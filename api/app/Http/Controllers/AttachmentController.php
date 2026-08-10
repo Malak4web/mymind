@@ -33,7 +33,7 @@ class AttachmentController extends Controller
                 'status' => 'failed'
             ]);
 
-            broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id));
+            broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id))->toOthers();
 
             return response()->json($attachment, 200);
         }
@@ -49,7 +49,7 @@ class AttachmentController extends Controller
             'status' => 'done'
         ]);
 
-        broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id));
+        broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id))->toOthers();
 
         return response()->json($attachment, 201);
     }
@@ -74,7 +74,7 @@ class AttachmentController extends Controller
         }
         $attachment->delete();
 
-        broadcast(new DataChanged(request()->user()->id, 'tasks', $projectId));
+        broadcast(new DataChanged(request()->user()->id, 'tasks', $projectId))->toOthers();
 
         return response()->json(['message' => 'تم حذف المرفق بنجاح']);
     }

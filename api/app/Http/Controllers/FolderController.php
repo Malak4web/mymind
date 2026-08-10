@@ -36,7 +36,7 @@ class FolderController extends Controller
             'name' => $request->name
         ]);
 
-        broadcast(new DataChanged($request->user()->id, 'folders', $folder->project_id));
+        broadcast(new DataChanged($request->user()->id, 'folders', $folder->project_id))->toOthers();
 
         return response()->json($folder, 201);
     }
@@ -50,7 +50,7 @@ class FolderController extends Controller
             $this->deleteFolderRecursive($folder);
         });
 
-        broadcast(new DataChanged(request()->user()->id, 'folders', $projectId));
+        broadcast(new DataChanged(request()->user()->id, 'folders', $projectId))->toOthers();
 
         return response()->json(['message' => 'تم حذف المجلد بنجاح']);
     }

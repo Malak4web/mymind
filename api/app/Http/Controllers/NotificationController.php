@@ -26,7 +26,7 @@ class NotificationController extends Controller
             'is_read' => false
         ]);
 
-        broadcast(new DataChanged($request->user()->id, 'notifications'));
+        broadcast(new DataChanged($request->user()->id, 'notifications'))->toOthers();
 
         return response()->json($notification, 201);
     }
@@ -36,7 +36,7 @@ class NotificationController extends Controller
         $notification = Notification::findOrFail($id);
         $notification->update(['is_read' => true]);
 
-        broadcast(new DataChanged(request()->user()->id, 'notifications'));
+        broadcast(new DataChanged(request()->user()->id, 'notifications'))->toOthers();
 
         return response()->json($notification);
     }
@@ -45,7 +45,7 @@ class NotificationController extends Controller
     {
         Notification::where('is_read', false)->update(['is_read' => true]);
 
-        broadcast(new DataChanged(request()->user()->id, 'notifications'));
+        broadcast(new DataChanged(request()->user()->id, 'notifications'))->toOthers();
 
         return response()->json(['message' => 'تم تحديد جميع الإشعارات كمقروءة']);
     }
@@ -58,7 +58,7 @@ class NotificationController extends Controller
             'is_read' => false
         ]);
 
-        broadcast(new DataChanged(request()->user()->id, 'notifications'));
+        broadcast(new DataChanged(request()->user()->id, 'notifications'))->toOthers();
 
         return response()->json($notification, 201);
     }

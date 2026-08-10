@@ -1,5 +1,5 @@
 import { reactive, watch } from 'vue'
-import { initEcho, disconnectEcho } from './echo.js'
+import { initEcho, disconnectEcho, getSocketId } from './echo.js'
 
 // Dedup/throttle: prevents the same load function from firing twice within 2 seconds
 // This eliminates duplicate fetches when local code + Pusher event both trigger reload
@@ -195,6 +195,11 @@ export const store = reactive({
     const headers = { 'Accept': 'application/json', ...customHeaders }
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`
+    }
+    // Send socket ID so broadcast()->toOthers() excludes this browser
+    const socketId = getSocketId()
+    if (socketId) {
+      headers['X-Socket-ID'] = socketId
     }
     return headers
   },

@@ -59,7 +59,7 @@ class DailyTaskController extends Controller
         $task->update(array_filter($validated, fn($val) => $val !== null));
 
         if ($request->user()) {
-            broadcast(new DataChanged($request->user()->id, 'daily_tasks'));
+            broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
         }
 
         return response()->json($task);
@@ -71,7 +71,7 @@ class DailyTaskController extends Controller
         $task->delete();
 
         if ($request->user()) {
-            broadcast(new DataChanged($request->user()->id, 'daily_tasks'));
+            broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
         }
 
         return response()->json(['message' => 'تم حذف المهمة اليومية بنجاح']);

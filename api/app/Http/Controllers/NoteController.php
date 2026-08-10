@@ -29,7 +29,7 @@ class NoteController extends Controller
             'content' => $request->content
         ]);
 
-        broadcast(new DataChanged($request->user()->id, 'notes', $note->project_id));
+        broadcast(new DataChanged($request->user()->id, 'notes', $note->project_id))->toOthers();
 
         return response()->json($note, 201);
     }
@@ -50,7 +50,7 @@ class NoteController extends Controller
             'content' => $request->content
         ]);
 
-        broadcast(new DataChanged($request->user()->id, 'notes', $note->project_id));
+        broadcast(new DataChanged($request->user()->id, 'notes', $note->project_id))->toOthers();
 
         return response()->json($note);
     }
@@ -61,7 +61,7 @@ class NoteController extends Controller
         $projectId = $note->project_id;
         $note->delete();
 
-        broadcast(new DataChanged(request()->user()->id, 'notes', $projectId));
+        broadcast(new DataChanged(request()->user()->id, 'notes', $projectId))->toOthers();
 
         return response()->json(['message' => 'تم حذف الملاحظة بنجاح']);
     }

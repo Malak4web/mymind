@@ -191,7 +191,7 @@ class ProjectController extends Controller
             return response()->json($pData, 201);
         });
 
-        broadcast(new DataChanged($request->user()->id, 'projects'));
+        broadcast(new DataChanged($request->user()->id, 'projects'))->toOthers();
 
         return $res;
     }
@@ -224,7 +224,7 @@ class ProjectController extends Controller
         $pData = $project->load('users')->toArray();
         $pData['member_ids'] = $project->users->pluck('id')->all();
 
-        broadcast(new DataChanged($request->user()->id, 'projects'));
+        broadcast(new DataChanged($request->user()->id, 'projects'))->toOthers();
 
         return response()->json($pData);
     }
@@ -235,7 +235,7 @@ class ProjectController extends Controller
         $project->update(['is_deleted' => true]);
         $project->delete(); // SoftDeletes call
 
-        broadcast(new DataChanged(request()->user()->id, 'projects'));
+        broadcast(new DataChanged(request()->user()->id, 'projects'))->toOthers();
 
         return response()->json(['message' => 'تم نقل المشروع لسلة المهملات']);
     }
@@ -246,7 +246,7 @@ class ProjectController extends Controller
         $project->restore();
         $project->update(['is_deleted' => false]);
 
-        broadcast(new DataChanged(request()->user()->id, 'projects'));
+        broadcast(new DataChanged(request()->user()->id, 'projects'))->toOthers();
 
         return response()->json($project);
     }
@@ -264,7 +264,7 @@ class ProjectController extends Controller
             $project->update(['statuses' => $statuses]);
         }
 
-        broadcast(new DataChanged($request->user()->id, 'projects'));
+        broadcast(new DataChanged($request->user()->id, 'projects'))->toOthers();
 
         return response()->json($project);
     }
@@ -297,7 +297,7 @@ class ProjectController extends Controller
         $newStatuses = array_values(array_filter($statuses, fn($s) => $s !== $validated['status']));
         $project->update(['statuses' => $newStatuses]);
 
-        broadcast(new DataChanged($request->user()->id, 'projects'));
+        broadcast(new DataChanged($request->user()->id, 'projects'))->toOthers();
 
         return response()->json($project);
     }

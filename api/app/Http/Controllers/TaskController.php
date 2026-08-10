@@ -61,7 +61,7 @@ class TaskController extends Controller
             'deadline' => $validated['deadline'] ?? null
         ]);
 
-        broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id));
+        broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id))->toOthers();
 
         return response()->json($task, 201);
     }
@@ -109,7 +109,7 @@ class TaskController extends Controller
 
         $task->update($validated);
 
-        broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id));
+        broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id))->toOthers();
 
         return response()->json($task);
     }
@@ -120,7 +120,7 @@ class TaskController extends Controller
         $projectId = $task->project_id;
         $task->delete();
 
-        broadcast(new DataChanged(request()->user()->id, 'tasks', $projectId));
+        broadcast(new DataChanged(request()->user()->id, 'tasks', $projectId))->toOthers();
 
         return response()->json(['message' => 'تم حذف المهمة بنجاح']);
     }

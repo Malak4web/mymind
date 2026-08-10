@@ -27,7 +27,7 @@ class CustomFieldController extends Controller
             'active' => true
         ]);
 
-        broadcast(new DataChanged($request->user()->id, 'tasks', (int)$projectId));
+        broadcast(new DataChanged($request->user()->id, 'tasks', (int)$projectId))->toOthers();
 
         return response()->json($field, 201);
     }
@@ -37,7 +37,7 @@ class CustomFieldController extends Controller
         $field = CustomFieldDefinition::where('project_id', $projectId)->findOrFail($fieldId);
         $field->update(['active' => false]);
 
-        broadcast(new DataChanged(request()->user()->id, 'tasks', (int)$projectId));
+        broadcast(new DataChanged(request()->user()->id, 'tasks', (int)$projectId))->toOthers();
 
         return response()->json(['message' => 'تم إلغاء تفعيل الحقل المخصص بنجاح']);
     }
@@ -61,7 +61,7 @@ class CustomFieldController extends Controller
             ]
         );
 
-        broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id));
+        broadcast(new DataChanged($request->user()->id, 'tasks', $task->project_id))->toOthers();
 
         return response()->json($value);
     }
