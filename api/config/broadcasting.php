@@ -12,7 +12,7 @@ return [
             'secret' => env('PUSHER_APP_SECRET', '333a9c33e8ccff7eaa83'),
             'app_id' => env('PUSHER_APP_ID', '2184921'),
             'options' => [
-                'cluster' => env('PUSHER_APP_CLUSTER', 'eu'),
+                'cluster' => (env('PUSHER_APP_CLUSTER') && env('PUSHER_APP_CLUSTER') !== 'mt1') ? env('PUSHER_APP_CLUSTER') : 'eu',
                 'useTLS' => true,
             ],
         ],
