@@ -16,7 +16,8 @@ const props = defineProps({
 const emit = defineEmits([
   'set-view',
   'update:showProjectsSheet',
-  'update:showMoreSheet'
+  'update:showMoreSheet',
+  'quick-create'
 ])
 
 const unreadNotificationsCount = computed(() => 

@@ -855,6 +855,8 @@ export const store = reactive({
           }
         }
 
+        await this.loadTasks()
+        await this.loadDigestInfo()
         this.addNotification('مهمة جديدة', `تمت إضافة المهمة "${title}" إلى قائمة المهام.`)
       }
     } catch (e) {
@@ -898,6 +900,8 @@ export const store = reactive({
           }
         }
 
+        await this.loadTasks()
+        await this.loadDigestInfo()
       }
     } catch (e) {
       console.error("خطأ في تعديل المهمة", e)
@@ -919,6 +923,7 @@ export const store = reactive({
       })
 
       if (res.ok) {
+        await this.loadTasks()
         this.addNotification('حذف مهمة', `تمت إزالة المهمة "${task?.title}" نهائياً.`)
       }
     } catch (e) {
@@ -1052,6 +1057,7 @@ export const store = reactive({
         body: JSON.stringify({ name, parent_id: parentId })
       })
       if (res.ok) {
+        await this.loadFolders()
         this.addNotification('إنشاء مجلد', `تم إنشاء المجلد "${name}" بنجاح.`)
       }
     } catch (e) {
@@ -1067,6 +1073,9 @@ export const store = reactive({
         headers: this.getAuthHeaders()
       })
       if (res.ok) {
+        await this.loadFolders()
+        await this.loadProjectFiles()
+        await this.loadNotes()
         this.addNotification('حذف مجلد', 'تم حذف المجلد وكافة محتوياته بنجاح.')
       }
     } catch (e) {
@@ -1090,6 +1099,7 @@ export const store = reactive({
         body: formData
       })
       if (res.ok) {
+        await this.loadProjectFiles()
         this.addNotification('ملف جديد', `تم رفع الملف "${file.name}" بنجاح.`)
       }
     } catch (e) {
@@ -1105,6 +1115,7 @@ export const store = reactive({
         headers: this.getAuthHeaders()
       })
       if (res.ok) {
+        await this.loadProjectFiles()
         this.addNotification('حذف ملف', 'تم حذف الملف بنجاح.')
       }
     } catch (e) {
@@ -1122,6 +1133,7 @@ export const store = reactive({
         body: JSON.stringify({ title, content, folder_id: folderId })
       })
       if (res.ok) {
+        await this.loadNotes()
         this.addNotification('ملاحظة جديدة', `تم حفظ الملاحظة "${title}" بنجاح.`)
       }
     } catch (e) {
@@ -1138,6 +1150,7 @@ export const store = reactive({
         body: JSON.stringify({ title, content, folder_id: folderId })
       })
       if (res.ok) {
+        await this.loadNotes()
         this.addNotification('تعديل ملاحظة', `تم تحديث الملاحظة "${title}" بنجاح.`)
       }
     } catch (e) {
@@ -1153,6 +1166,7 @@ export const store = reactive({
         headers: this.getAuthHeaders()
       })
       if (res.ok) {
+        await this.loadNotes()
         this.addNotification('حذف ملاحظة', 'تم حذف الملاحظة بنجاح.')
       }
     } catch (e) {

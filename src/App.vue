@@ -455,24 +455,33 @@ watch(() => store.projects.length, (newLen) => {
           </svg>
         </button>
 
-        <!-- Left: Quick Actions (Notifications & Settings) -->
-        <div class="flex items-center gap-1 shrink-0">
+        <!-- Left: Quick Actions (Create Task, Notifications & Settings) -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button 
+            @click="triggerQuickCreate"
+            class="h-9 px-2.5 bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-700 hover:to-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-violet-500/20 active:scale-95 transition cursor-pointer flex items-center gap-1 shrink-0"
+            title="إضافة مهمة جديدة"
+          >
+            <span class="text-base font-black">+</span>
+            <span class="text-[11px] font-bold">مهمة</span>
+          </button>
+
           <button 
             @click="store.toggleNotificationDrawer()"
-            class="w-11 h-11 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer relative"
+            class="w-9 h-9 min-h-[36px] min-w-[36px] flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer relative"
             title="مركز الإشعارات"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
-            <span v-if="unreadNotificationsCount > 0" class="absolute top-1.5 left-1.5 bg-violet-600 text-white rounded-full text-[8px] font-black w-4 h-4 flex items-center justify-center border border-white dark:border-slate-900 shadow-sm">
+            <span v-if="unreadNotificationsCount > 0" class="absolute top-1 left-1 bg-violet-600 text-white rounded-full text-[8px] font-black w-3.5 h-3.5 flex items-center justify-center border border-white dark:border-slate-900 shadow-sm">
               {{ unreadNotificationsCount }}
             </span>
           </button>
 
           <button 
             @click="showMobileMoreSheet = true"
-            class="w-11 h-11 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
+            class="w-9 h-9 min-h-[36px] min-w-[36px] flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
             title="الإعدادات السريعة والمزيد"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -667,7 +676,19 @@ watch(() => store.projects.length, (newLen) => {
       v-model:showProjectsSheet="showMobileProjectsSheet" 
       v-model:showMoreSheet="showMobileMoreSheet" 
       @set-view="setView" 
+      @quick-create="triggerQuickCreate"
     />
+
+    <!-- Mobile Floating Action Button (+) for Quick Task Creation -->
+    <button 
+      v-if="!store.isFocusMode && store.activeView !== 'settings'"
+      @click="triggerQuickCreate"
+      class="md:hidden fixed bottom-20 left-4 z-40 w-13 h-13 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-650 text-white shadow-xl shadow-violet-600/35 flex items-center justify-center text-2xl font-black active:scale-95 transition-all duration-300 border border-white/20 cursor-pointer"
+      title="إضافة مهمة جديدة"
+      aria-label="إضافة مهمة جديدة"
+    >
+      +
+    </button>
 
     <!-- Mobile Projects Bottom Sheet Drawer -->
     <Transition name="sheet">
