@@ -2,15 +2,15 @@
 
 return [
 
-    'default' => env('BROADCAST_CONNECTION', 'null'),
+    'default' => env('BROADCAST_CONNECTION', env('BROADCAST_DRIVER', 'pusher')),
 
     'connections' => [
 
         'pusher' => [
             'driver' => 'pusher',
-            'key' => env('PUSHER_APP_KEY'),
-            'secret' => env('PUSHER_APP_SECRET'),
-            'app_id' => env('PUSHER_APP_ID'),
+            'key' => env('PUSHER_APP_KEY', '7adfbdb785782270cb45'),
+            'secret' => env('PUSHER_APP_SECRET', '333a9c33e8ccff7eaa83'),
+            'app_id' => env('PUSHER_APP_ID', '2184921'),
             'options' => [
                 'cluster' => env('PUSHER_APP_CLUSTER', 'mt1'),
                 'useTLS' => true,

@@ -37,9 +37,13 @@ class DataChanged implements ShouldBroadcastNow
      */
     public function broadcastOn(): array
     {
-        return [
-            new PrivateChannel('user.' . $this->userId),
-        ];
+        // Get all active user IDs in the application so every connected user receives the real-time update
+        $allUserIds = \App\Models\User::pluck('id')->toArray();
+        if (empty($allUserIds)) {
+            $allUserIds = [$this->userId];
+        }
+
+        return array_map(fn($id) => new PrivateChannel('user.' . $id), array_unique($allUserIds));
     }
 
     /**
