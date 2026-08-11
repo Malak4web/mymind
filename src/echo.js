@@ -22,7 +22,7 @@ export function initEcho(token, apiBase) {
   echoInstance = new Echo({
     broadcaster: 'pusher',
     key: '7adfbdb785782270cb45',
-    cluster: 'mt1',
+    cluster: 'eu',
     forceTLS: true,
     authEndpoint,
     auth: {
