@@ -56,6 +56,10 @@ class HabitController extends Controller
             'checklist' => $validated['checklist'] ?? []
         ]);
 
+        if ($request->user()) {
+            broadcast(new DataChanged($request->user()->id, 'habits'))->toOthers();
+        }
+
         return response()->json($habit, 201);
     }
 
@@ -146,6 +150,10 @@ class HabitController extends Controller
                     ]);
                 }
             }
+        }
+
+        if ($request->user()) {
+            broadcast(new DataChanged($request->user()->id, 'habits'))->toOthers();
         }
 
         return $this->index($request);

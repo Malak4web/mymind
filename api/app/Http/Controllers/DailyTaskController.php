@@ -42,6 +42,10 @@ class DailyTaskController extends Controller
             'completed' => $validated['completed'] ?? false
         ]);
 
+        if ($request->user()) {
+            broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
+        }
+
         return response()->json($task, 201);
     }
 
@@ -111,6 +115,10 @@ class DailyTaskController extends Controller
                     ]);
                 }
             }
+        }
+
+        if ($request->user()) {
+            broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
         }
 
         return $this->index($request);
