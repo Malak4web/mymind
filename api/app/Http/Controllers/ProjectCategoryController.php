@@ -13,23 +13,20 @@ class ProjectCategoryController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
+        if (!$user) {
+            return response()->json([]);
+        }
+
         $hasUserIdCol = Schema::hasColumn('project_categories', 'user_id');
-        
         $query = ProjectCategory::query();
         
         if ($hasUserIdCol) {
-            $query->where(function ($q) use ($user) {
-                if ($user) {
-                    $q->where('user_id', $user->id)
-                      ->orWhereNull('user_id');
-                } else {
-                    $q->whereNull('user_id');
-                }
-            });
+            // Strictly fetch ONLY categories belonging to this authenticated user
+            $query->where('user_id', $user->id);
         }
         
         $categories = $query->withCount(['projects' => function ($q) use ($user) {
-                if ($user && (!$user->role || $user->role->name !== 'مدير')) {
+                if (!$user->role || $user->role->name !== 'مدير') {
                     $q->whereHas('users', function ($uq) use ($user) {
                         $uq->where('users.id', $user->id);
                     });
@@ -43,6 +40,11 @@ class ProjectCategoryController extends Controller
 
     public function store(Request $request)
     {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -51,16 +53,14 @@ class ProjectCategoryController extends Controller
             'sort_order' => 'nullable|integer',
         ]);
 
-        if ($request->user() && Schema::hasColumn('project_categories', 'user_id')) {
-            $validated['user_id'] = $request->user()->id;
+        if (Schema::hasColumn('project_categories', 'user_id')) {
+            $validated['user_id'] = $user->id;
         }
 
         $category = ProjectCategory::create($validated);
 
         try {
-            if ($request->user()) {
-                broadcast(new DataChanged($request->user()->id, 'project_categories'))->toOthers();
-            }
+            broadcast(new DataChanged($user->id, 'project_categories'))->toOthers();
         } catch (\Throwable $e) {
             Log::warning('Broadcasting failed in ProjectCategoryController@store: ' . $e->getMessage());
         }
@@ -73,10 +73,13 @@ class ProjectCategoryController extends Controller
         $category = ProjectCategory::findOrFail($id);
         $user = $request->user();
 
-        if ($user && (!$user->role || $user->role->name !== 'مدير')) {
-            if (isset($category->user_id) && $category->user_id !== null && $category->user_id !== $user->id) {
-                return response()->json(['message' => 'غير مصرح بتعديل هذا التصنيف'], 403);
-            }
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        // Only the owner of the category can edit it
+        if (isset($category->user_id) && $category->user_id !== null && $category->user_id !== $user->id) {
+            return response()->json(['message' => 'غير مصرح بتعديل هذا التصنيف'], 403);
         }
 
         $validated = $request->validate([
@@ -90,9 +93,7 @@ class ProjectCategoryController extends Controller
         $category->update($validated);
 
         try {
-            if ($request->user()) {
-                broadcast(new DataChanged($request->user()->id, 'project_categories'))->toOthers();
-            }
+            broadcast(new DataChanged($user->id, 'project_categories'))->toOthers();
         } catch (\Throwable $e) {
             Log::warning('Broadcasting failed in ProjectCategoryController@update: ' . $e->getMessage());
         }
@@ -105,18 +106,19 @@ class ProjectCategoryController extends Controller
         $category = ProjectCategory::findOrFail($id);
         $user = $request->user();
 
-        if ($user && (!$user->role || $user->role->name !== 'مدير')) {
-            if (isset($category->user_id) && $category->user_id !== null && $category->user_id !== $user->id) {
-                return response()->json(['message' => 'غير مصرح بحذف هذا التصنيف'], 403);
-            }
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        // Only the owner of the category can delete it
+        if (isset($category->user_id) && $category->user_id !== null && $category->user_id !== $user->id) {
+            return response()->json(['message' => 'غير مصرح بحذف هذا التصنيف'], 403);
         }
 
         $category->delete();
 
         try {
-            if ($request->user()) {
-                broadcast(new DataChanged($request->user()->id, 'project_categories'))->toOthers();
-            }
+            broadcast(new DataChanged($user->id, 'project_categories'))->toOthers();
         } catch (\Throwable $e) {
             Log::warning('Broadcasting failed in ProjectCategoryController@destroy: ' . $e->getMessage());
         }

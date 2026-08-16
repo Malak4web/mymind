@@ -37,6 +37,11 @@ class DataChanged implements ShouldBroadcastNow
      */
     public function broadcastOn(): array
     {
+        // For user-private resources (categories, habits, daily tasks, notifications), only broadcast to the specific user's private channel
+        if (in_array($this->type, ['project_categories', 'daily_tasks', 'habits', 'notifications'])) {
+            return [new PrivateChannel('user.' . $this->userId)];
+        }
+
         // Get all active user IDs in the application so every connected user receives the real-time update
         $allUserIds = \App\Models\User::pluck('id')->toArray();
         if (empty($allUserIds)) {

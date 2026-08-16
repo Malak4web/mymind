@@ -30,7 +30,7 @@ class ProjectCategoryTest extends TestCase
 
     public function test_can_list_project_categories()
     {
-        ProjectCategory::create(['name' => 'تصنيف 1', 'color' => '#8b5cf6']);
+        ProjectCategory::create(['name' => 'تصنيف 1', 'color' => '#8b5cf6', 'user_id' => $this->user->id]);
 
         $response = $this->getJson('/api/project-categories');
 
@@ -50,9 +50,13 @@ class ProjectCategoryTest extends TestCase
         $response = $this->postJson('/api/project-categories', $data);
 
         $response->assertStatus(201)
-                 ->assertJsonPath('name', 'تصنيف جديد');
+                 ->assertJsonPath('name', 'تصنيف جديد')
+                 ->assertJsonPath('user_id', $this->user->id);
 
-        $this->assertDatabaseHas('project_categories', ['name' => 'تصنيف جديد']);
+        $this->assertDatabaseHas('project_categories', [
+            'name' => 'تصنيف جديد',
+            'user_id' => $this->user->id
+        ]);
     }
 
     public function test_cannot_create_category_without_required_name()
@@ -67,7 +71,7 @@ class ProjectCategoryTest extends TestCase
 
     public function test_can_update_project_category()
     {
-        $category = ProjectCategory::create(['name' => 'تصنيف قديم']);
+        $category = ProjectCategory::create(['name' => 'تصنيف قديم', 'user_id' => $this->user->id]);
 
         $response = $this->putJson("/api/project-categories/{$category->id}", [
             'name' => 'تصنيف معدل',
@@ -108,8 +112,6 @@ class ProjectCategoryTest extends TestCase
         ProjectCategory::create(['name' => 'تصنيفي الخاص', 'user_id' => $this->user->id]);
         // Category by other user
         ProjectCategory::create(['name' => 'تصنيف عضو آخر', 'user_id' => $otherUser->id]);
-        // System category
-        ProjectCategory::create(['name' => 'تصنيف عام للنظام', 'user_id' => null]);
 
         // Authenticate as otherUser
         $this->authenticateUser($otherUser);
@@ -117,6 +119,7 @@ class ProjectCategoryTest extends TestCase
         $response = $this->getJson('/api/project-categories');
 
         $response->assertStatus(200)
-                 ->assertJsonCount(2); // Sees own + system, but not current user's
+                 ->assertJsonCount(1) // Sees ONLY own category, not other user's
+                 ->assertJsonPath('0.name', 'تصنيف عضو آخر');
     }
 }
