@@ -165,6 +165,7 @@ describe('store.js State & Actions Unit Tests', () => {
     })
 
     it('createProjectCategory() and deleteProjectCategory() should manage categories reactively', async () => {
+      store.token = 'test-token'
       const mockCategory = { id: 10, name: 'تصنيف تكنو', color: '#8b5cf6', icon: '💻' }
       global.fetch = vi.fn((url, opts) => {
         if (opts && opts.method === 'POST') {

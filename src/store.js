@@ -280,6 +280,20 @@ export const store = reactive({
   // Create Project Category
   async createProjectCategory(name, description = '', color = '#8b5cf6', icon = '📂') {
     try {
+      if (!this.token) {
+        const localCat = {
+          id: Date.now(),
+          name,
+          description,
+          color,
+          icon,
+          projects_count: 0
+        }
+        this.projectCategories.push(localCat)
+        this.addNotification('تصنيف جديد', `تم إنشاء التصنيف "${name}" بنجاح.`)
+        return localCat
+      }
+
       const res = await fetch(`${this.apiBase}/project-categories`, {
         method: 'POST',
         headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -287,21 +301,48 @@ export const store = reactive({
       })
       if (res.ok) {
         const newCat = await res.json()
+        const idx = this.projectCategories.findIndex(c => c.id === newCat.id)
+        if (idx === -1) {
+          this.projectCategories.push(newCat)
+        } else {
+          this.projectCategories[idx] = newCat
+        }
         await this.loadProjectCategories(true)
         this.addNotification('تصنيف جديد', `تم إنشاء التصنيف "${name}" بنجاح.`)
         return newCat
       } else {
         const err = await res.json().catch(() => ({}))
         console.error("فشل إنشاء التصنيف:", err)
+        this.addNotification('تنبيه', err.message || 'فشل في إنشاء التصنيف، يرجى المحاولة لاحقاً.', 'warning')
+        return null
       }
     } catch (e) {
       console.error("خطأ في إنشاء التصنيف", e)
+      // Fallback local addition if network fails
+      const fallbackCat = {
+        id: Date.now(),
+        name,
+        description,
+        color,
+        icon,
+        projects_count: 0
+      }
+      this.projectCategories.push(fallbackCat)
+      this.addNotification('تصنيف محلي', `تم إضافة التصنيف "${name}" محلياً.`)
+      return fallbackCat
     }
   },
 
   // Update Project Category
   async updateProjectCategory(id, data) {
     try {
+      const cat = this.projectCategories.find(c => c.id === id)
+      if (cat) {
+        Object.assign(cat, data)
+      }
+
+      if (!this.token) return
+
       const res = await fetch(`${this.apiBase}/project-categories/${id}`, {
         method: 'PUT',
         headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -320,12 +361,23 @@ export const store = reactive({
   // Delete Project Category
   async deleteProjectCategory(id) {
     try {
+      if (this.activeCategoryId === id) this.activeCategoryId = null
+      this.projectCategories = this.projectCategories.filter(c => c.id !== id)
+      this.projects.forEach(p => {
+        if (p.categoryId === id || p.category_id === id) {
+          p.categoryId = null
+          p.category_id = null
+          p.category = null
+        }
+      })
+
+      if (!this.token) return
+
       const res = await fetch(`${this.apiBase}/project-categories/${id}`, {
         method: 'DELETE',
         headers: this.getAuthHeaders()
       })
       if (res.ok) {
-        if (this.activeCategoryId === id) this.activeCategoryId = null
         this.projects.forEach(p => {
           if (p.categoryId === id) {
             p.categoryId = null

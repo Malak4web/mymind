@@ -5,22 +5,30 @@ namespace App\Http\Controllers;
 use App\Events\DataChanged;
 use App\Models\ProjectCategory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class ProjectCategoryController extends Controller
 {
     public function index(Request $request)
     {
         $user = $request->user();
+        $hasUserIdCol = Schema::hasColumn('project_categories', 'user_id');
         
-        $categories = ProjectCategory::where(function ($query) use ($user) {
+        $query = ProjectCategory::query();
+        
+        if ($hasUserIdCol) {
+            $query->where(function ($q) use ($user) {
                 if ($user) {
-                    $query->where('user_id', $user->id)
-                          ->orWhereNull('user_id');
+                    $q->where('user_id', $user->id)
+                      ->orWhereNull('user_id');
                 } else {
-                    $query->whereNull('user_id');
+                    $q->whereNull('user_id');
                 }
-            })
-            ->withCount(['projects' => function ($q) use ($user) {
+            });
+        }
+        
+        $categories = $query->withCount(['projects' => function ($q) use ($user) {
                 if ($user && (!$user->role || $user->role->name !== 'مدير')) {
                     $q->whereHas('users', function ($uq) use ($user) {
                         $uq->where('users.id', $user->id);
@@ -43,13 +51,19 @@ class ProjectCategoryController extends Controller
             'sort_order' => 'nullable|integer',
         ]);
 
-        if ($request->user()) {
+        if ($request->user() && Schema::hasColumn('project_categories', 'user_id')) {
             $validated['user_id'] = $request->user()->id;
         }
 
         $category = ProjectCategory::create($validated);
 
-        broadcast(new DataChanged($request->user()->id, 'project_categories'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($request->user()->id, 'project_categories'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Broadcasting failed in ProjectCategoryController@store: ' . $e->getMessage());
+        }
 
         return response()->json($category, 201);
     }
@@ -60,7 +74,7 @@ class ProjectCategoryController extends Controller
         $user = $request->user();
 
         if ($user && (!$user->role || $user->role->name !== 'مدير')) {
-            if ($category->user_id !== $user->id) {
+            if (isset($category->user_id) && $category->user_id !== null && $category->user_id !== $user->id) {
                 return response()->json(['message' => 'غير مصرح بتعديل هذا التصنيف'], 403);
             }
         }
@@ -75,7 +89,13 @@ class ProjectCategoryController extends Controller
 
         $category->update($validated);
 
-        broadcast(new DataChanged($request->user()->id, 'project_categories'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($request->user()->id, 'project_categories'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Broadcasting failed in ProjectCategoryController@update: ' . $e->getMessage());
+        }
 
         return response()->json($category);
     }
@@ -86,14 +106,20 @@ class ProjectCategoryController extends Controller
         $user = $request->user();
 
         if ($user && (!$user->role || $user->role->name !== 'مدير')) {
-            if ($category->user_id !== $user->id) {
+            if (isset($category->user_id) && $category->user_id !== null && $category->user_id !== $user->id) {
                 return response()->json(['message' => 'غير مصرح بحذف هذا التصنيف'], 403);
             }
         }
 
         $category->delete();
 
-        broadcast(new DataChanged($request->user()->id, 'project_categories'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($request->user()->id, 'project_categories'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Broadcasting failed in ProjectCategoryController@destroy: ' . $e->getMessage());
+        }
 
         return response()->json(null, 204);
     }

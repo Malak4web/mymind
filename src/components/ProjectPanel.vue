@@ -156,18 +156,29 @@ const handleCreateProject = async () => {
   selectedCategoryId.value = ''
 }
 
+const isSubmittingCategory = ref(false)
+
 const handleCreateCategory = async () => {
-  if (!newCatName.value.trim()) return
-  await store.createProjectCategory(
-    newCatName.value.trim(),
-    '',
-    newCatColor.value,
-    newCatIcon.value
-  )
-  newCatName.value = ''
-  newCatColor.value = '#8b5cf6'
-  newCatIcon.value = '📂'
-  showCategoryForm.value = false
+  const name = newCatName.value.trim()
+  if (!name || isSubmittingCategory.value) return
+  
+  isSubmittingCategory.value = true
+  try {
+    const created = await store.createProjectCategory(
+      name,
+      '',
+      newCatColor.value,
+      newCatIcon.value
+    )
+    if (created) {
+      newCatName.value = ''
+      newCatColor.value = '#8b5cf6'
+      newCatIcon.value = '📂'
+      showCategoryForm.value = false
+    }
+  } finally {
+    isSubmittingCategory.value = false
+  }
 }
 
 const startEditCategory = (cat) => {
@@ -561,10 +572,11 @@ const handleTouchEnd = (closeFn) => {
           <div class="flex gap-2">
             <button 
               @click="handleCreateCategory"
-              :disabled="!newCatName.trim()"
-              class="flex-1 bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2 rounded-xl text-xs transition cursor-pointer"
+              :disabled="!newCatName.trim() || isSubmittingCategory"
+              class="flex-1 bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2 rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
             >
-              إنشاء التصنيف
+              <span v-if="isSubmittingCategory" class="inline-block animate-spin">⌛</span>
+              <span>{{ isSubmittingCategory ? 'جاري الحفظ...' : 'إنشاء التصنيف' }}</span>
             </button>
             <button 
               @click="showCategoryForm = false"
