@@ -85,9 +85,9 @@ describe('Milestone 5 Empirical Verification & Challenge Suite', () => {
       expect(wrapper.text()).toContain('1 من 2 (50%)')
     })
 
-    it('handles rapid numeric habit increments up to target value reactively', () => {
+    it('handles rapid numeric habit increments up to target value reactively', async () => {
       const todayKey = formatDateKey(new Date())
-      const numHabit = store.addHabit({
+      const numHabit = await store.addHabit({
         title: 'تمارين ضغط',
         type: 'numeric',
         targetValue: 10,

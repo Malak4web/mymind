@@ -13,6 +13,51 @@ describe('Milestone 3 Animation Performance & Interaction Empirical Tests', () =
     localStorage.clear()
     vi.restoreAllMocks()
 
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url.includes('/tasks')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([
+            { id: 101, project_id: 1, title: 'بطاقة مهمة اختبارية', status: 'بانتظار البدء', deadline: '2026-08-01' }
+          ])
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve([])
+      })
+    })
+
+    if (!Element.prototype.animate) {
+      Element.prototype.animate = vi.fn().mockReturnValue({ finished: Promise.resolve() })
+    }
+
+    class MockAudioContext {
+      constructor() { this.state = 'running' }
+      createOscillator() {
+        return {
+          connect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn(),
+          frequency: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() }
+        }
+      }
+      createGain() {
+        return {
+          connect: vi.fn(),
+          gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() }
+        }
+      }
+      get destination() { return {} }
+      get currentTime() { return 0 }
+      close() { return Promise.resolve() }
+    }
+    window.AudioContext = MockAudioContext
+    window.webkitAudioContext = MockAudioContext
+
+    store.startRealtimeSync = vi.fn()
+    store.stopRealtimeSync = vi.fn()
+
     store.isAuthenticated = true
     store.activeProjectId = 1
     store.activeDocumentFolderId = 1
@@ -77,7 +122,26 @@ describe('Milestone 3 Animation Performance & Interaction Empirical Tests', () =
   })
 
   it('verifies active touch feedback (btn-touch-active / active:scale) on App navigation tabs and main buttons', () => {
-    const wrapper = mount(App)
+    vi.useFakeTimers()
+    const wrapper = mount(App, {
+      global: {
+        stubs: {
+          TaskBoard: true,
+          TaskList: true,
+          TaskCalendar: true,
+          ProjectDocuments: true,
+          Login: true,
+          Settings: true,
+          DailyRoutines: true,
+          HabitDetail: true,
+          MobileBottomNav: true,
+          QuickInspector: true,
+          ProjectPanel: true,
+          NotificationCenter: true,
+          TaskModal: true
+        }
+      }
+    })
     
     // Quick Add button
     const quickAddBtn = wrapper.find('button.bg-gradient-to-r')
@@ -92,6 +156,8 @@ describe('Milestone 3 Animation Performance & Interaction Empirical Tests', () =
     tabButtons.forEach(tab => {
       expect(tab.classes()).toContain('btn-touch-active')
     })
+    wrapper.unmount()
+    vi.useRealTimers()
   })
 
   it('verifies CSS definitions in style.css for .btn-touch-active:active and .glass-card-hover:hover', () => {

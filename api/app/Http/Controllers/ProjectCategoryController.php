@@ -59,8 +59,10 @@ class ProjectCategoryController extends Controller
         $category = ProjectCategory::findOrFail($id);
         $user = $request->user();
 
-        if ($user && $category->user_id && $category->user_id !== $user->id && (!$user->role || $user->role->name !== 'مدير')) {
-            return response()->json(['message' => 'غير مصرح بتعديل هذا التصنيف'], 403);
+        if ($user && (!$user->role || $user->role->name !== 'مدير')) {
+            if ($category->user_id !== $user->id) {
+                return response()->json(['message' => 'غير مصرح بتعديل هذا التصنيف'], 403);
+            }
         }
 
         $validated = $request->validate([
@@ -83,8 +85,10 @@ class ProjectCategoryController extends Controller
         $category = ProjectCategory::findOrFail($id);
         $user = $request->user();
 
-        if ($user && $category->user_id && $category->user_id !== $user->id && (!$user->role || $user->role->name !== 'مدير')) {
-            return response()->json(['message' => 'غير مصرح بحذف هذا التصنيف'], 403);
+        if ($user && (!$user->role || $user->role->name !== 'مدير')) {
+            if ($category->user_id !== $user->id) {
+                return response()->json(['message' => 'غير مصرح بحذف هذا التصنيف'], 403);
+            }
         }
 
         $category->delete();

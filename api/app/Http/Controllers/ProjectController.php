@@ -181,9 +181,13 @@ class ProjectController extends Controller
                 }
             }
 
-            if ($request->has('member_ids') && is_array($request->member_ids)) {
-                $project->users()->sync($request->member_ids);
+            $memberIds = $request->has('member_ids') && is_array($request->member_ids)
+                ? $request->member_ids
+                : [];
+            if ($request->user() && !in_array($request->user()->id, $memberIds)) {
+                $memberIds[] = $request->user()->id;
             }
+            $project->users()->sync($memberIds);
 
             $pData = $project->load('users')->toArray();
             $pData['member_ids'] = $project->users->pluck('id')->all();

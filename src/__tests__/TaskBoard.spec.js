@@ -106,17 +106,20 @@ describe('TaskBoard.vue Component Tests', () => {
   })
 
   it('opens quick inspector on single click and task modal on double click', async () => {
+    store.activeProjectId = 1
+    store.tasks = [
+      { id: 101, projectId: 1, title: 'مهمة تصميم', status: 'بانتظار البدء', deadline: '2026-08-01' }
+    ]
     const wrapper = mount(TaskBoard)
-    const taskCard = wrapper.find('.cursor-grab')
-    if (taskCard.exists()) {
-      await taskCard.trigger('click')
-      expect(store.isInspectorOpen).toBe(true)
-      expect(store.activeInspectorTaskId).toBe(101)
+    const taskCard = wrapper.find('.glass-card-hover')
+    expect(taskCard.exists()).toBe(true)
+    await taskCard.trigger('click')
+    expect(store.isInspectorOpen).toBe(true)
+    expect(store.activeInspectorTaskId).toBe(101)
 
-      await taskCard.trigger('dblclick')
-      expect(store.isTaskModalOpen).toBe(true)
-      expect(store.selectedTaskIdForModal).toBe(101)
-    }
+    await taskCard.trigger('dblclick')
+    expect(store.isTaskModalOpen).toBe(true)
+    expect(store.selectedTaskIdForModal).toBe(101)
   })
 
   it('cleans up AudioContext on unmount', async () => {

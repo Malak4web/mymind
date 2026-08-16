@@ -135,6 +135,8 @@ describe('store.js State & Actions Unit Tests', () => {
         expect.objectContaining({ method: 'POST' })
       )
       expect(store.activeProjectId).toBe(101)
+      expect(store.projects.length).toBe(1)
+      expect(store.projects[0].id).toBe(101)
     })
 
     it('updateProject() should send PUT request with updated data', async () => {
@@ -148,15 +150,52 @@ describe('store.js State & Actions Unit Tests', () => {
       )
     })
 
-    it('deleteProject() and restoreProject() should invoke delete/restore endpoints', async () => {
-      store.projects = [{ id: 50, name: 'مشروع للتجربة' }]
-      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    it('deleteProject() and restoreProject() should invoke delete/restore endpoints and update projects array', async () => {
+      store.projects = [{ id: 50, name: 'مشروع للتجربة', isDeleted: false }, { id: 51, name: 'مشروع ثان', isDeleted: false }]
+      store.activeProjectId = 50
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([{ id: 51, name: 'مشروع ثان', isDeleted: false }]) })
 
       await store.deleteProject(50)
       expect(global.fetch).toHaveBeenCalledWith(`${store.apiBase}/projects/50`, expect.objectContaining({ method: 'DELETE' }))
+      expect(store.projects.find(p => p.id === 50)).toBeUndefined()
+      expect(store.activeProjectId).toBe(51)
 
       await store.restoreProject(50)
       expect(global.fetch).toHaveBeenCalledWith(`${store.apiBase}/projects/50/restore`, expect.objectContaining({ method: 'POST' }))
+    })
+
+    it('createProjectCategory() and deleteProjectCategory() should manage categories reactively', async () => {
+      const mockCategory = { id: 10, name: 'تصنيف تكنو', color: '#8b5cf6', icon: '💻' }
+      global.fetch = vi.fn((url, opts) => {
+        if (opts && opts.method === 'POST') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockCategory) })
+        }
+        if (opts && opts.method === 'DELETE') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([mockCategory]) })
+      })
+
+      await store.createProjectCategory('تصنيف تكنو', '', '#8b5cf6', '💻')
+      expect(global.fetch).toHaveBeenCalledWith(`${store.apiBase}/project-categories`, expect.objectContaining({ method: 'POST' }))
+      expect(store.projectCategories).toContainEqual(mockCategory)
+
+      store.projects = [{ id: 1, name: 'تطبيق', categoryId: 10, categoryName: 'تصنيف تكنو' }]
+      store.activeCategoryId = 10
+      global.fetch = vi.fn((url, opts) => {
+        if (opts && opts.method === 'DELETE') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+        }
+        if (url.includes('/projects')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([{ id: 1, name: 'تطبيق', category_id: null }]) })
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+      })
+
+      await store.deleteProjectCategory(10)
+      expect(global.fetch).toHaveBeenCalledWith(`${store.apiBase}/project-categories/10`, expect.objectContaining({ method: 'DELETE' }))
+      expect(store.activeCategoryId).toBeNull()
+      expect(store.projects[0].categoryId).toBeNull()
     })
 
     it('reorderProjects() should reorder projects array and save order to localStorage', () => {

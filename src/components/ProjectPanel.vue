@@ -135,13 +135,13 @@ const filteredUsersForModal = computed(() => {
   )
 })
 
-const handleCreateProject = () => {
+const handleCreateProject = async () => {
   if (!newProjName.value.trim()) return
   
   // Use active category if no category explicitly selected
-  const catId = selectedCategoryId.value || store.activeCategoryId || null
+  const catId = selectedCategoryId.value || (store.activeCategoryId !== 'none' ? store.activeCategoryId : null) || null
 
-  store.createProject(
+  await store.createProject(
     newProjName.value.trim(),
     newProjDesc.value.trim(),
     selectedTemplateId.value || null,

@@ -259,8 +259,8 @@ export const store = reactive({
   },
 
   // Load Project Categories
-  async loadProjectCategories() {
-    if (shouldSkipLoad('projectCategories')) return
+  async loadProjectCategories(force = false) {
+    if (!force && shouldSkipLoad('projectCategories')) return
     try {
       const res = await fetch(`${this.apiBase}/project-categories`, {
         headers: this.getAuthHeaders()
@@ -286,7 +286,13 @@ export const store = reactive({
         body: JSON.stringify({ name, description, color, icon })
       })
       if (res.ok) {
+        const newCat = await res.json()
+        await this.loadProjectCategories(true)
         this.addNotification('تصنيف جديد', `تم إنشاء التصنيف "${name}" بنجاح.`)
+        return newCat
+      } else {
+        const err = await res.json().catch(() => ({}))
+        console.error("فشل إنشاء التصنيف:", err)
       }
     } catch (e) {
       console.error("خطأ في إنشاء التصنيف", e)
@@ -302,6 +308,9 @@ export const store = reactive({
         body: JSON.stringify(data)
       })
       if (res.ok) {
+        await this.loadProjectCategories(true)
+        await this.loadProjects(true)
+        this.addNotification('تعديل تصنيف', `تم تحديث التصنيف بنجاح.`)
       }
     } catch (e) {
       console.error("خطأ في تحديث التصنيف", e)
@@ -317,6 +326,14 @@ export const store = reactive({
       })
       if (res.ok) {
         if (this.activeCategoryId === id) this.activeCategoryId = null
+        this.projects.forEach(p => {
+          if (p.categoryId === id) {
+            p.categoryId = null
+            p.categoryName = null
+          }
+        })
+        await this.loadProjectCategories(true)
+        await this.loadProjects(true)
         this.addNotification('حذف تصنيف', 'تم حذف التصنيف بنجاح.')
       }
     } catch (e) {
@@ -325,8 +342,8 @@ export const store = reactive({
   },
 
   // Load Projects
-  async loadProjects() {
-    if (shouldSkipLoad('projects')) return
+  async loadProjects(force = false) {
+    if (!force && shouldSkipLoad('projects')) return
     try {
       const res = await fetch(`${this.apiBase}/projects`, {
         headers: this.getAuthHeaders()
@@ -668,8 +685,11 @@ export const store = reactive({
 
       if (res.ok) {
         const data = await res.json()
+        await this.loadProjects(true)
+        await this.loadProjectCategories(true)
         this.activeProjectId = data.id
         this.addNotification('إنشاء مشروع جديد', `تم إنشاء المشروع "${name}" بنجاح.`)
+        return data
       }
     } catch (e) {
       console.error("خطأ في إنشاء المشروع", e)
@@ -695,6 +715,8 @@ export const store = reactive({
       })
 
       if (res.ok) {
+        await this.loadProjects(true)
+        await this.loadProjectCategories(true)
         this.addNotification('تعديل مشروع', `تم تحديث تفاصيل المشروع "${name}" بنجاح.`)
       }
     } catch (e) {
@@ -798,7 +820,20 @@ export const store = reactive({
 
       if (res.ok) {
         const project = this.projects.find(p => p.id === id)
-        this.addNotification('نقل للمهملات', `تم نقل المشروع "${project?.name}" إلى سلة المهملات.`)
+        const projectName = project?.name || ''
+        
+        // Immediately remove locally
+        this.projects = this.projects.filter(p => p.id !== id)
+        
+        // If deleted project was active, switch to next available project
+        if (this.activeProjectId === id) {
+          const remaining = this.projects.filter(p => !p.isDeleted)
+          this.activeProjectId = remaining.length > 0 ? remaining[0].id : null
+        }
+
+        await this.loadProjects(true)
+        await this.loadProjectCategories(true)
+        this.addNotification('نقل للمهملات', `تم نقل المشروع "${projectName}" إلى سلة المهملات.`)
       }
     } catch (e) {
       console.error("خطأ في حذف المشروع", e)
@@ -819,6 +854,9 @@ export const store = reactive({
       })
 
       if (res.ok) {
+        await this.loadProjects(true)
+        await this.loadProjectCategories(true)
+        this.activeProjectId = id
         const project = this.projects.find(p => p.id === id)
         this.addNotification('استعادة مشروع', `تمت استعادة المشروع "${project?.name}" بنجاح.`)
       }
