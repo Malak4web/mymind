@@ -4,12 +4,27 @@ namespace App\Http\Controllers;
 
 use App\Events\DataChanged;
 use App\Models\ProjectCategory;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class ProjectCategoryController extends Controller
 {
+    private function ensureUserIdColumnExists(): void
+    {
+        try {
+            if (!Schema::hasColumn('project_categories', 'user_id')) {
+                Schema::table('project_categories', function (Blueprint $table) {
+                    $table->unsignedBigInteger('user_id')->nullable()->after('id')->index();
+                });
+                ProjectCategory::whereNull('user_id')->update(['user_id' => 1]);
+            }
+        } catch (\Throwable $e) {
+            Log::error("Failed to ensure user_id column in project_categories: " . $e->getMessage());
+        }
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -17,15 +32,10 @@ class ProjectCategoryController extends Controller
             return response()->json([]);
         }
 
-        $hasUserIdCol = Schema::hasColumn('project_categories', 'user_id');
-        $query = ProjectCategory::query();
-        
-        if ($hasUserIdCol) {
-            // Strictly fetch ONLY categories belonging to this authenticated user
-            $query->where('user_id', $user->id);
-        }
-        
-        $categories = $query->withCount(['projects' => function ($q) use ($user) {
+        $this->ensureUserIdColumnExists();
+
+        $categories = ProjectCategory::where('user_id', $user->id)
+            ->withCount(['projects' => function ($q) use ($user) {
                 if (!$user->role || $user->role->name !== 'مدير') {
                     $q->whereHas('users', function ($uq) use ($user) {
                         $uq->where('users.id', $user->id);
@@ -45,6 +55,8 @@ class ProjectCategoryController extends Controller
             return response()->json(['message' => 'Unauthenticated'], 401);
         }
 
+        $this->ensureUserIdColumnExists();
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -53,9 +65,7 @@ class ProjectCategoryController extends Controller
             'sort_order' => 'nullable|integer',
         ]);
 
-        if (Schema::hasColumn('project_categories', 'user_id')) {
-            $validated['user_id'] = $user->id;
-        }
+        $validated['user_id'] = $user->id;
 
         $category = ProjectCategory::create($validated);
 
@@ -70,6 +80,8 @@ class ProjectCategoryController extends Controller
 
     public function update(Request $request, $id)
     {
+        $this->ensureUserIdColumnExists();
+
         $category = ProjectCategory::findOrFail($id);
         $user = $request->user();
 
@@ -78,7 +90,7 @@ class ProjectCategoryController extends Controller
         }
 
         // Only the owner of the category can edit it
-        if (isset($category->user_id) && $category->user_id !== null && $category->user_id !== $user->id) {
+        if ((int)$category->user_id !== (int)$user->id) {
             return response()->json(['message' => 'غير مصرح بتعديل هذا التصنيف'], 403);
         }
 
@@ -103,6 +115,8 @@ class ProjectCategoryController extends Controller
 
     public function destroy(Request $request, $id)
     {
+        $this->ensureUserIdColumnExists();
+
         $category = ProjectCategory::findOrFail($id);
         $user = $request->user();
 
@@ -111,7 +125,7 @@ class ProjectCategoryController extends Controller
         }
 
         // Only the owner of the category can delete it
-        if (isset($category->user_id) && $category->user_id !== null && $category->user_id !== $user->id) {
+        if ((int)$category->user_id !== (int)$user->id) {
             return response()->json(['message' => 'غير مصرح بحذف هذا التصنيف'], 403);
         }
 
