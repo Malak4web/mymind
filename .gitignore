@@ -30,3 +30,6 @@ dist-ssr
 run_*.js
 run_*.cjs
 verify_suite.cjs
+
+# Impeccable design-review session artifacts (tool state, not source)
+.impeccable/

@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests --bail=1",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint:classes": "node scripts/fix-dead-classes.mjs --check",
+    "fix:classes": "node scripts/fix-dead-classes.mjs"
   },
   "dependencies": {
     "laravel-echo": "^2.4.0",
