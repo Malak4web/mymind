@@ -24,14 +24,16 @@ const breadcrumbs = computed(() => {
   const list = []
   let currentId = store.activeDocumentFolderId
   const folders = Array.isArray(store.folders) ? store.folders : []
-  while (currentId) {
+  // `seen` guards against a cyclic parent chain. Without it a folder that
+  // referenced itself (or an ancestor) spun this loop forever and froze the
+  // tab -- the same hang that crashed the test worker.
+  const seen = new Set()
+  while (currentId && !seen.has(currentId)) {
+    seen.add(currentId)
     const folder = folders.find(f => f.id === currentId)
-    if (folder) {
-      list.unshift(folder)
-      currentId = folder.parent_id
-    } else {
-      break
-    }
+    if (!folder) break
+    list.unshift(folder)
+    currentId = folder.parent_id
   }
   return list
 })
@@ -94,7 +96,7 @@ const copyItemLink = (type, item) => {
     link = `${window.location.origin}#note-${item.id}`
   }
   navigator.clipboard.writeText(link)
-  store.addNotification('تم نسخ الرابط', `تم نسخ رابط الـ ${type === 'file' ? 'ملف' : type === 'folder' ? 'مجلد' : 'ملاحظة'} إلى الحافظة بنجاح.`)
+  store.toastSuccess(`تم نسخ رابط الـ ${type === 'file' ? 'ملف' : type === 'folder' ? 'مجلد' : 'ملاحظة'} إلى الحافظة بنجاح.`)
 }
 
 const openFileInNewTab = (file) => {
@@ -182,24 +184,24 @@ const handleTouchEnd = (closeFn) => {
   <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-3xl p-6 shadow-[0_4px_12px_rgba(0,0,0,0.015)] space-y-5 text-right" dir="rtl">
     
     <!-- Header Documents Actions -->
-    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-4 gap-4">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 gap-4">
       <div class="space-y-1">
-        <h3 class="text-sm font-extrabold text-slate-855 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5 justify-start">
+        <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 justify-start">
           <span>المستندات والملفات المشتركة</span>
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
           </svg>
         </h3>
-        <p class="text-xs text-slate-455 dark:text-slate-400 block font-semibold leading-relaxed">تنظيم ملفات المشروع، المرفقات والملاحظات الغنية في هيكل مجلدات منسق.</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 block font-semibold leading-relaxed">تنظيم ملفات المشروع، المرفقات والملاحظات الغنية في هيكل مجلدات منسق.</p>
       </div>
 
       <!-- Action Buttons -->
       <div class="flex items-center gap-2 flex-row-reverse w-full sm:w-auto flex-wrap">
         <button 
           @click="showNewFolderModal = true"
-          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer flex items-center gap-1 min-h-[44px] min-w-[44px] justify-center"
+          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer flex items-center gap-1 min-h-[44px] min-w-[44px] justify-center"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
           </svg>
           مجلد جديد
@@ -207,9 +209,9 @@ const handleTouchEnd = (closeFn) => {
 
         <button 
           @click="openNewNoteModal"
-          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer flex items-center gap-1 min-h-[44px] min-w-[44px] justify-center"
+          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer flex items-center gap-1 min-h-[44px] min-w-[44px] justify-center"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
           ملاحظة جديدة
@@ -219,7 +221,7 @@ const handleTouchEnd = (closeFn) => {
           @click="triggerFileUpload"
           class="bg-violet-600 hover:bg-violet-700 text-white font-extrabold px-4 py-1.5 rounded-xl text-xs shadow-md shadow-violet-500/10 transition cursor-pointer flex items-center gap-1 min-h-[44px] min-w-[44px] justify-center"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           رفع ملف
@@ -235,10 +237,10 @@ const handleTouchEnd = (closeFn) => {
     </div>
 
     <!-- Breadcrumb Path Navigation -->
-    <div class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/60 border border-slate-200/50 dark:border-slate-850 px-4 py-2.5 rounded-xl">
+    <div class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/60 border border-slate-200/50 dark:border-slate-800 px-4 py-2.5 rounded-xl">
       <button 
         @click="store.activeDocumentFolderId = null"
-        class="hover:text-violet-650 dark:hover:text-violet-400 font-extrabold flex items-center gap-1 transition cursor-pointer"
+        class="hover:text-violet-600 dark:hover:text-violet-400 font-extrabold flex items-center gap-1 transition cursor-pointer"
       >
         <span>📁 الرئيسية</span>
       </button>
@@ -247,7 +249,7 @@ const handleTouchEnd = (closeFn) => {
         <span class="text-slate-300">/</span>
         <button 
           @click="store.activeDocumentFolderId = crumb.id"
-          class="hover:text-violet-650 dark:hover:text-violet-400 font-extrabold transition cursor-pointer"
+          class="hover:text-violet-600 dark:hover:text-violet-400 font-extrabold transition cursor-pointer"
         >
           {{ crumb.name }}
         </button>
@@ -256,7 +258,7 @@ const handleTouchEnd = (closeFn) => {
 
     <!-- Directory Content List -->
     <div class="space-y-3">
-      <div v-if="currentFolders.length === 0 && currentFiles.length === 0 && currentNotes.length === 0" class="text-center py-16 border border-dashed border-slate-200 dark:border-slate-850 rounded-2xl">
+      <div v-if="currentFolders.length === 0 && currentFiles.length === 0 && currentNotes.length === 0" class="text-center py-16 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
         <div class="text-2xl mb-2">📁</div>
         <p class="text-xs text-slate-400 italic font-semibold">هذا المجلد فارغ تماماً. قم بإنشاء مجلدات، رفع ملفات أو إضافة ملاحظات جديدة لبدء تنظيم عملك.</p>
       </div>
@@ -272,24 +274,24 @@ const handleTouchEnd = (closeFn) => {
           <div class="flex items-center gap-3">
             <span class="text-2xl">📁</span>
             <div class="text-right">
-              <span class="text-xs font-bold text-slate-855 dark:text-slate-100 block">{{ folder.name }}</span>
-              <span class="text-[9.5px] font-semibold text-slate-400 block mt-0.5">مجلد فرعي</span>
+              <span class="text-xs font-bold text-slate-900 dark:text-slate-100 block">{{ folder.name }}</span>
+              <span class="text-[10px] font-semibold text-slate-400 block mt-0.5">مجلد فرعي</span>
             </div>
           </div>
-          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+          <div class="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition">
             <button 
               @click.stop="copyItemLink('folder', folder)"
               class="p-1.5 text-slate-400 hover:text-violet-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-              title="نسخ رابط المجلد"
+              title="نسخ رابط المجلد" aria-label="نسخ رابط المجلد"
             >
               🔗
             </button>
             <button 
               @click.stop="handleDeleteFolder(folder.id)"
-              class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-955/20 transition cursor-pointer"
-              title="حذف المجلد"
+              class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/20 transition cursor-pointer"
+              title="حذف المجلد" aria-label="حذف المجلد"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </button>
@@ -307,35 +309,35 @@ const handleTouchEnd = (closeFn) => {
             <span class="text-2xl">{{ getFileIcon(file.type) }}</span>
             <div class="text-right min-w-0">
               <span 
-                class="text-xs font-bold text-slate-855 dark:text-slate-100 block hover:text-violet-600 truncate max-w-[150px]"
+                class="text-xs font-bold text-slate-900 dark:text-slate-100 block hover:text-violet-600 truncate max-w-[150px]"
                 title="فتح الملف في نافذة جديدة"
               >
                 {{ file.name }}
               </span>
-              <span class="text-[9.5px] font-semibold text-slate-400 block mt-0.5">{{ file.size }} • {{ file.type.toUpperCase() }}</span>
+              <span class="text-[10px] font-semibold text-slate-400 block mt-0.5">{{ file.size }} • {{ file.type.toUpperCase() }}</span>
             </div>
           </div>
-          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+          <div class="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition">
             <button 
               @click.stop="openFileInNewTab(file)"
               class="p-1.5 text-slate-400 hover:text-violet-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-              title="فتح الملف في نافذة جديدة"
+              title="فتح الملف في نافذة جديدة" aria-label="فتح الملف في نافذة جديدة"
             >
               ↗
             </button>
             <button 
               @click.stop="copyItemLink('file', file)"
               class="p-1.5 text-slate-400 hover:text-violet-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-              title="نسخ رابط الملف"
+              title="نسخ رابط الملف" aria-label="نسخ رابط الملف"
             >
               🔗
             </button>
             <button 
               @click.stop="handleDeleteFile(file.id)"
-              class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-955/20 transition cursor-pointer"
-              title="حذف الملف"
+              class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/20 transition cursor-pointer"
+              title="حذف الملف" aria-label="حذف الملف"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </button>
@@ -352,24 +354,24 @@ const handleTouchEnd = (closeFn) => {
           <div class="flex items-center gap-3">
             <span class="text-2xl">📝</span>
             <div class="text-right">
-              <span class="text-xs font-bold text-slate-855 dark:text-slate-100 block"><MentionText :content="note.title" /></span>
-              <span class="text-[9.5px] font-semibold text-slate-400 block mt-0.5 max-w-xs truncate"><MentionText :content="note.content || 'ملاحظة غنية'" /></span>
+              <span class="text-xs font-bold text-slate-900 dark:text-slate-100 block"><MentionText :content="note.title" /></span>
+              <span class="text-[10px] font-semibold text-slate-400 block mt-0.5 max-w-xs truncate"><MentionText :content="note.content || 'ملاحظة غنية'" /></span>
             </div>
           </div>
-          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+          <div class="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition">
             <button 
               @click.stop="copyItemLink('note', note)"
               class="p-1.5 text-slate-400 hover:text-violet-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-              title="نسخ رابط الملاحظة"
+              title="نسخ رابط الملاحظة" aria-label="نسخ رابط الملاحظة"
             >
               🔗
             </button>
             <button 
               @click.stop="handleDeleteNote(note.id)"
-              class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-955/20 transition cursor-pointer"
-              title="حذف الملاحظة"
+              class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-950/20 transition cursor-pointer"
+              title="حذف الملاحظة" aria-label="حذف الملاحظة"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </button>
@@ -393,25 +395,25 @@ const handleTouchEnd = (closeFn) => {
           class="relative z-10 bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-sm max-h-[85vh] overflow-y-auto w-full shadow-2xl space-y-4 text-right transform transition-all duration-300"
         >
           <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto my-2.5 shrink-0 sm:hidden cursor-grab"></div>
-          <h3 class="text-sm font-extrabold text-slate-855 dark:text-slate-100 flex items-center gap-1 justify-start">
+          <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-1 justify-start">
             <span>إنشاء مجلد جديد</span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
             </svg>
           </h3>
           
           <div class="space-y-1.5">
-            <label class="text-[11px] font-bold text-slate-450 dark:text-slate-400">اسم المجلد</label>
+            <label class="text-[11px] font-bold text-slate-400 dark:text-slate-400">اسم المجلد</label>
             <input 
               type="text" 
               v-model="newFolderName" 
               @keydown.enter.prevent="handleCreateFolder"
               placeholder="مثال: التصاميم والواجهات"
-              class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-violet-500 font-extrabold"
+              class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-violet-500 font-extrabold"
             />
           </div>
 
-          <div class="flex items-center justify-start space-x-2 space-x-reverse flex-row-reverse pt-2 border-t border-slate-100 dark:border-slate-850">
+          <div class="flex items-center justify-start space-x-2 flex-row-reverse pt-2 border-t border-slate-100 dark:border-slate-800">
             <button 
               @click="handleCreateFolder" 
               class="bg-violet-600 hover:bg-violet-700 text-white font-extrabold py-2 px-4 rounded-xl text-xs transition cursor-pointer"
@@ -443,16 +445,16 @@ const handleTouchEnd = (closeFn) => {
           class="relative z-10 bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-lg max-h-[90vh] overflow-y-auto w-full shadow-2xl space-y-4 text-right transform transition-all duration-300"
         >
           <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto my-2.5 shrink-0 sm:hidden cursor-grab"></div>
-          <h3 class="text-sm font-extrabold text-slate-855 dark:text-slate-100 flex items-center gap-1 justify-start">
+          <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-1 justify-start">
             <span>{{ noteIdToEdit ? 'تعديل الملاحظة' : 'ملاحظة جديدة' }}</span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
           </h3>
 
           <div class="space-y-4">
             <div class="space-y-1.5">
-              <label class="text-[11px] font-bold text-slate-450 dark:text-slate-400">العنوان</label>
+              <label class="text-[11px] font-bold text-slate-400 dark:text-slate-400">العنوان</label>
               <MentionInput 
                 v-model="noteTitle" 
                 placeholder="اكتب عنوان الملاحظة... (استخدم / للملفات، و @ للمنشن)"
@@ -460,7 +462,7 @@ const handleTouchEnd = (closeFn) => {
             </div>
 
             <div class="space-y-1.5">
-              <label class="text-[11px] font-bold text-slate-450 dark:text-slate-400">محتوى الملاحظة</label>
+              <label class="text-[11px] font-bold text-slate-400 dark:text-slate-400">محتوى الملاحظة</label>
               <MentionInput 
                 v-model="noteContent" 
                 :is-textarea="true"
@@ -470,7 +472,7 @@ const handleTouchEnd = (closeFn) => {
             </div>
           </div>
 
-          <div class="flex items-center justify-start space-x-2 space-x-reverse flex-row-reverse pt-2 border-t border-slate-100 dark:border-slate-850">
+          <div class="flex items-center justify-start space-x-2 flex-row-reverse pt-2 border-t border-slate-100 dark:border-slate-800">
             <button 
               @click="handleSaveNote" 
               class="bg-violet-600 hover:bg-violet-700 text-white font-extrabold py-2 px-4 rounded-xl text-xs transition cursor-pointer"

@@ -102,18 +102,40 @@ describe('ProjectPanel.vue Component Tests', () => {
     expect(createBtn.attributes('disabled')).toBeDefined()
   })
 
-  it('handles soft deleting a project', async () => {
+  it('asks before deleting a project, and does nothing if the user backs out', async () => {
     store.currentUser = { role: { name: 'مدير' } }
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
 
     const wrapper = mount(ProjectPanel)
     const deleteBtn = wrapper.find('button[title="نقل المشروع لسلة المهملات"]')
-    if (deleteBtn.exists()) {
-      await deleteBtn.trigger('click')
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/projects/'),
-        expect.objectContaining({ method: 'DELETE' })
-      )
-    }
+    expect(deleteBtn.exists()).toBe(true)
+
+    await deleteBtn.trigger('click')
+
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('/projects/'),
+      expect.objectContaining({ method: 'DELETE' })
+    )
+    confirmSpy.mockRestore()
+  })
+
+  it('handles soft deleting a project once confirmed', async () => {
+    store.currentUser = { role: { name: 'مدير' } }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    const wrapper = mount(ProjectPanel)
+    const deleteBtn = wrapper.find('button[title="نقل المشروع لسلة المهملات"]')
+    expect(deleteBtn.exists()).toBe(true)
+
+    await deleteBtn.trigger('click')
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/projects/'),
+      expect.objectContaining({ method: 'DELETE' })
+    )
+    confirmSpy.mockRestore()
   })
 })

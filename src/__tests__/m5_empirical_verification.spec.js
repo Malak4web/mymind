@@ -231,7 +231,14 @@ describe('Milestone 5 Empirical Verification & Challenge Suite', () => {
   })
 
   describe('3. Daily Notes Submission Payload Formatting & Reactive Sync', () => {
-    it('formats mobile daily note payload correctly and prepends to store.dailyNotesList', async () => {
+    it('sends the journal note to the API and shows it for the selected day', async () => {
+      store.dailyNotes = []
+      const addDailyNoteSpy = vi.spyOn(store, 'addDailyNote').mockImplementation(async (dateKey, content) => {
+        const note = { id: 4242, dateKey, content, createdAt: new Date().toISOString() }
+        store.dailyNotes = [note, ...store.dailyNotes]
+        return note
+      })
+
       const wrapper = mount(DailyRoutines)
 
       // Switch to journal tab
@@ -247,13 +254,14 @@ describe('Milestone 5 Empirical Verification & Challenge Suite', () => {
       if (noteForm && noteForm.exists()) await noteForm.trigger('submit')
 
       const todayKey = formatDateKey(new Date())
-      const notes = store.dailyNotesList[todayKey]
 
-      expect(notes).toBeTruthy()
+      // Notes are persisted through the API now; they used to be pushed into
+      // an undeclared store property that was never saved anywhere.
+      expect(addDailyNoteSpy).toHaveBeenCalledWith(todayKey, 'انطباع يومي رائع عن التقدّم')
+
+      const notes = store.notesForDate(todayKey)
       expect(notes.length).toBe(1)
       expect(notes[0].content).toBe('انطباع يومي رائع عن التقدّم')
-      expect(notes[0].id).toBeTypeOf('number')
-      expect(notes[0].createdAt).toBeTruthy()
     })
 
     it('formats HabitDetail note payload with mood emoji prefix', () => {
@@ -275,9 +283,13 @@ describe('Milestone 5 Empirical Verification & Challenge Suite', () => {
       await journalTabBtn.trigger('click')
 
       const todayKey = formatDateKey(new Date())
-      store.dailyNotesList[todayKey] = [
-        { id: 999, content: 'ملاحظة ملغاة', createdAt: '10:00 AM' }
+      store.dailyNotes = [
+        { id: 999, dateKey: todayKey, content: 'ملاحظة ملغاة', createdAt: new Date().toISOString() }
       ]
+
+      const deleteSpy = vi.spyOn(store, 'deleteDailyNote').mockImplementation(async (id) => {
+        store.dailyNotes = store.dailyNotes.filter(n => String(n.id) !== String(id))
+      })
 
       await wrapper.vm.$nextTick()
       expect(wrapper.text()).toContain('ملاحظة ملغاة')
@@ -285,9 +297,10 @@ describe('Milestone 5 Empirical Verification & Challenge Suite', () => {
       const deleteBtn = wrapper.findAll('button').find(b => b.text().includes('🗑️'))
       await deleteBtn.trigger('click')
 
-      expect(store.dailyNotesList[todayKey].length).toBe(0)
+      expect(deleteSpy).toHaveBeenCalledWith(999)
       await wrapper.vm.$nextTick()
       expect(wrapper.text()).not.toContain('ملاحظة ملغاة')
+      deleteSpy.mockRestore()
     })
   })
 

@@ -100,7 +100,7 @@ onUnmounted(() => {
     <div 
       v-if="isOpen" 
       :class="[
-        'fixed inset-0 z-50 flex dir-rtl mobile-bottom-sheet',
+        'fixed inset-0 z-50 flex mobile-bottom-sheet',
         drawerMode 
           ? 'items-end sm:items-stretch justify-center sm:justify-end' 
           : 'items-end sm:items-center justify-center p-0 sm:p-4'
@@ -131,7 +131,7 @@ onUnmounted(() => {
           @touchmove="handleTouchMove"
           @touchend="handleTouchEnd"
           @touchcancel="handleTouchCancel"
-          class="shrink-0 cursor-grab active:cursor-grabbing select-none pt-3 px-6 pb-2 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-850/50"
+          class="shrink-0 cursor-grab active:cursor-grabbing select-none pt-3 px-6 pb-2 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/50"
           style="touch-action: none;"
         >
           <!-- Visual Drag Bar Indicator -->
@@ -150,9 +150,9 @@ onUnmounted(() => {
                 v-if="showClose"
                 @click.stop="emit('close')" 
                 class="min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition cursor-pointer"
-                title="إغلاق"
+                title="إغلاق" aria-label="إغلاق"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -166,7 +166,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Optional Sheet Footer -->
-        <div v-if="$slots.footer" class="shrink-0 p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/50">
+        <div v-if="$slots.footer" class="shrink-0 p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
           <slot name="footer"></slot>
         </div>
 

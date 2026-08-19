@@ -22,13 +22,16 @@ export const store = reactive({
 
   // Application Data States
   projects: [],
+  trashedProjects: [],
   projectCategories: [],
+  dailyNotes: [],
   tasks: [],
   folders: [],
   projectFiles: [],
   notes: [],
   activeDocumentFolderId: null,
   notifications: [],
+  toasts: [],
   messages: [],
   emailQueue: [],
   batchedEmails: [],
@@ -152,6 +155,10 @@ export const store = reactive({
   activeView: 'kanban',
   isFocusMode: false,
   theme: localStorage.getItem('mymind_theme') || 'light',
+  // The confetti + synthesised brass fanfare is the best-authored moment in
+  // the app, and it fires on a checkbox in an open-plan office with no way
+  // to stop it. Make it a choice, and honour the OS motion preference.
+  celebrationsEnabled: localStorage.getItem('mymind_celebrations') !== 'off',
   isOnline: true,
   isNotificationDrawerOpen: false,
   selectedTaskIdForModal: null,
@@ -230,6 +237,7 @@ export const store = reactive({
         await this.loadTaskTemplates()
         await this.loadUsers()
         await this.loadDailyTasks()
+        await this.loadDailyNotes()
         await this.loadHabits()
         this.startRealtimeSync()
       } else {
@@ -256,6 +264,9 @@ export const store = reactive({
     this.notes = []
     this.activeDocumentFolderId = null
     this.notifications = []
+    this.trashedProjects = []
+    this.dailyNotes = []
+    this.toasts = []
   },
 
   // Load Project Categories
@@ -447,13 +458,14 @@ export const store = reactive({
       }
     } catch (e) {
       console.error("فشل تحميل المشاريع", e)
+      this.toastError('تعذّر تحميل المشاريع. تحقق من الاتصال.')
     }
   },
 
   // Load Tasks
-  async loadTasks() {
+  async loadTasks(force = false) {
     if (!this.activeProjectId) return
-    if (shouldSkipLoad('tasks')) return
+    if (!force && shouldSkipLoad('tasks')) return
     try {
       const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/tasks`, {
         headers: this.getAuthHeaders()
@@ -474,9 +486,11 @@ export const store = reactive({
               title: t.title,
               description: t.description,
               status: t.status,
+              priority: t.priority || null,
               startDate: t.start_date,
               deadline: t.deadline,
               attachments: t.attachments || [],
+              comments: t.comments || [],
               customFieldValues: values
             }
           })
@@ -485,6 +499,7 @@ export const store = reactive({
       }
     } catch (e) {
       console.error("فشل تحميل المهام", e)
+      this.toastError('تعذّر تحميل المهام. تحقق من الاتصال.')
     }
   },
 
@@ -503,9 +518,9 @@ export const store = reactive({
   },
 
   // Load Folders
-  async loadFolders() {
+  async loadFolders(force = false) {
     if (!this.activeProjectId) return
-    if (shouldSkipLoad('folders')) return
+    if (!force && shouldSkipLoad('folders')) return
     try {
       const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/folders`, {
         headers: this.getAuthHeaders()
@@ -519,9 +534,9 @@ export const store = reactive({
   },
 
   // Load Project Files
-  async loadProjectFiles() {
+  async loadProjectFiles(force = false) {
     if (!this.activeProjectId) return
-    if (shouldSkipLoad('projectFiles')) return
+    if (!force && shouldSkipLoad('projectFiles')) return
     try {
       const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/project-files`, {
         headers: this.getAuthHeaders()
@@ -551,9 +566,9 @@ export const store = reactive({
 
   // Load Notes
 
-  async loadNotes() {
+  async loadNotes(force = false) {
     if (!this.activeProjectId) return
-    if (shouldSkipLoad('notes')) return
+    if (!force && shouldSkipLoad('notes')) return
     try {
       const res = await fetch(`${this.apiBase}/projects/${this.activeProjectId}/notes`, {
         headers: this.getAuthHeaders()
@@ -584,8 +599,8 @@ export const store = reactive({
   },
 
   // Load Notifications
-  async loadNotifications() {
-    if (shouldSkipLoad('notifications')) return
+  async loadNotifications(force = false) {
+    if (!force && shouldSkipLoad('notifications')) return
     try {
       const res = await fetch(`${this.apiBase}/notifications`, {
         headers: this.getAuthHeaders()
@@ -608,7 +623,16 @@ export const store = reactive({
   },
 
   // Load digest details
+  // The digest endpoints expose task activity across every project, so they
+  // are now admin-only (SEC-19). Skip the call entirely for everyone else
+  // rather than firing two requests that can only come back 403.
   async loadDigestInfo() {
+    if (!this.hasPermission('manage-users')) {
+      this.emailQueue = []
+      this.batchedEmails = []
+      return
+    }
+
     try {
       const resQueue = await fetch(`${this.apiBase}/digest/queue`, {
         headers: this.getAuthHeaders()
@@ -745,6 +769,7 @@ export const store = reactive({
       }
     } catch (e) {
       console.error("خطأ في إنشاء المشروع", e)
+      this.toastError('تعذّر إنشاء المشروع. حاول مرة أخرى.')
     }
   },
 
@@ -773,6 +798,7 @@ export const store = reactive({
       }
     } catch (e) {
       console.error("خطأ في تحديث المشروع", e)
+      this.toastError('تعذّر حفظ المشروع. حاول مرة أخرى.')
     }
   },
 
@@ -884,11 +910,13 @@ export const store = reactive({
         }
 
         await this.loadProjects(true)
+        await this.loadTrashedProjects(true)
         await this.loadProjectCategories(true)
         this.addNotification('نقل للمهملات', `تم نقل المشروع "${projectName}" إلى سلة المهملات.`)
       }
     } catch (e) {
       console.error("خطأ في حذف المشروع", e)
+      this.toastError('تعذّر حذف المشروع. حاول مرة أخرى.')
     }
   },
 
@@ -907,6 +935,7 @@ export const store = reactive({
 
       if (res.ok) {
         await this.loadProjects(true)
+        await this.loadTrashedProjects(true)
         await this.loadProjectCategories(true)
         this.activeProjectId = id
         const project = this.projects.find(p => p.id === id)
@@ -951,6 +980,7 @@ export const store = reactive({
       }
     } catch (e) {
       console.error("خطأ في إنشاء المهمة", e)
+      this.toastError('تعذّر إنشاء المهمة. حاول مرة أخرى.')
     }
   },
 
@@ -995,6 +1025,7 @@ export const store = reactive({
       }
     } catch (e) {
       console.error("خطأ في تعديل المهمة", e)
+      this.toastError('تعذّر حفظ التعديل. حاول مرة أخرى.')
     }
   },
 
@@ -1018,6 +1049,7 @@ export const store = reactive({
       }
     } catch (e) {
       console.error("خطأ في حذف المهمة", e)
+      this.toastError('تعذّر حذف المهمة. حاول مرة أخرى.')
     }
   },
 
@@ -1114,6 +1146,7 @@ export const store = reactive({
       }
     } catch (e) {
       console.error("خطأ في رفع المرفق", e)
+      this.toastError('تعذّر رفع الملف. تحقق من نوعه وحجمه.')
     } finally {
       if (interval) {
         clearInterval(interval)
@@ -1152,6 +1185,7 @@ export const store = reactive({
       }
     } catch (e) {
       console.error("خطأ في إنشاء المجلد", e)
+      this.toastError('تعذّر إنشاء المجلد. حاول مرة أخرى.')
     }
   },
 
@@ -1194,6 +1228,7 @@ export const store = reactive({
       }
     } catch (e) {
       console.error("خطأ في رفع ملف المشروع", e)
+      this.toastError('تعذّر رفع الملف. تحقق من نوعه وحجمه.')
     }
   },
 
@@ -1228,6 +1263,7 @@ export const store = reactive({
       }
     } catch (e) {
       console.error("خطأ في إنشاء الملاحظة", e)
+      this.toastError('تعذّر حفظ الملاحظة. حاول مرة أخرى.')
     }
   },
 
@@ -1310,7 +1346,11 @@ export const store = reactive({
   },
 
   // Client-side quick notification generator (triggers push simulation)
-  async addNotification(title, text) {
+  async addNotification(title, text, tone = 'info') {
+    // Surface it immediately; the drawer is closed by default, so a durable
+    // record alone meant the user saw nothing.
+    this.toast(text || title, tone)
+
     try {
       const res = await fetch(`${this.apiBase}/notifications`, {
         method: 'POST',
@@ -1345,6 +1385,21 @@ export const store = reactive({
 
   denyPushPermission() {
     this.pushPermission = 'denied'
+  },
+
+  toggleCelebrations() {
+    this.celebrationsEnabled = !this.celebrationsEnabled
+    localStorage.setItem('mymind_celebrations', this.celebrationsEnabled ? 'on' : 'off')
+  },
+
+  prefersReducedMotion() {
+    return typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  },
+
+  shouldCelebrate() {
+    return this.celebrationsEnabled && !this.prefersReducedMotion()
   },
 
   // Theme Toggler
@@ -1598,6 +1653,188 @@ export const store = reactive({
     }
   },
 
+  // ── Task comments ─────────────────────────────────────────────────
+  // These used to live in a component-local ref with no server behind them,
+  // so every comment was discarded on the next refresh.
+
+  async addComment(taskId, body) {
+    const text = (body || '').trim()
+    if (!text || !taskId) return null
+
+    try {
+      const res = await fetch(`${this.apiBase}/tasks/${taskId}/comments`, {
+        method: 'POST',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ body: text })
+      })
+      if (!res.ok) return null
+
+      const created = await res.json()
+      const task = this.tasks.find(t => String(t.id) === String(taskId))
+      if (task) {
+        if (!Array.isArray(task.comments)) task.comments = []
+        task.comments.push(created)
+      }
+      return created
+    } catch (e) {
+      console.error('فشل إضافة التعليق', e)
+      return null
+    }
+  },
+
+  async deleteComment(taskId, commentId) {
+    try {
+      const res = await fetch(`${this.apiBase}/comments/${commentId}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      })
+      if (!res.ok) return false
+
+      const task = this.tasks.find(t => String(t.id) === String(taskId))
+      if (task && Array.isArray(task.comments)) {
+        task.comments = task.comments.filter(c => String(c.id) !== String(commentId))
+      }
+      return true
+    } catch (e) {
+      console.error('فشل حذف التعليق', e)
+      return false
+    }
+  },
+
+  // ── Journal notes ─────────────────────────────────────────────────
+  // Previously written into an undeclared store property that was never
+  // persisted, so notes vanished on refresh.
+
+  async loadDailyNotes(force = false) {
+    if (!force && shouldSkipLoad('dailyNotes')) return
+    try {
+      const res = await fetch(`${this.apiBase}/daily-notes`, {
+        headers: this.getAuthHeaders()
+      })
+      if (!res.ok) return
+      const raw = await res.json()
+      if (Array.isArray(raw)) {
+        this.dailyNotes = raw.map(n => ({
+          id: n.id,
+          dateKey: String(n.note_date).slice(0, 10),
+          content: n.content,
+          createdAt: n.created_at
+        }))
+      }
+    } catch (e) {
+      console.error('فشل تحميل ملاحظات اليوميات', e)
+    }
+  },
+
+  notesForDate(dateKey) {
+    return this.dailyNotes.filter(n => n.dateKey === dateKey)
+  },
+
+  async addDailyNote(dateKey, content) {
+    const text = (content || '').trim()
+    if (!text || !dateKey) return null
+
+    try {
+      const res = await fetch(`${this.apiBase}/daily-notes`, {
+        method: 'POST',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ note_date: dateKey, content: text })
+      })
+      if (!res.ok) return null
+
+      const created = await res.json()
+      const note = {
+        id: created.id,
+        dateKey: String(created.note_date).slice(0, 10),
+        content: created.content,
+        createdAt: created.created_at
+      }
+      this.dailyNotes = [note, ...this.dailyNotes]
+      return note
+    } catch (e) {
+      console.error('فشل حفظ ملاحظة اليوميات', e)
+      return null
+    }
+  },
+
+  async deleteDailyNote(noteId) {
+    const before = this.dailyNotes
+    this.dailyNotes = this.dailyNotes.filter(n => String(n.id) !== String(noteId))
+    try {
+      const res = await fetch(`${this.apiBase}/daily-notes/${noteId}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      })
+      if (!res.ok) this.dailyNotes = before
+    } catch (e) {
+      this.dailyNotes = before
+      console.error('فشل حذف ملاحظة اليوميات', e)
+    }
+  },
+
+  // ── Project bin ───────────────────────────────────────────────────
+  // The bin panel could never populate: the server filtered deleted projects
+  // out of every response, so `restoreProject` was unreachable.
+
+  async loadTrashedProjects(force = false) {
+    if (!force && shouldSkipLoad('trashedProjects')) return
+    try {
+      const res = await fetch(`${this.apiBase}/projects?trashed=1`, {
+        headers: this.getAuthHeaders()
+      })
+      if (!res.ok) return
+      const raw = await res.json()
+      if (Array.isArray(raw)) {
+        this.trashedProjects = raw.map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          categoryName: p.category_name || null,
+          isDeleted: true
+        }))
+      }
+    } catch (e) {
+      console.error('فشل تحميل سلة المهملات', e)
+    }
+  },
+
+  // ── Transient feedback ────────────────────────────────────────────
+  // Separate from `notifications`, which is durable and belongs to events
+  // other people should see. Copying a task title to the clipboard used to
+  // write a row to the database; that is what this replaces.
+
+  _toastSeq: 0,
+  _toastTimers: {},
+
+  toast(text, tone = 'info', { timeout = 4000, action = null } = {}) {
+    if (!text) return null
+    const id = ++this._toastSeq
+    this.toasts = [...this.toasts, { id, text, tone, action }]
+
+    if (timeout > 0) {
+      this._toastTimers[id] = setTimeout(() => this.dismissToast(id), timeout)
+    }
+    return id
+  },
+
+  toastSuccess(text, opts) { return this.toast(text, 'success', opts) },
+  toastError(text, opts)   { return this.toast(text, 'error', { timeout: 7000, ...opts }) },
+
+  dismissToast(id) {
+    const timer = this._toastTimers[id]
+    if (timer) {
+      clearTimeout(timer)
+      delete this._toastTimers[id]
+    }
+    this.toasts = this.toasts.filter(t => t.id !== id)
+  },
+
+  runToastAction(id) {
+    const t = this.toasts.find(x => x.id === id)
+    if (t && typeof t.action?.run === 'function') t.action.run()
+    this.dismissToast(id)
+  },
+
   // Real-time synchronization via Pusher WebSocket
   _echoChannel: null,
   _syncListenersAttached: false,
@@ -1644,6 +1881,7 @@ export const store = reactive({
         break
       case 'projects':
         this.loadProjects(true)
+        this.loadTrashedProjects(true)
         break
       case 'notifications':
         this.loadNotifications(true)
@@ -1671,6 +1909,9 @@ export const store = reactive({
         break
       case 'habits':
         this.loadHabits(true)
+        break
+      case 'daily_notes':
+        this.loadDailyNotes(true)
         break
       default:
         console.log(`[Pusher] نوع غير معروف: ${type}`)
@@ -1708,6 +1949,7 @@ export const store = reactive({
         title: t.title,
         category: t.category || 'عام',
         priority: t.priority || 'متوسطة',
+        dueDate: t.due_date ? String(t.due_date).slice(0, 10) : null,
         dueTime: t.due_time || '',
         completed: Boolean(t.completed),
         createdAt: t.created_at || new Date().toISOString()
@@ -1757,6 +1999,7 @@ export const store = reactive({
             title: task.title,
             category: task.category,
             priority: task.priority,
+            due_date: task.dueDate,
             due_time: task.dueTime,
             completed: task.completed
           })
@@ -1791,6 +2034,7 @@ export const store = reactive({
       id: tempId,
       category: 'عام',
       priority: 'متوسطة',
+      dueDate: new Date().toISOString().slice(0, 10),
       dueTime: '',
       completed: false,
       createdAt: new Date().toISOString(),
@@ -1808,6 +2052,7 @@ export const store = reactive({
           title: newTask.title,
           category: newTask.category,
           priority: newTask.priority,
+          due_date: newTask.dueDate,
           due_time: newTask.dueTime,
           completed: newTask.completed
         })
@@ -1884,6 +2129,7 @@ export const store = reactive({
             title: data.title,
             category: data.category,
             priority: data.priority,
+            due_date: data.dueDate,
             due_time: data.dueTime,
             completed: data.completed
           })

@@ -328,3 +328,121 @@ h1, h2, h3, h4, h5, h6 {
 
 
 
+
+
+/* ── Animations the components reference ──────────────────────────────
+   `animate-fade-in`, `animate-slide-left` and the `drawer` / `slide`
+   <Transition> names were used across 6 modals and the status drawer but
+   were never defined, so those surfaces appeared with no animation at all
+   and the drawer teleported into place.                               */
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.2s cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+@keyframes slide-in-start {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+/* Named for the visual side it enters from; under dir=rtl the translate
+   is mirrored by the logical transform below. */
+.animate-slide-left { animation: slide-in-start 0.24s cubic-bezier(0.4, 0, 0.2, 1) both; }
+[dir="rtl"] .animate-slide-left { animation-name: slide-in-start-rtl; }
+
+@keyframes slide-in-start-rtl {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* <Transition name="drawer"> */
+.drawer-enter-active,
+.drawer-leave-active { transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.26s ease; }
+.drawer-enter-from,
+.drawer-leave-to { opacity: 0; transform: translateX(-16px); }
+[dir="rtl"] .drawer-enter-from,
+[dir="rtl"] .drawer-leave-to { transform: translateX(16px); }
+
+/* <Transition name="slide"> */
+.slide-enter-active,
+.slide-leave-active { transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease; }
+.slide-enter-from,
+.slide-leave-to { opacity: 0; transform: translateY(-8px); }
+
+/* ── Motion preferences ───────────────────────────────────────────────
+   Confetti, an 80-particle celebration, an infinite pulse and hover lifts
+   all ran unconditionally. Honour the OS setting.                      */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-glass-glow { animation: none !important; }
+}
+
+/* ── Hover effects only where hover exists ────────────────────────────
+   On touch, :hover sticks after a tap, leaving cards lifted and glowing. */
+@media (hover: none) {
+  .glass-card-hover:hover,
+  .floating-shadow-transition:hover,
+  .glass-fab-mobile:hover { transform: none; }
+}
+
+
+/* ── Stacking order ───────────────────────────────────────────────────
+   Nine ad-hoc z values were in use, with three escape hatches
+   (z-[9999] / z-[10000] / z-[99999]) climbing over a flat z-50 layer that
+   held modals, dropdowns, a sticky banner and floating bars all at once. */
+:root {
+  --z-base:    0;
+  --z-raised: 10;
+  --z-sticky: 20;
+  --z-nav:    30;   /* bottom navigation */
+  --z-float:  40;   /* FABs, bulk-action bars */
+  --z-overlay:50;   /* backdrops */
+  --z-sheet:  60;   /* bottom sheets, drawers */
+  --z-modal:  70;   /* centred modals */
+  --z-popover:80;   /* mention autocomplete, menus inside modals */
+  --z-toast:  90;
+}
+
+.z-nav     { z-index: var(--z-nav); }
+.z-float   { z-index: var(--z-float); }
+.z-overlay { z-index: var(--z-overlay); }
+.z-sheet   { z-index: var(--z-sheet); }
+.z-modal   { z-index: var(--z-modal); }
+.z-popover { z-index: var(--z-popover); }
+.z-toast   { z-index: var(--z-toast); }
+
+/* ── Safe areas ───────────────────────────────────────────────────────
+   `viewport-fit=cover` is set, which draws under the notch and the home
+   indicator. Nothing compensated for it, so the bottom bar sat 12px from
+   the physical edge, underneath the indicator. */
+.pb-safe      { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.bottom-safe  { bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)); }
+
+/* Floating elements clear the bottom navigation as well as the safe area. */
+.above-nav    { bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)); }
+
+@supports (height: 100dvh) {
+  .min-h-dvh { min-height: 100dvh; }
+}
+
+
+/* ── Keyboard focus ───────────────────────────────────────────────────
+   Not one of the 229 buttons had a focus style, and 43 elements stripped
+   the native outline without replacing it, so keyboard navigation was
+   invisible. `:focus-visible` only fires for keyboard interaction, so this
+   never shows on a mouse click. The override is deliberate: it has to beat
+   the `outline-none` utilities already in the markup.                  */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500) !important;
+  outline-offset: 2px !important;
+  border-radius: 4px;
+}
+.dark :focus-visible {
+  outline-color: #a78bfa !important;
+}

@@ -145,6 +145,7 @@ const handleTouchEnd = (closeFn) => {
 }
 
 const triggerCelebration = () => {
+  if (!store.shouldCelebrate()) return
   const colors = ['#8B5CF6', '#EC4899', '#3B82F6', '#10B981', '#F59E0B', '#EF4444']
   const shapes = ['circle', 'square', 'triangle', 'star']
   
@@ -202,6 +203,7 @@ const triggerCelebration = () => {
 let activeAudioContexts = []
 
 const playSuccessSound = () => {
+  if (!store.shouldCelebrate()) return
   const AudioContextClass = window.AudioContext || window.webkitAudioContext
   if (!AudioContextClass) return
   try {
@@ -433,15 +435,15 @@ const getColumnColorClass = (status) => {
 const getCustomFieldIcon = (fieldName) => {
   const name = fieldName.toLowerCase()
   if (name.includes('url') || name.includes('link') || name.includes('رابط') || name.includes('figma')) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>`
+    return `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>`
   }
   if (name.includes('hour') || name.includes('time') || name.includes('ساعات') || name.includes('مدة')) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`
+    return `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`
   }
   if (name.includes('budget') || name.includes('spend') || name.includes('ميزانية') || name.includes('تكلفة') || name.includes('$')) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M12 16v1" /></svg>`
+    return `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M12 16v1" /></svg>`
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>`
 }
 
 // Bulk Actions States
@@ -560,7 +562,7 @@ const fallbackCopyText = (text, message = 'تم نسخ عنوان المهمة �
   textarea.select()
   try {
     document.execCommand('copy')
-    store.addNotification('تم النسخ', message)
+    store.toastSuccess(message)
   } catch (e) {
     console.error('فشل النسخ إلى الحافظة', e)
   }
@@ -572,7 +574,7 @@ const copyTaskTitle = (title) => {
   const textToCopy = String(title).trim()
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(textToCopy).then(() => {
-      store.addNotification('تم النسخ', 'تم نسخ عنوان المهمة إلى الحافظة')
+      store.toastSuccess('تم نسخ عنوان المهمة إلى الحافظة')
     }).catch(() => {
       fallbackCopyText(textToCopy)
     })
@@ -591,7 +593,7 @@ const bulkCopyTitles = () => {
   const msg = `تم نسخ عناوين (${titles.length}) مهام كـ أسطر منفصلة إلى الحافظة`
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(textToCopy).then(() => {
-      store.addNotification('تم النسخ الجماعي', msg)
+      store.toastSuccess(msg)
     }).catch(() => {
       fallbackCopyText(textToCopy, msg)
     })
@@ -828,29 +830,29 @@ const onKanbanMouseMove = (e) => {
 <template>
   <div class="space-y-6 text-right" v-if="activeProject">
     <!-- Kanban Header Actions -->
-    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-4 flex-wrap gap-2">
+    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 flex-wrap gap-2">
       <div>
-        <h2 class="text-base font-extrabold text-slate-855 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
+        <h2 class="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
           لوحة المهام (Kanban)
           <span class="text-xs font-bold text-slate-400 font-sans">({{ projectTasks.length }} مهام)</span>
         </h2>
       </div>
 
-      <div class="flex items-center space-x-2 space-x-reverse flex-wrap gap-2">
+      <div class="flex items-center space-x-2 flex-wrap gap-2">
         <!-- Kanban Scroll Navigation Buttons -->
-        <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-855 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60" title="التنقل السريع بين الحالات">
+        <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60" title="التنقل السريع بين الحالات">
           <button 
             @click="scrollKanban('left')"
-            class="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 transition cursor-pointer min-h-[36px] flex items-center gap-1"
-            title="التمرير للحالة السابقة"
+            class="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 transition cursor-pointer min-h-[44px] flex items-center gap-1"
+            title="التمرير للحالة السابقة" aria-label="التمرير للحالة السابقة"
           >
             <span>◀️</span>
             <span class="hidden sm:inline">السابق</span>
           </button>
           <button 
             @click="scrollKanban('right')"
-            class="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 transition cursor-pointer min-h-[36px] flex items-center gap-1"
-            title="التمرير للحالة التالية"
+            class="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 transition cursor-pointer min-h-[44px] flex items-center gap-1"
+            title="التمرير للحالة التالية" aria-label="التمرير للحالة التالية"
           >
             <span class="hidden sm:inline">التالي</span>
             <span>▶️</span>
@@ -860,8 +862,8 @@ const onKanbanMouseMove = (e) => {
         <!-- Add New Status Button Top Option -->
         <button 
           @click="promptAddStatus"
-          class="bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/40 dark:hover:bg-violet-900/50 text-violet-600 dark:text-violet-400 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer min-h-[40px] flex items-center gap-1.5 border border-violet-200/50 dark:border-violet-800/50"
-          title="إضافة حالة جديدة للمشروع"
+          class="bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/40 dark:hover:bg-violet-900/50 text-violet-600 dark:text-violet-400 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer min-h-[44px] flex items-center gap-1.5 border border-violet-200/50 dark:border-violet-800/50"
+          title="إضافة حالة جديدة للمشروع" aria-label="إضافة حالة جديدة للمشروع"
         >
           <span>➕</span>
           <span>إضافة حالة جديدة</span>
@@ -870,8 +872,8 @@ const onKanbanMouseMove = (e) => {
         <!-- Reorder & Customize Statuses Side Drawer Trigger -->
         <button 
           @click="openStatusDrawer"
-          class="bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer min-h-[40px] flex items-center gap-1.5 border border-indigo-200/50 dark:border-indigo-800/50 shadow-2xs"
-          title="ترتيب وتخصيص الحالات في نافذة سريعة"
+          class="bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer min-h-[44px] flex items-center gap-1.5 border border-indigo-200/50 dark:border-indigo-800/50 shadow-2xs"
+          title="ترتيب وتخصيص الحالات في نافذة سريعة" aria-label="ترتيب وتخصيص الحالات في نافذة سريعة"
         >
           <span>⚙️</span>
           <span>ترتيب وتخصيص الحالات</span>
@@ -879,7 +881,7 @@ const onKanbanMouseMove = (e) => {
 
         <button 
           @click="toggleSelectAllKanban"
-          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer min-h-[40px] flex items-center justify-center border border-slate-200/60 dark:border-slate-700/60"
+          class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold px-3 py-1.5 rounded-xl text-xs transition cursor-pointer min-h-[44px] flex items-center justify-center border border-slate-200/60 dark:border-slate-700/60"
         >
           {{ isAllSelected ? 'إلغاء تحديد الكل' : 'تحديد جميع المهام' }}
         </button>
@@ -887,7 +889,7 @@ const onKanbanMouseMove = (e) => {
     </div>
 
     <!-- Mobile Column Filter Tabs (lg:hidden) -->
-    <div class="lg:hidden flex gap-2 overflow-x-auto no-scrollbar py-2 shrink-0 border-b border-slate-100 dark:border-slate-800 -mt-2 mb-2">
+    <div class="lg:hidden flex gap-2 overflow-x-auto scrollbar-hide py-2 shrink-0 border-b border-slate-100 dark:border-slate-800 -mt-2 mb-2">
       <!-- All Columns Pill -->
       <button 
         @click="setMobileStatusFilter('all')"
@@ -960,29 +962,29 @@ const onKanbanMouseMove = (e) => {
           @dragstart="onColumnDragStart(colIdx, $event)"
           @dragover.prevent="onColumnDragOver(colIdx, $event)"
           @drop="onColumnDrop(colIdx, $event)"
-          class="flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-2 cursor-grab active:cursor-grabbing select-none"
+          class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 cursor-grab active:cursor-grabbing select-none"
         >
-          <div class="flex items-center space-x-2 space-x-reverse">
+          <div class="flex items-center space-x-2">
             <!-- Drag handle icon -->
             <span class="text-slate-400 dark:text-slate-600 text-xs font-mono group-hover/column:text-violet-500 transition cursor-grab" title="اسحب لترتيب الحالات">⠿</span>
-            <span class="text-xs font-extrabold text-slate-855 dark:text-slate-205 uppercase tracking-wider">{{ status }}</span>
-            <span class="bg-slate-150 dark:bg-slate-855 text-slate-700 dark:text-slate-350 font-sans text-xs font-extrabold px-2 py-0.5 rounded-full">
+            <span class="text-xs font-extrabold text-slate-900 dark:text-slate-200">{{ status }}</span>
+            <span class="bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-sans text-xs font-extrabold px-2 py-0.5 rounded-full">
               {{ getTasksByStatus(status).length }}
             </span>
           </div>
 
-          <div class="flex items-center space-x-1 space-x-reverse" @click.stop>
+          <div class="flex items-center space-x-1" @click.stop>
             <input 
               type="checkbox"
               :checked="isColumnAllSelected(status)"
               @change="toggleSelectColumn(status, $event)"
-              class="rounded border-slate-300 dark:border-slate-805 text-violet-650 focus:ring-violet-500 cursor-pointer h-4 w-4"
+              class="rounded border-slate-300 dark:border-slate-800 text-violet-600 focus:ring-violet-500 cursor-pointer h-4 w-4"
               title="تحديد كل مهام هذا العمود"
             />
             <button 
               @click="triggerQuickAdd(status)"
-              class="min-h-[36px] min-w-[36px] flex items-center justify-center text-slate-455 hover:text-violet-600 dark:hover:text-violet-400 p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-900 transition cursor-pointer text-xs"
-              title="إضافة مهمة سريعة"
+              class="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-violet-600 dark:hover:text-violet-400 p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-900 transition cursor-pointer text-xs"
+              title="إضافة مهمة سريعة" aria-label="إضافة مهمة سريعة"
             >
               ➕
             </button>
@@ -991,8 +993,8 @@ const onKanbanMouseMove = (e) => {
             <div class="relative">
               <button 
                 @click="toggleColumnMenu(status, $event)"
-                class="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center text-xs"
-                title="خيارات الحالة"
+                class="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center text-xs"
+                title="خيارات الحالة" aria-label="خيارات الحالة"
               >
                 ⚙️
               </button>
@@ -1028,7 +1030,7 @@ const onKanbanMouseMove = (e) => {
                   </button>
                   <button 
                     @click="closeColumnMenu(); promptDeleteStatus(status)"
-                    class="w-full text-right px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-955/30 transition cursor-pointer flex items-center gap-2 border-t border-slate-100 dark:border-slate-800/60"
+                    class="w-full text-right px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer flex items-center gap-2 border-t border-slate-100 dark:border-slate-800/60"
                   >
                     <span>🗑️</span>
                     <span>حذف الحالة</span>
@@ -1055,18 +1057,18 @@ const onKanbanMouseMove = (e) => {
             <div class="flex items-center justify-between gap-2 w-full min-w-0">
               <!-- Left: Checkbox + Full Title -->
               <div class="flex items-center gap-2 flex-1 min-w-0">
-                <div class="shrink-0 flex items-center justify-center min-h-[32px] min-w-[32px]" @click.stop>
+                <div class="shrink-0 flex items-center justify-center min-h-[44px] min-w-[44px]" @click.stop>
                   <input 
                     type="checkbox"
                     :checked="task.status === 'مكتمل'"
                     @change="toggleTaskCompletion(task, $event)"
-                    class="rounded-full border-slate-350 dark:border-slate-800 text-emerald-500 focus:ring-emerald-500 cursor-pointer h-4.5 w-4.5 transition-all duration-200"
+                    class="rounded-full border-slate-300 dark:border-slate-800 text-emerald-500 focus:ring-emerald-500 cursor-pointer h-4.5 w-4.5 transition-all duration-200"
                     title="تحديد المهمة كمكتملة"
                   />
                 </div>
                 <div class="relative group/title flex-1 min-w-0">
                   <h4 
-                    class="text-xs sm:text-sm font-extrabold text-slate-855 dark:text-slate-100 group-hover:text-violet-650 dark:group-hover:text-violet-400 transition duration-150 whitespace-nowrap overflow-hidden text-ellipsis block leading-snug max-w-full"
+                    class="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition duration-150 whitespace-nowrap overflow-hidden text-ellipsis block leading-snug max-w-full"
                     :class="[task.status === 'مكتمل' ? 'line-through text-slate-400 dark:text-slate-500' : '']"
                     :title="task.title"
                   >
@@ -1074,7 +1076,7 @@ const onKanbanMouseMove = (e) => {
                   </h4>
                   <!-- Custom Floating Tooltip on Hover -->
                   <div class="absolute bottom-full right-0 mb-1.5 hidden group-hover/title:block z-50 pointer-events-none max-w-xs sm:max-w-sm">
-                    <div class="bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-medium px-3 py-1.5 rounded-xl shadow-xl border border-slate-700/50 backdrop-blur-md whitespace-normal break-words text-right dir-rtl">
+                    <div class="bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-medium px-3 py-1.5 rounded-xl shadow-xl border border-slate-700/50 backdrop-blur-md whitespace-normal break-words text-right">
                       {{ task.title }}
                     </div>
                   </div>
@@ -1088,8 +1090,8 @@ const onKanbanMouseMove = (e) => {
                   type="checkbox" 
                   v-model="selectedTaskIds" 
                   :value="task.id" 
-                  class="rounded border-slate-300 dark:border-slate-855 text-violet-650 focus:ring-violet-500 cursor-pointer h-3.5 w-3.5 transition-opacity"
-                  :class="[selectedTaskIds.includes(task.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100']"
+                  class="rounded border-slate-300 dark:border-slate-900 text-violet-600 focus:ring-violet-500 cursor-pointer h-4.5 w-4.5 transition-opacity"
+                  :class="[selectedTaskIds.includes(task.id) ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100']"
                   title="تحديد المهمة للعمليات الجماعية"
                 />
 
@@ -1097,10 +1099,10 @@ const onKanbanMouseMove = (e) => {
                 <div class="relative">
                   <button 
                     @click="toggleTaskMenu(task.id, $event)"
-                    class="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center min-h-[32px] min-w-[32px]"
-                    title="خيارات المهمة"
+                    class="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center min-h-[44px] min-w-[44px]"
+                    title="خيارات المهمة" aria-label="خيارات المهمة"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                     </svg>
                   </button>
@@ -1128,7 +1130,7 @@ const onKanbanMouseMove = (e) => {
                       </button>
                       <button 
                         @click="closeTaskMenu(); quickDeleteTask(task)"
-                        class="w-full text-right px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-955/30 transition cursor-pointer flex items-center gap-2"
+                        class="w-full text-right px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer flex items-center gap-2"
                       >
                         <span>🗑️</span>
                         <span>حذف المهمة</span>
@@ -1149,7 +1151,7 @@ const onKanbanMouseMove = (e) => {
               <button
                 @click="toggleTaskStatus(task, $event)"
                 class="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 hover:text-violet-600 transition min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
-                title="انقر للتنقل السريع بين الحالات"
+                title="انقر للتنقل السريع بين الحالات" aria-label="انقر للتنقل السريع بين الحالات"
               >
                 {{ task.status }}
               </button>
@@ -1163,7 +1165,7 @@ const onKanbanMouseMove = (e) => {
             <div class="absolute inset-0 bg-violet-500/[0.01] dark:bg-violet-400/[0.01] opacity-0 group-hover:opacity-100 rounded-xl pointer-events-none transition duration-200"></div>
           </div>
 
-          <div v-if="getTasksByStatus(status).length === 0 && activeQuickAddColumn !== status" class="text-center py-8 text-xs text-slate-400 dark:text-slate-555 border border-dashed border-slate-200 dark:border-slate-855 rounded-xl">
+          <div v-if="getTasksByStatus(status).length === 0 && activeQuickAddColumn !== status" class="text-center py-8 text-xs text-slate-400 dark:text-slate-600 border border-dashed border-slate-200 dark:border-slate-900 rounded-xl">
             أفلت المهام هنا
           </div>
 
@@ -1178,7 +1180,7 @@ const onKanbanMouseMove = (e) => {
           </button>
 
           <!-- Trello-like Inline Quick Add Input -->
-          <div v-if="activeQuickAddColumn === status" class="bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-805 rounded-xl p-3 shadow-sm space-y-2.5 text-right mt-2" @click.stop>
+          <div v-if="activeQuickAddColumn === status" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 shadow-sm space-y-2.5 text-right mt-2" @click.stop>
             <MentionInput
               v-model="quickAddTitle"
               :is-textarea="true"
@@ -1193,7 +1195,7 @@ const onKanbanMouseMove = (e) => {
             <div class="flex items-center gap-1.5 justify-start flex-row-reverse flex-wrap">
               <button 
                 @click="submitQuickAdd(status)"
-                class="bg-violet-650 hover:bg-violet-755 text-white font-bold px-3 py-1 rounded-lg text-[10px] transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+                class="bg-violet-600 hover:bg-violet-800 text-white font-bold px-3 py-1 rounded-lg text-[10px] transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 إضافة
               </button>
@@ -1205,7 +1207,7 @@ const onKanbanMouseMove = (e) => {
               </button>
               <button 
                 @click="openFullModalFromQuickAdd(status)"
-                class="text-violet-600 dark:text-violet-405 hover:bg-violet-50 dark:hover:bg-violet-955/20 font-extrabold px-2 py-1 rounded-lg text-[10px] transition cursor-pointer mr-auto min-h-[44px] min-w-[44px] flex items-center justify-center"
+                class="text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/20 font-extrabold px-2 py-1 rounded-lg text-[10px] transition cursor-pointer mr-auto min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 فتح التفاصيل
               </button>
@@ -1231,7 +1233,7 @@ const onKanbanMouseMove = (e) => {
     <!-- Floating Bulk Actions Bar (Responsive Mobile Stack / Sheet) -->
     <div 
       v-if="selectedTaskIds.length > 0"
-      class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl border border-violet-500/30 shadow-glass-glow rounded-2xl w-[calc(100%-2rem)] max-w-lg px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-6 z-40 animate-fade-in flex-row-reverse" 
+      class="fixed above-nav sm:bottom-6 left-1/2 -translate-x-1/2 bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl border border-violet-500/30 shadow-glass-glow rounded-2xl w-[calc(100%-2rem)] max-w-lg px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-6 z-float animate-fade-in flex-row-reverse" 
       dir="rtl"
     >
       <span class="text-xs font-extrabold text-slate-800 dark:text-slate-200 shrink-0">
@@ -1254,7 +1256,7 @@ const onKanbanMouseMove = (e) => {
         <div class="relative flex-1 sm:flex-none">
           <select 
             @change="bulkMoveToProject($event.target.value); $event.target.value = ''"
-            class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer min-h-[44px]"
+            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer min-h-[44px]"
           >
             <option value="">-- نقل للمشروع --</option>
             <option v-for="p in otherProjects" :key="p.id" :value="p.id">{{ p.name }}</option>
@@ -1264,8 +1266,8 @@ const onKanbanMouseMove = (e) => {
         <!-- Bulk Copy Titles Button -->
         <button 
           @click="bulkCopyTitles"
-          class="bg-indigo-50 hover:bg-indigo-100 text-indigo-650 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold px-3 py-2 rounded-xl text-xs transition cursor-pointer min-h-[44px] flex items-center justify-center gap-1.5 shrink-0 border border-indigo-200/50 dark:border-indigo-800/50"
-          title="نسخ عناوين المهام المحددة كـ أسطر منفصلة"
+          class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold px-3 py-2 rounded-xl text-xs transition cursor-pointer min-h-[44px] flex items-center justify-center gap-1.5 shrink-0 border border-indigo-200/50 dark:border-indigo-800/50"
+          title="نسخ عناوين المهام المحددة كـ أسطر منفصلة" aria-label="نسخ عناوين المهام المحددة كـ أسطر منفصلة"
         >
           <span>📋</span>
           <span>نسخ العناوين</span>
@@ -1274,7 +1276,7 @@ const onKanbanMouseMove = (e) => {
         <!-- Bulk Delete Button -->
         <button 
           @click="bulkDelete"
-          class="bg-rose-50 hover:bg-rose-100 text-rose-650 dark:bg-rose-955/20 dark:text-rose-400 font-extrabold px-4 py-2 rounded-xl text-xs transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
+          class="bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/20 dark:text-rose-400 font-extrabold px-4 py-2 rounded-xl text-xs transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
         >
           حذف جماعي
         </button>
@@ -1289,27 +1291,35 @@ const onKanbanMouseMove = (e) => {
 
         <!-- Modal Content -->
         <div 
-          @touchstart="handleTouchStart"
-          @touchmove="handleTouchMove"
-          @touchend="handleTouchEnd(cancelPasteModal)"
           class="relative z-10 bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-3xl p-6 max-w-md max-h-[85vh] overflow-y-auto w-full shadow-2xl space-y-4 text-right transform transition-all duration-300"
         >
-          <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto my-2.5 shrink-0 sm:hidden cursor-grab"></div>
-          <h3 class="text-sm font-extrabold text-slate-855 dark:text-slate-100">لقد قمت بلصق نص متعدد السطور</h3>
+          <!-- Drag handle. The dismiss gesture lives HERE, not on the
+               scrollable panel: bound to the panel, any scroll past 50px
+               closed the sheet and discarded the user's edits. -->
+          <div
+            @touchstart="handleTouchStart"
+            @touchmove="handleTouchMove"
+            @touchend="handleTouchEnd(cancelPasteModal)"
+            class="shrink-0 sm:hidden flex justify-center py-2.5 cursor-grab touch-none"
+            aria-hidden="true"
+          >
+            <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full"></div>
+          </div>
+          <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100">لقد قمت بلصق نص متعدد السطور</h3>
           <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
             النص الملصق يحتوي على {{ pastedLines.length }} أسطر. هل ترغب في إنشاء مهمة منفصلة لكل سطر أم دمجها كلها في مهمة واحدة؟
           </p>
 
-          <div class="flex items-center justify-start space-x-2 space-x-reverse flex-row-reverse pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div class="flex items-center justify-start space-x-2 flex-row-reverse pt-2 border-t border-slate-100 dark:border-slate-800">
             <button 
               @click="createPastedAsSeparate" 
-              class="bg-violet-600 hover:bg-violet-755 text-white font-bold py-2 px-4 rounded-xl text-xs transition cursor-pointer"
+              class="bg-violet-600 hover:bg-violet-800 text-white font-bold py-2 px-4 rounded-xl text-xs transition cursor-pointer"
             >
               إنشاء {{ pastedLines.length }} مهام منفصلة
             </button>
             <button 
               @click="createPastedAsSingle" 
-              class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-350 font-bold py-2 px-3 rounded-xl text-xs transition cursor-pointer"
+              class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold py-2 px-3 rounded-xl text-xs transition cursor-pointer"
             >
               دمج في عنوان واحد
             </button>
@@ -1338,13 +1348,13 @@ const onKanbanMouseMove = (e) => {
             <div class="flex items-center gap-2.5">
               <span class="text-xl">⚙️</span>
               <div>
-                <h3 class="text-sm font-extrabold text-slate-855 dark:text-slate-100">ترتيب وتخصيص الحالات</h3>
+                <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100">ترتيب وتخصيص الحالات</h3>
                 <p class="text-[11px] text-slate-400 font-semibold">اسحب الحالات لترتيبها أو قم بتعديل أسمائها</p>
               </div>
             </div>
-            <button 
+            <button aria-label="إغلاق درج الحالات" 
               @click="closeStatusDrawer"
-              class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center font-bold text-sm"
+              class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center font-bold text-sm"
             >
               ✕
             </button>
@@ -1407,14 +1417,14 @@ const onKanbanMouseMove = (e) => {
                     v-if="idx < drawerStatuses.length - 1"
                     @click="moveDrawerItem(idx, 'down')"
                     class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold"
-                    title="تحريك لأسفل"
+                    title="تحريك لأسفل" aria-label="تحريك لأسفل"
                   >
                     ▼
                   </button>
                   <button 
                     @click="removeDrawerStatus(idx)"
-                    class="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/30 transition text-xs font-bold"
-                    title="حذف هذه الحالة"
+                    class="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition text-xs font-bold"
+                    title="حذف هذه الحالة" aria-label="حذف هذه الحالة"
                   >
                     🗑️
                   </button>

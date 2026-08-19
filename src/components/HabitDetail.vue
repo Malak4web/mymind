@@ -350,7 +350,7 @@ const handleDeleteNote = (noteId) => {
           @click="goBackToHabits"
           class="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs sm:text-sm hover:border-violet-500 transition cursor-pointer shadow-sm min-h-[44px]"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transform rotate-180 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transform rotate-180 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
           <span>العودة لجميع العادات</span>
@@ -405,7 +405,7 @@ const handleDeleteNote = (noteId) => {
             
             <!-- Animated SVG Circular Progress Ring Gauge -->
             <div class="relative w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center shrink-0">
-              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 96 96">
+              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 96 96" aria-hidden="true">
                 <!-- Background Circle -->
                 <circle
                   cx="48"
@@ -438,7 +438,7 @@ const handleDeleteNote = (noteId) => {
                 <span class="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
                   {{ currentMonthCompletionPercentage }}%
                 </span>
-                <span class="text-[9px] font-bold text-slate-500 dark:text-slate-400">إنجاز الشهر</span>
+                <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400">إنجاز الشهر</span>
               </div>
             </div>
 
@@ -472,7 +472,7 @@ const handleDeleteNote = (noteId) => {
             <span class="text-[11px] font-semibold text-slate-400">اضغط للتسجيل السريع</span>
           </div>
 
-          <div class="flex items-center gap-2 sm:gap-3 overflow-x-auto no-scrollbar py-1">
+          <div class="flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-hide py-1">
             <button 
               v-for="day in last7Days"
               :key="day.dateKey"
@@ -537,7 +537,7 @@ const handleDeleteNote = (noteId) => {
                 v-model="newChecklistTitle"
                 type="text"
                 placeholder="إضافة خطوة جديدة..."
-                class="flex-1 px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 text-slate-900 dark:text-white text-xs font-bold outline-none focus:ring-2 focus:ring-violet-500 min-h-[44px]"
+                class="flex-1 px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold outline-none focus:ring-2 focus:ring-violet-500 min-h-[44px]"
               />
               <button 
                 type="submit"
@@ -559,8 +559,8 @@ const handleDeleteNote = (noteId) => {
                 :class="[
                   'p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 min-h-[44px]',
                   item.completed
-                    ? 'bg-slate-50 dark:bg-slate-850/60 border-slate-200/60 dark:border-slate-800/80 text-slate-400 dark:text-slate-500'
-                    : 'bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-750 text-slate-800 dark:text-slate-100 hover:border-violet-400'
+                    ? 'bg-slate-50 dark:bg-slate-800/60 border-slate-200/60 dark:border-slate-800/80 text-slate-400 dark:text-slate-500'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-violet-400'
                 ]"
               >
                 <!-- Inline Editing Mode -->
@@ -576,14 +576,14 @@ const handleDeleteNote = (noteId) => {
                     <button 
                       @click="saveEditingSubtask(item.id)"
                       class="min-h-[44px] min-w-[44px] flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-xl"
-                      title="حفظ"
+                      title="حفظ" aria-label="حفظ"
                     >
                       ✓
                     </button>
                     <button 
                       @click="cancelEditingSubtask"
                       class="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-xl"
-                      title="إلغاء"
+                      title="إلغاء" aria-label="إلغاء"
                     >
                       ✕
                     </button>
@@ -615,7 +615,7 @@ const handleDeleteNote = (noteId) => {
                     <button 
                       @click="startEditingSubtask(item)"
                       class="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-violet-500 transition cursor-pointer"
-                      title="تعديل العنصر"
+                      title="تعديل العنصر" aria-label="تعديل العنصر"
                     >
                       ✏️
                     </button>
@@ -624,7 +624,7 @@ const handleDeleteNote = (noteId) => {
                     <button 
                       @click="handleDeleteChecklist(item.id)"
                       class="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-300 hover:text-red-500 transition cursor-pointer"
-                      title="حذف العنصر"
+                      title="حذف العنصر" aria-label="حذف العنصر"
                     >
                       ✕
                     </button>
@@ -725,10 +725,10 @@ const handleDeleteNote = (noteId) => {
                       ? 'bg-emerald-500/30 text-emerald-800 dark:text-emerald-300 border-emerald-500/40'
                       : 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border-slate-200/50 dark:border-slate-800/80 hover:border-violet-400'
                   ]"
-                  :title="item.dateKey + (item.completed ? ' (مكتمل)' : '')"
+                  :title="item.dateKey + (item.completed ? ' (مكتمل)' : '')" aria-label="item.dateKey + (item.completed ? ' (مكتمل)' : '')"
                 >
                   <span class="font-bold">{{ item.dayNum }}</span>
-                  <span v-if="item.completed" class="text-[9px] -mt-1 font-black">✓</span>
+                  <span v-if="item.completed" class="text-[10px] -mt-1 font-black">✓</span>
                 </button>
               </div>
             </div>
@@ -772,7 +772,7 @@ const handleDeleteNote = (noteId) => {
                       'px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border min-h-[44px] cursor-pointer',
                       selectedMood === m.emoji
                         ? 'bg-violet-600 text-white border-violet-600 shadow-md ring-2 ring-violet-400/40'
-                        : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-750 hover:border-violet-400'
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-400'
                     ]"
                   >
                     <span class="text-base">{{ m.emoji }}</span>
@@ -789,7 +789,7 @@ const handleDeleteNote = (noteId) => {
                 <input 
                   v-model="noteDate"
                   type="date"
-                  class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 text-slate-900 dark:text-white text-xs font-bold outline-none focus:ring-2 focus:ring-violet-500 min-h-[44px]"
+                  class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold outline-none focus:ring-2 focus:ring-violet-500 min-h-[44px]"
                 />
               </div>
 
@@ -798,7 +798,7 @@ const handleDeleteNote = (noteId) => {
                 v-model="newNoteContent"
                 rows="3"
                 placeholder="اكتب ملاحظة أو انطباع جديد بخصوص هذه العادة..."
-                class="w-full p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 text-slate-900 dark:text-white text-xs font-semibold outline-none focus:ring-2 focus:ring-violet-500"
+                class="w-full p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold outline-none focus:ring-2 focus:ring-violet-500"
               ></textarea>
 
               <button 
@@ -818,7 +818,7 @@ const handleDeleteNote = (noteId) => {
               <div 
                 v-for="n in habit.notesList" 
                 :key="n.id"
-                class="bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 relative group transition hover:border-violet-300 dark:hover:border-violet-800/60"
+                class="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 relative group transition hover:border-violet-300 dark:hover:border-violet-800/60"
               >
                 <!-- Note Header: Date & Mood Badge -->
                 <div class="flex items-center justify-between text-xs font-bold text-violet-600 dark:text-violet-400 mb-2">
@@ -833,7 +833,7 @@ const handleDeleteNote = (noteId) => {
                   <button 
                     @click="handleDeleteNote(n.id)"
                     class="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-300 hover:text-red-500 transition cursor-pointer"
-                    title="حذف الملاحظة"
+                    title="حذف الملاحظة" aria-label="حذف الملاحظة"
                   >
                     ✕
                   </button>

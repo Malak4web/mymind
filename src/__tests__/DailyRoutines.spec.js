@@ -169,17 +169,21 @@ describe('DailyRoutines.vue Component Tests', () => {
     expect(wrapper.text()).toContain('سجل اليوميات والتاسكات السريعة')
   })
 
-  it('enforces touch target dimensions, 32-36px micro toggles, compact card classes, micro-FAB, and slim tab bar selectors', () => {
+  it('enforces a 44px minimum tap target, compact card classes, FAB placement, and slim tab bar selectors', () => {
     const wrapper = mount(DailyRoutines)
     const buttons = wrapper.findAll('button')
 
     // Filter interactive buttons with compact touch target classes
     const interactiveButtons = buttons.filter(b => {
       const cls = b.classes().join(' ')
-      return cls.includes('min-h-[32px]') || cls.includes('min-h-[36px]') || cls.includes('min-h-[44px]') || cls.includes('min-h-[48px]')
+      return /min-h-\[(4[4-9]|[5-9]\d)px\]/.test(cls)
     })
 
     expect(interactiveButtons.length).toBeGreaterThan(0)
+
+    // No declared tap target may sit below 44px.
+    const undersized = buttons.filter(b => /min-[hw]-\[(3\d|4[0-3])px\]/.test(b.classes().join(' ')))
+    expect(undersized.map(b => b.classes().join(' '))).toEqual([])
 
     // Assert container compact padding class px-1 sm:px-3
     const rootContainer = wrapper.find('div.max-w-6xl')
@@ -196,20 +200,20 @@ describe('DailyRoutines.vue Component Tests', () => {
     expect(firstCard.exists()).toBe(true)
     expect(firstCard.classes()).toContain('p-2.5')
 
-    // Check sleek 32-36px check-in toggle button
+    // Check-in toggle meets the minimum tap target
     const checkBtn = wrapper.find('button[title="تسجيل الإنجاز"]')
     expect(checkBtn.exists()).toBe(true)
-    expect(checkBtn.classes()).toContain('w-9')
-    expect(checkBtn.classes()).toContain('h-9')
-    expect(checkBtn.classes()).toContain('min-h-[36px]')
-    expect(checkBtn.classes()).toContain('min-w-[36px]')
+    expect(checkBtn.classes()).toContain('min-h-[44px]')
+    expect(checkBtn.classes()).toContain('min-w-[44px]')
 
-    // Check micro floating action button (Micro-FAB)
+    // The FAB clears the bottom navigation and the device safe area instead
+    // of sitting on top of both.
     const microFab = wrapper.find('button.micro-fab')
     expect(microFab.exists()).toBe(true)
     expect(microFab.classes()).toContain('fixed')
-    expect(microFab.classes()).toContain('bottom-4')
+    expect(microFab.classes()).toContain('above-nav')
     expect(microFab.classes()).toContain('left-4')
+    expect(microFab.classes()).toContain('min-h-[44px]')
 
     // Assert slim tab bar segmented switcher py-1 px-1.5
     const segmentedSwitcher = wrapper.find('div.relative.flex.items-center.justify-between')
@@ -217,10 +221,10 @@ describe('DailyRoutines.vue Component Tests', () => {
     expect(segmentedSwitcher.classes()).toContain('py-1')
     expect(segmentedSwitcher.classes()).toContain('px-1.5')
 
-    // Check stepper button micro dimensions
+    // Date stepper also meets the minimum
     const prevDateBtn = wrapper.find('button[title="اليوم السابق"]')
-    expect(prevDateBtn.classes()).toContain('min-h-[36px]')
-    expect(prevDateBtn.classes()).toContain('min-w-[36px]')
+    expect(prevDateBtn.classes()).toContain('min-h-[44px]')
+    expect(prevDateBtn.classes()).toContain('min-w-[44px]')
   })
 
   it('updates progress bar and streak counter upon habit check-in', async () => {
@@ -236,6 +240,14 @@ describe('DailyRoutines.vue Component Tests', () => {
   })
 
   it('handles mobile daily notes entry and quick submit trigger', async () => {
+    // Journal notes go through the API now instead of an in-memory dictionary.
+    store.dailyNotes = []
+    vi.spyOn(store, 'addDailyNote').mockImplementation(async (dateKey, content) => {
+      const note = { id: 7, dateKey, content, createdAt: new Date().toISOString() }
+      store.dailyNotes = [note, ...store.dailyNotes]
+      return note
+    })
+
     const wrapper = mount(DailyRoutines)
 
     // Switch to journal tab
@@ -252,8 +264,11 @@ describe('DailyRoutines.vue Component Tests', () => {
     const noteForm = wrapper.findAll('form').find(f => f.find('textarea[placeholder*="اكتب ملاحظة أو خاطر سريع"]').exists())
     expect(noteForm.exists()).toBe(true)
     await noteForm.trigger('submit')
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
 
-    // Verify note is saved and displayed in list
+    // Verify the note was sent for persistence and is displayed in the list
+    expect(store.addDailyNote).toHaveBeenCalled()
     expect(wrapper.text()).toContain('ملاحظة يومية سريعة لاختبار الواجهة')
   })
 

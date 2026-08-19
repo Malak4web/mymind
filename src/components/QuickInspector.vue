@@ -25,14 +25,11 @@ const status = ref('')
 const startDate = ref('')
 const deadline = ref('')
 
-// File Upload simulation state
-const fileToUploadName = ref('')
-const fileToUploadSize = ref('1.2 MB')
-const simulateFailure = ref(false)
-
 // Quick Comment stream state
 const newCommentText = ref('')
 const localComments = ref([])
+const isSendingComment = ref(false)
+const commentError = ref('')
 
 const inspectorFileInputRef = ref(null)
 
@@ -106,23 +103,17 @@ const closeLightbox = () => {
   lightboxTitle.value = ''
 }
 
+// The API returns a signed, expiring `url` for every stored attachment.
+// We never build the URL ourselves: an unsigned one is rejected (SEC-05),
+// and reaching into /storage directly would bypass authorization entirely.
 const getAttachmentUrl = (file) => {
   if (!file) return ''
   if (file.url) return file.url
   if (file.fileObj) {
+    // Still uploading - show the local blob until the server responds.
     try {
       return URL.createObjectURL(file.fileObj)
     } catch (e) {}
-  }
-  if (file.id) {
-    return `${store.apiBase}/attachments/${file.id}/file`
-  }
-  if (file.path) {
-    if (file.path.startsWith('http://') || file.path.startsWith('https://') || file.path.startsWith('data:')) {
-      return file.path
-    }
-    const cleanPath = file.path.replace(/^public\//, '')
-    return `${store.apiBase.replace(/\/api\/?$/, '')}/storage/${cleanPath}`
   }
   return ''
 }
@@ -145,7 +136,11 @@ const handleDeleteInspectorAttachment = async (file, idx) => {
 }
 
 // Sync task data into local refs when activeTask changes
-watch(activeTask, (task) => {
+// Watches the task *id*, not the object: store.loadTasks() replaces every
+// task object on each refresh, which used to refire this and wipe the user's
+// in-progress edits.
+watch(() => activeTask.value?.id ?? null, () => {
+  const task = activeTask.value
   if (task) {
     title.value = task.title || ''
     description.value = task.description || ''
@@ -153,6 +148,7 @@ watch(activeTask, (task) => {
     startDate.value = task.startDate || ''
     deadline.value = task.deadline || ''
     localComments.value = Array.isArray(task.comments) ? [...task.comments] : []
+    commentError.value = ''
   } else {
     title.value = ''
     description.value = ''
@@ -192,20 +188,6 @@ const openFullModal = () => {
   store.closeTaskInspector()
 }
 
-const triggerFileUpload = async () => {
-  if (!fileToUploadName.value.trim() || !activeTask.value) return
-
-  await store.uploadFileToTask(
-    activeTask.value.id,
-    fileToUploadName.value.trim(),
-    fileToUploadSize.value,
-    simulateFailure.value
-  )
-
-  fileToUploadName.value = ''
-  simulateFailure.value = false
-}
-
 const toggleMemberAssignment = async (userId) => {
   if (!activeTask.value) return
   const current = activeTask.value.memberIds ? [...activeTask.value.memberIds] : []
@@ -223,48 +205,78 @@ const toggleMemberAssignment = async (userId) => {
   })
 }
 
-const addQuickComment = () => {
-  if (!newCommentText.value.trim() || !activeTask.value) return
-  const authorName = store.currentUser?.name || 'أنت'
-  const newComment = {
-    id: Date.now(),
-    author: authorName,
-    text: newCommentText.value.trim(),
-    createdAt: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
+const addQuickComment = async () => {
+  const text = newCommentText.value.trim()
+  if (!text || !activeTask.value || isSendingComment.value) return
+
+  isSendingComment.value = true
+  commentError.value = ''
+  const taskId = activeTask.value.id
+
+  const created = await store.addComment(taskId, text)
+
+  if (created) {
+    localComments.value = [...localComments.value, created]
+    newCommentText.value = ''
+  } else {
+    // Previously this path announced success regardless. Now it says what happened.
+    commentError.value = 'تعذّر حفظ التعليق. تحقق من الاتصال وحاول مرة أخرى.'
   }
-  localComments.value.push(newComment)
-  if (!activeTask.value.comments) activeTask.value.comments = []
-  activeTask.value.comments.push(newComment)
-  store.addNotification('تعليق جديد', `تم إضافة تعليق على المهمة "${activeTask.value.title}".`)
-  newCommentText.value = ''
+  isSendingComment.value = false
 }
+
+const removeComment = async (commentId) => {
+  if (!activeTask.value) return
+  const ok = await store.deleteComment(activeTask.value.id, commentId)
+  if (ok) {
+    localComments.value = localComments.value.filter(c => String(c.id) !== String(commentId))
+  }
+}
+
+const commentAuthor = (c) => c.author_name || c.author || 'مستخدم'
+const commentBody = (c) => c.body ?? c.text ?? ''
+const commentTime = (c) => {
+  if (!c.created_at) return ''
+  try {
+    return new Intl.DateTimeFormat('ar-EG', {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+    }).format(new Date(c.created_at))
+  } catch (e) {
+    return ''
+  }
+}
+const isMyComment = (c) => String(c.user_id ?? '') === String(store.currentUser?.id ?? '-')
 </script>
 
 <template>
   <aside 
-    class="bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl border-l border-white/30 dark:border-slate-800/60 rounded-3xl p-5 shadow-2xl space-y-4 text-right transition-all duration-300 flex flex-col max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-hide sticky top-20"
+    class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-s border-white/30 dark:border-slate-800/60 rounded-t-3xl xl:rounded-3xl p-5 pb-safe xl:pb-5 shadow-2xl space-y-4 text-right transition-all duration-300 flex flex-col max-h-[88vh] xl:max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-hide xl:sticky xl:top-20"
     dir="rtl"
   >
+    <!-- Mobile grab affordance -->
+    <div class="xl:hidden shrink-0 flex justify-center pb-2 -mt-1" aria-hidden="true">
+      <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full"></div>
+    </div>
     <!-- Inspector Header Bar -->
     <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
       <div class="flex items-center gap-2">
         <button 
           @click="store.closeTaskInspector()"
-          class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center"
-          title="إغلاق المعاين السريع"
+          class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+          title="إغلاق المعاين السريع" aria-label="إغلاق المعاين السريع"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">المعاين السريع</span>
+        <span class="text-xs font-bold text-slate-400 dark:text-slate-500">المعاين السريع</span>
       </div>
 
       <button 
         v-if="activeTask"
         @click="openFullModal"
-        class="text-xs font-bold text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 bg-violet-50 dark:bg-violet-955/40 border border-violet-200/50 dark:border-violet-800/40 px-2.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1"
-        title="فتح المهمة في النافذة المنبثقة الكاملة"
+        class="text-xs font-bold text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 bg-violet-50 dark:bg-violet-950/40 border border-violet-200/50 dark:border-violet-800/40 px-2.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1"
+        title="فتح المهمة في النافذة المنبثقة الكاملة" aria-label="فتح المهمة في النافذة المنبثقة الكاملة"
       >
         <span>فتح النموذج الكامل</span>
         <span>↗</span>
@@ -274,12 +286,12 @@ const addQuickComment = () => {
     <!-- Empty State when no task is active -->
     <div v-if="!activeTask" class="py-16 text-center space-y-3">
       <div class="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
         </svg>
       </div>
-      <p class="text-xs text-slate-450 dark:text-slate-400 font-semibold">اضغط على أي مهمة لمعاينتها وتعديل تفاصيلها فوراً بدون التغطية على اللوحة.</p>
+      <p class="text-xs text-slate-400 dark:text-slate-400 font-semibold">اضغط على أي مهمة لمعاينتها وتعديل تفاصيلها فوراً بدون التغطية على اللوحة.</p>
     </div>
 
     <!-- Task Details Form Content -->
@@ -287,13 +299,13 @@ const addQuickComment = () => {
 
       <!-- Title Input -->
       <div>
-        <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">عنوان المهمة</label>
+        <label class="block text-[11px] font-extrabold text-slate-400 mb-1">عنوان المهمة</label>
         <input 
           v-model="title"
           @blur="saveFieldUpdates"
           @keyup.enter="saveFieldUpdates"
           type="text"
-          class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-bold text-slate-855 dark:text-slate-100 focus:outline-none focus:border-violet-500 transition"
+          class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-violet-500 transition"
           placeholder="عنوان المهمة..."
         />
       </div>
@@ -301,7 +313,7 @@ const addQuickComment = () => {
       <!-- Status & Project Info -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
-          <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">الحالة</label>
+          <label class="block text-[11px] font-extrabold text-slate-400 mb-1">الحالة</label>
           <select 
             v-model="status" 
             @change="handleStatusChange"
@@ -312,8 +324,8 @@ const addQuickComment = () => {
         </div>
 
         <div>
-          <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">المشروع</label>
-          <div class="bg-slate-50 dark:bg-slate-955 border border-slate-200/60 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-350 font-bold truncate">
+          <label class="block text-[11px] font-extrabold text-slate-400 mb-1">المشروع</label>
+          <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-300 font-bold truncate">
             {{ activeProject?.name || 'عام' }}
           </div>
         </div>
@@ -342,7 +354,7 @@ const addQuickComment = () => {
       </div>
       <!-- Description -->
       <div>
-        <label class="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">الوصف والتفاصيل</label>
+        <label class="block text-[11px] font-extrabold text-slate-400 mb-1">الوصف والتفاصيل</label>
         <MentionInput 
           v-model="description"
           :is-textarea="true"
@@ -350,13 +362,13 @@ const addQuickComment = () => {
           placeholder="إضافة وصف تفصيلي..."
           @blur="saveFieldUpdates"
         />
-        <div v-if="description" class="mt-1.5 p-2 bg-slate-50 dark:bg-slate-955 rounded-xl border border-slate-200/60 dark:border-slate-800 text-xs">
+        <div v-if="description" class="mt-1.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200/60 dark:border-slate-800 text-xs">
           <MentionText :content="description" />
         </div>
       </div>
 
       <!-- Attachments Stream -->
-      <div class="bg-slate-50/70 dark:bg-slate-955/50 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-3 space-y-2">
+      <div class="bg-slate-50/70 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-3 space-y-2">
         <div class="flex items-center justify-between">
           <span class="text-xs font-extrabold text-slate-700 dark:text-slate-300">المرفقات والملفات</span>
           <span class="text-[10px] text-slate-400 font-bold">{{ activeTask.attachments?.length || 0 }} مرفق</span>
@@ -365,7 +377,7 @@ const addQuickComment = () => {
         <!-- Image Paste Drop Zone -->
         <div 
           @click="$refs.inspectorFileInputRef?.click()"
-          class="border border-dashed border-violet-300/80 dark:border-violet-800/80 hover:border-violet-500 rounded-xl p-2.5 text-center cursor-pointer transition bg-violet-50/40 dark:bg-violet-955/20 group/inspectpaste"
+          class="border border-dashed border-violet-300/80 dark:border-violet-800/80 hover:border-violet-500 rounded-xl p-2.5 text-center cursor-pointer transition bg-violet-50/40 dark:bg-violet-950/20 group/inspectpaste"
         >
           <input 
             ref="inspectorFileInputRef"
@@ -416,7 +428,7 @@ const addQuickComment = () => {
               >
                 {{ file?.name || 'ملف بدون اسم' }}
               </div>
-              <span class="text-[9.5px] font-mono text-slate-400 block">{{ file?.size || '' }}</span>
+              <span class="text-[10px] font-mono text-slate-400 block">{{ file?.size || '' }}</span>
             </div>
 
             <!-- Actions (Download & Delete) -->
@@ -434,7 +446,7 @@ const addQuickComment = () => {
               <button 
                 @click.stop="handleDeleteInspectorAttachment(file, idx)"
                 class="p-1 text-rose-500 hover:text-rose-700 transition cursor-pointer text-xs"
-                title="حذف هذا المرفق"
+                title="حذف هذا المرفق" aria-label="حذف هذا المرفق"
               >
                 🗑️
               </button>
@@ -443,26 +455,10 @@ const addQuickComment = () => {
         </div>
         <div v-else class="text-[11px] text-slate-400 italic">لا توجد مرفقات.</div>
 
-        <!-- Quick Upload Stream -->
-        <div class="flex gap-1.5 pt-1">
-          <input 
-            v-model="fileToUploadName"
-            type="text"
-            placeholder="اسم الملف..."
-            class="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-xs focus:outline-none"
-          />
-          <button 
-            @click="triggerFileUpload"
-            :disabled="!fileToUploadName.trim()"
-            class="bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white font-bold px-2.5 py-1 rounded-lg text-xs transition cursor-pointer"
-          >
-            رفع
-          </button>
-        </div>
       </div>
 
       <!-- Quick Comments Stream -->
-      <div class="bg-slate-50/70 dark:bg-slate-955/50 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-3 space-y-2">
+      <div class="bg-slate-50/70 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-3 space-y-2">
         <span class="text-xs font-extrabold text-slate-700 dark:text-slate-300 block">شريط التعليقات السريعة</span>
 
         <div v-if="localComments.length > 0" class="space-y-2 max-h-40 overflow-y-auto">
@@ -471,11 +467,19 @@ const addQuickComment = () => {
             :key="c.id"
             class="p-2 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl text-xs space-y-1"
           >
-            <div class="flex items-center justify-between text-[10px] text-slate-400">
-              <span class="font-bold text-violet-600 dark:text-violet-400">{{ c.author }}</span>
-              <span>{{ c.createdAt }}</span>
+            <div class="flex items-center justify-between text-[10px] text-slate-400 gap-2">
+              <span class="font-bold text-violet-600 dark:text-violet-400">{{ commentAuthor(c) }}</span>
+              <span class="flex items-center gap-1.5">
+                <span>{{ commentTime(c) }}</span>
+                <button
+                  v-if="isMyComment(c)"
+                  @click="removeComment(c.id)"
+                  class="text-slate-400 hover:text-rose-600 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  aria-label="حذف التعليق"
+                >✕</button>
+              </span>
             </div>
-            <p class="text-slate-700 dark:text-slate-300 leading-normal">{{ c.text }}</p>
+            <p class="text-slate-700 dark:text-slate-300 leading-normal">{{ commentBody(c) }}</p>
           </div>
         </div>
         <div v-else class="text-[11px] text-slate-400 italic">لا توجد تعليقات حتى الآن.</div>
@@ -488,12 +492,13 @@ const addQuickComment = () => {
           />
           <button 
             @click="addQuickComment"
-            :disabled="!newCommentText.trim()"
-            class="bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-40 text-white dark:text-slate-900 font-bold px-3 py-1 rounded-xl text-xs transition cursor-pointer"
+            :disabled="!newCommentText.trim() || isSendingComment"
+            class="bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-40 text-white dark:text-slate-900 font-bold px-3 py-1 rounded-xl text-xs transition cursor-pointer min-h-[44px]"
           >
-            إرسال
+            {{ isSendingComment ? '...' : 'إرسال' }}
           </button>
         </div>
+        <p v-if="commentError" class="text-[11px] text-rose-600 dark:text-rose-400 font-bold">{{ commentError }}</p>
       </div>
 
     </div>
@@ -522,7 +527,7 @@ const addQuickComment = () => {
                 <span>⬇️</span>
                 <span>تحميل</span>
               </a>
-              <button 
+              <button aria-label="إغلاق معاينة الصورة" 
                 @click="closeLightbox"
                 class="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
               >

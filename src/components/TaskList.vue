@@ -97,16 +97,16 @@ const getPriorityInfo = (task) => {
 const getStatusColor = (status) => {
   const s = status.toLowerCase()
   if (s.includes('todo') || s.includes('to do') || s.includes('بدء') || s.includes('بانتظار')) {
-    return 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-450 border-blue-100/50 dark:border-blue-900/25'
+    return 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 border-blue-100/50 dark:border-blue-900/25'
   }
   if (s.includes('progress') || s.includes('عمل') || s.includes('approved') || s.includes('نشط')) {
-    return 'bg-violet-50 text-violet-650 dark:bg-violet-950/30 dark:text-violet-400 border-violet-100/50 dark:border-violet-900/25'
+    return 'bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-400 border-violet-100/50 dark:border-violet-900/25'
   }
   if (s.includes('review') || s.includes('مراجعة') || s.includes('schedule') || s.includes('مجدول')) {
-    return 'bg-amber-50 text-amber-655 dark:bg-amber-955/30 dark:text-amber-400 border-amber-100/50 dark:border-amber-900/25'
+    return 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border-amber-100/50 dark:border-amber-900/25'
   }
   if (s.includes('done') || s.includes('مكتمل') || s.includes('منشور') || s.includes('publish') || s.includes('complete')) {
-    return 'bg-emerald-50 text-emerald-650 dark:bg-emerald-955/30 dark:text-emerald-400 border-emerald-100/50 dark:border-emerald-900/25'
+    return 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 border-emerald-100/50 dark:border-emerald-900/25'
   }
   return 'bg-slate-50 text-slate-500 dark:bg-slate-900/60 dark:text-slate-400 border-slate-200/50 dark:border-slate-800'
 }
@@ -202,7 +202,7 @@ const fallbackCopyText = (text, message = 'تم نسخ عنوان المهمة �
   textarea.select()
   try {
     document.execCommand('copy')
-    store.addNotification('تم النسخ', message)
+    store.toastSuccess(message)
   } catch (e) {
     console.error('فشل النسخ إلى الحافظة', e)
   }
@@ -214,7 +214,7 @@ const copyTaskTitle = (title) => {
   const textToCopy = String(title).trim()
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(textToCopy).then(() => {
-      store.addNotification('تم النسخ', 'تم نسخ عنوان المهمة إلى الحافظة')
+      store.toastSuccess('تم نسخ عنوان المهمة إلى الحافظة')
     }).catch(() => {
       fallbackCopyText(textToCopy)
     })
@@ -233,7 +233,7 @@ const bulkCopyTitles = () => {
   const msg = `تم نسخ عناوين (${titles.length}) مهام كـ أسطر منفصلة إلى الحافظة`
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(textToCopy).then(() => {
-      store.addNotification('تم النسخ الجماعي', msg)
+      store.toastSuccess(msg)
     }).catch(() => {
       fallbackCopyText(textToCopy, msg)
     })
@@ -246,8 +246,8 @@ const bulkCopyTitles = () => {
 <template>
   <div class="space-y-6 text-right">
     <!-- List Header Actions -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-855 pb-4">
-      <h2 class="text-base font-extrabold text-slate-850 dark:text-slate-100 uppercase tracking-widest gap-2 flex items-center">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-900 pb-4">
+      <h2 class="text-base font-extrabold text-slate-800 dark:text-slate-100 gap-2 flex items-center">
         جدول مهام المشروع
         <span class="text-xs font-bold text-slate-400 font-sans">({{ projectTasks.length }} مهام إجمالاً)</span>
       </h2>
@@ -256,7 +256,7 @@ const bulkCopyTitles = () => {
         <!-- Search input -->
         <div class="relative flex-1 sm:flex-none">
           <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </span>
@@ -264,7 +264,7 @@ const bulkCopyTitles = () => {
             v-model="searchQuery"
             type="text"
             placeholder="ابحث عن المهام بالاسم..."
-            class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl pr-9 pl-4 py-2.5 text-sm text-slate-850 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition-all"
+            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pr-9 pl-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition-all"
           />
         </div>
 
@@ -272,7 +272,7 @@ const bulkCopyTitles = () => {
           @click="triggerNewTask"
           class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition duration-200 cursor-pointer flex items-center gap-1.5 shadow-sm"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
           </svg>
           <span>إضافة مهمة</span>
@@ -299,7 +299,7 @@ const bulkCopyTitles = () => {
             <button
               @click="toggleTaskStatus(task)"
               :class="['inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold border min-h-[44px] min-w-[44px] transition cursor-pointer active:scale-95 shadow-sm', getStatusColor(task.status)]"
-              title="انقر لتغيير حالة المهمة"
+              title="انقر لتغيير حالة المهمة" aria-label="انقر لتغيير حالة المهمة"
             >
               <span class="w-2 h-2 rounded-full bg-current ml-1.5 shrink-0"></span>
               <span>{{ task.status }}</span>
@@ -331,7 +331,7 @@ const bulkCopyTitles = () => {
             <MentionText :content="task.title" singleLine />
           </h3>
           <div class="absolute bottom-full right-0 mb-1.5 hidden group-hover/title:block z-50 pointer-events-none max-w-xs sm:max-w-sm">
-            <div class="bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-medium px-3 py-1.5 rounded-xl shadow-xl border border-slate-700/50 backdrop-blur-md whitespace-normal break-words text-right dir-rtl">
+            <div class="bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-medium px-3 py-1.5 rounded-xl shadow-xl border border-slate-700/50 backdrop-blur-md whitespace-normal break-words text-right">
               {{ task.title }}
             </div>
           </div>
@@ -364,7 +364,7 @@ const bulkCopyTitles = () => {
             <button
               @click="copyTaskTitle(task.title)"
               class="min-h-[44px] min-w-[44px] p-2.5 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center text-xs"
-              title="نسخ عنوان المهمة"
+              title="نسخ عنوان المهمة" aria-label="نسخ عنوان المهمة"
             >
               📋
             </button>
@@ -373,9 +373,9 @@ const bulkCopyTitles = () => {
             <button
               @click="openEditTask(task.id)"
               class="min-h-[44px] min-w-[44px] p-2.5 rounded-xl text-slate-500 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center"
-              title="تعديل المهمة"
+              title="تعديل المهمة" aria-label="تعديل المهمة"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
@@ -384,9 +384,9 @@ const bulkCopyTitles = () => {
             <button
               @click="deleteSingleTask(task.id)"
               class="min-h-[44px] min-w-[44px] p-2.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center"
-              title="حذف المهمة"
+              title="حذف المهمة" aria-label="حذف المهمة"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </button>
@@ -400,44 +400,44 @@ const bulkCopyTitles = () => {
       <div class="overflow-x-auto">
         <table class="w-full text-right border-collapse">
           <thead>
-            <tr class="bg-slate-50/50 dark:bg-slate-955/30 border-b border-slate-100 dark:border-slate-850 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none">
+            <tr class="bg-slate-50/50 dark:bg-slate-950/30 border-b border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-500 dark:text-slate-400 select-none">
               <th class="py-4 px-4 w-12 text-center">
                 <input 
                   type="checkbox" 
                   :checked="isAllSelected" 
                   @change="toggleSelectAll" 
-                  class="rounded border-slate-300 dark:border-slate-800 text-violet-650 focus:ring-violet-500 cursor-pointer h-4 w-4" 
+                  class="rounded border-slate-300 dark:border-slate-800 text-violet-600 focus:ring-violet-500 cursor-pointer h-4 w-4" 
                 />
               </th>
               <th class="py-4 px-5 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-900/60 transition" @click="toggleSort('title')">
-                <div class="flex items-center space-x-1 space-x-reverse">
+                <div class="flex items-center space-x-1">
                   <span>اسم وتفاصيل المهمة</span>
-                  <span v-if="sortBy === 'title'" class="text-[9px] text-violet-500">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
+                  <span v-if="sortBy === 'title'" class="text-[10px] text-violet-500">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
                 </div>
               </th>
               <th class="py-4 px-5 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-900/60 transition" @click="toggleSort('status')">
-                <div class="flex items-center space-x-1 space-x-reverse">
+                <div class="flex items-center space-x-1">
                   <span>الحالة</span>
-                  <span v-if="sortBy === 'status'" class="text-[9px] text-violet-500">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
+                  <span v-if="sortBy === 'status'" class="text-[10px] text-violet-500">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
                 </div>
               </th>
               <th class="py-4 px-5 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-900/60 transition" @click="toggleSort('startDate')">
-                <div class="flex items-center space-x-1 space-x-reverse">
+                <div class="flex items-center space-x-1">
                   <span>تاريخ البدء</span>
-                  <span v-if="sortBy === 'startDate'" class="text-[9px] text-violet-500">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
+                  <span v-if="sortBy === 'startDate'" class="text-[10px] text-violet-500">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
                 </div>
               </th>
               <th class="py-4 px-5 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-900/60 transition" @click="toggleSort('deadline')">
-                <div class="flex items-center space-x-1 space-x-reverse">
+                <div class="flex items-center space-x-1">
                   <span>تاريخ الاستحقاق</span>
-                  <span v-if="sortBy === 'deadline'" class="text-[9px] text-violet-500">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
+                  <span v-if="sortBy === 'deadline'" class="text-[10px] text-violet-500">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
                 </div>
               </th>
               <th class="py-4 px-5">المرفقات</th>
               <th class="py-4 px-4 text-center">إجراءات</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100 dark:divide-slate-855 text-sm text-slate-700 dark:text-slate-350">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-900 text-sm text-slate-700 dark:text-slate-300">
             <tr v-if="filteredAndSortedTasks.length === 0">
               <td colspan="7" class="py-12 text-center text-slate-400 italic font-semibold">
                 لا توجد أي مهام مطابقة لفلترة البحث الحالية.
@@ -455,67 +455,67 @@ const bulkCopyTitles = () => {
                   type="checkbox" 
                   v-model="selectedTaskIds" 
                   :value="task.id" 
-                  class="rounded border-slate-300 dark:border-slate-850 text-violet-650 focus:ring-violet-500 cursor-pointer h-4 w-4" 
+                  class="rounded border-slate-300 dark:border-slate-800 text-violet-600 focus:ring-violet-500 cursor-pointer h-4 w-4" 
                 />
               </td>
               <td class="py-4 px-5 max-w-xs">
                 <div class="relative group/title min-w-0">
                   <div 
-                    class="font-extrabold text-slate-855 dark:text-slate-205 truncate whitespace-nowrap overflow-hidden leading-relaxed text-sm block cursor-pointer"
+                    class="font-extrabold text-slate-900 dark:text-slate-200 truncate whitespace-nowrap overflow-hidden leading-relaxed text-sm block cursor-pointer"
                     :title="task.title"
                   >
                     <MentionText :content="task.title" />
                   </div>
                   <div class="absolute bottom-full right-0 mb-1.5 hidden group-hover/title:block z-50 pointer-events-none max-w-xs sm:max-w-sm">
-                    <div class="bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-medium px-3 py-1.5 rounded-xl shadow-xl border border-slate-700/50 backdrop-blur-md whitespace-normal break-words text-right dir-rtl">
+                    <div class="bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-medium px-3 py-1.5 rounded-xl shadow-xl border border-slate-700/50 backdrop-blur-md whitespace-normal break-words text-right">
                       {{ task.title }}
                     </div>
                   </div>
                 </div>
-                <div class="text-xs text-slate-455 line-clamp-1 mt-1" @click.stop>
+                <div class="text-xs text-slate-500 line-clamp-1 mt-1" @click.stop>
                   <MentionText v-if="task.description" :content="task.description" />
                   <span v-else class="text-slate-400 italic">لا توجد ملاحظات تفصيلية.</span>
                 </div>
               </td>
               <td class="py-4 px-5">
-                <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold tracking-wider uppercase border', getStatusColor(task.status)]">
+                <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold border', getStatusColor(task.status)]">
                   {{ task.status }}
                 </span>
               </td>
-              <td class="py-4 px-5 font-mono text-xs text-slate-500 dark:text-slate-450">{{ task.startDate || '—' }}</td>
+              <td class="py-4 px-5 font-mono text-xs text-slate-500 dark:text-slate-400">{{ task.startDate || '—' }}</td>
               <td class="py-4 px-5">
                 <span 
                   :class="[
                     'font-mono text-xs font-bold py-0.5 px-1.5 rounded',
                     task.deadline && new Date(task.deadline) < new Date() && task.status !== 'مكتمل'
-                      ? 'text-rose-650 dark:text-rose-400 bg-rose-500/10'
-                      : 'text-slate-550'
+                      ? 'text-rose-600 dark:text-rose-400 bg-rose-500/10'
+                      : 'text-slate-500'
                   ]"
                 >
                   {{ task.deadline || '—' }}
                 </span>
               </td>
               <td class="py-4 px-5">
-                <div class="flex items-center space-x-1 space-x-reverse" v-if="task.attachments?.length > 0">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <div class="flex items-center space-x-1" v-if="task.attachments?.length > 0">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                   </svg>
                   <span class="text-xs text-slate-500 font-extrabold">{{ task.attachments.length }}</span>
                 </div>
                 <span v-else class="text-xs text-slate-400">—</span>
               </td>
-              <td class="py-4 px-4 text-center space-x-1 space-x-reverse" @click.stop>
+              <td class="py-4 px-4 text-center space-x-1" @click.stop>
                 <button 
                   @click="copyTaskTitle(task.title)"
                   class="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition cursor-pointer"
-                  title="نسخ عنوان المهمة"
+                  title="نسخ عنوان المهمة" aria-label="نسخ عنوان المهمة"
                 >
                   📋
                 </button>
                 <button 
                   @click="openEditTask(task.id)"
                   class="p-1.5 rounded-lg text-slate-500 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-slate-800 transition cursor-pointer"
-                  title="تعديل المهمة (فتح النموذج الكامل)"
+                  title="تعديل المهمة (فتح النموذج الكامل)" aria-label="تعديل المهمة (فتح النموذج الكامل)"
                 >
                   ✏️
                 </button>
@@ -529,7 +529,7 @@ const bulkCopyTitles = () => {
     <!-- Floating Bulk Actions Bar (Responsive Mobile Stack / Sheet) -->
     <div 
       v-if="selectedTaskIds.length > 0"
-      class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl w-[calc(100%-2rem)] max-w-lg px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-6 z-40 animate-fade-in flex-row-reverse" 
+      class="fixed above-nav sm:bottom-6 left-1/2 -translate-x-1/2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl w-[calc(100%-2rem)] max-w-lg px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-6 z-float animate-fade-in flex-row-reverse" 
       dir="rtl"
     >
       <span class="text-xs font-extrabold text-slate-800 dark:text-slate-200 shrink-0">
@@ -552,7 +552,7 @@ const bulkCopyTitles = () => {
         <div class="relative flex-1 sm:flex-none">
           <select 
             @change="bulkMoveToProject($event.target.value); $event.target.value = ''"
-            class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer min-h-[44px]"
+            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer min-h-[44px]"
           >
             <option value="">-- نقل للمشروع --</option>
             <option v-for="p in otherProjects" :key="p.id" :value="p.id">{{ p.name }}</option>
@@ -562,8 +562,8 @@ const bulkCopyTitles = () => {
         <!-- Bulk Copy Titles Button -->
         <button 
           @click="bulkCopyTitles"
-          class="bg-indigo-50 hover:bg-indigo-100 text-indigo-650 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold px-3 py-2 rounded-xl text-xs transition cursor-pointer min-h-[44px] flex items-center justify-center gap-1.5 shrink-0 border border-indigo-200/50 dark:border-indigo-800/50"
-          title="نسخ عناوين المهام المحددة كـ أسطر منفصلة"
+          class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold px-3 py-2 rounded-xl text-xs transition cursor-pointer min-h-[44px] flex items-center justify-center gap-1.5 shrink-0 border border-indigo-200/50 dark:border-indigo-800/50"
+          title="نسخ عناوين المهام المحددة كـ أسطر منفصلة" aria-label="نسخ عناوين المهام المحددة كـ أسطر منفصلة"
         >
           <span>📋</span>
           <span>نسخ العناوين</span>
@@ -572,7 +572,7 @@ const bulkCopyTitles = () => {
         <!-- Bulk Delete Button -->
         <button 
           @click="bulkDelete"
-          class="bg-rose-50 hover:bg-rose-100 text-rose-650 dark:bg-rose-955/20 dark:text-rose-400 font-extrabold px-4 py-2 rounded-xl text-xs transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
+          class="bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/20 dark:text-rose-400 font-extrabold px-4 py-2 rounded-xl text-xs transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
         >
           حذف جماعي
         </button>

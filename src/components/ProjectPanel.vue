@@ -1,9 +1,16 @@
 <script setup>
 import { store } from '../store'
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 
 const activeProject = computed(() => store.projects.find(p => p.id === store.activeProjectId))
-const deletedProjects = computed(() => store.projects.filter(p => p.isDeleted))
+// The bin is its own request. store.projects can never contain a deleted
+// project -- the server excludes them twice over -- so this panel was
+// permanently empty and `restoreProject` was unreachable.
+const deletedProjects = computed(() => store.trashedProjects)
+
+onMounted(() => {
+  store.loadTrashedProjects()
+})
 const activeProjectsList = computed(() => store.projects.filter(p => !p.isDeleted))
 
 const projectSearchQuery = ref('')
@@ -103,15 +110,25 @@ const getStatusColor = (status) => {
     return 'bg-blue-50/80 text-blue-600 dark:bg-blue-950/35 dark:text-blue-400 border-blue-100/60 dark:border-blue-900/20'
   }
   if (s.includes('progress') || s.includes('عمل') || s.includes('approved') || s.includes('نشط')) {
-    return 'bg-violet-50/80 text-violet-650 dark:bg-violet-955/35 dark:text-violet-400 border-violet-100/60 dark:border-violet-900/20'
+    return 'bg-violet-50/80 text-violet-600 dark:bg-violet-950/35 dark:text-violet-400 border-violet-100/60 dark:border-violet-900/20'
   }
   if (s.includes('review') || s.includes('مراجعة') || s.includes('schedule') || s.includes('مجدول')) {
-    return 'bg-amber-50/80 text-amber-605 dark:bg-amber-955/35 dark:text-amber-400 border-amber-100/60 dark:border-amber-900/20'
+    return 'bg-amber-50/80 text-amber-600 dark:bg-amber-950/35 dark:text-amber-400 border-amber-100/60 dark:border-amber-900/20'
   }
   if (s.includes('done') || s.includes('مكتمل') || s.includes('منشور') || s.includes('publish') || s.includes('complete')) {
     return 'bg-emerald-50/80 text-emerald-600 dark:bg-emerald-950/35 dark:text-emerald-400 border-emerald-100/60 dark:border-emerald-900/20'
   }
-  return 'bg-slate-50 text-slate-550 dark:bg-slate-900 dark:text-slate-400 border-slate-100 dark:border-slate-800'
+  return 'bg-slate-50 text-slate-500 dark:bg-slate-900 dark:text-slate-400 border-slate-100 dark:border-slate-800'
+}
+
+// Deleting a project had no confirmation at all, from an icon that is
+// permanently visible on touch. One mis-tap removed the project silently.
+const confirmDeleteProject = (p) => {
+  if (!p) return
+  if (!confirm(`هل أنت متأكد من نقل المشروع "${p.name}" إلى سلة المهملات؟
+
+تقدر تستعيده من السلة بعد كده.`)) return
+  store.deleteProject(p.id)
 }
 
 const selectedMemberIds = ref([])
@@ -318,9 +335,9 @@ const handleTouchEnd = (closeFn) => {
       <button 
         @click="store.toggleSidebar()"
         class="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-200 transition cursor-pointer flex items-center justify-center min-h-[44px] min-w-[44px]"
-        title="توسيع القائمة الجانبية (Sidebar)"
+        title="توسيع القائمة الجانبية (Sidebar)" aria-label="توسيع القائمة الجانبية (Sidebar)"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
         </svg>
       </button>
@@ -329,9 +346,9 @@ const handleTouchEnd = (closeFn) => {
       <button 
         @click="store.isSidebarCollapsed = false"
         class="p-2.5 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white transition cursor-pointer flex items-center justify-center min-h-[44px] min-w-[44px] shadow-sm"
-        title="إضافة مشروع جديد"
+        title="إضافة مشروع جديد" aria-label="إضافة مشروع جديد"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
         </svg>
       </button>
@@ -348,7 +365,7 @@ const handleTouchEnd = (closeFn) => {
               ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-md' 
               : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
           ]"
-          title="كل التصنيفات"
+          title="كل التصنيفات" aria-label="كل التصنيفات"
         >
           📋
         </button>
@@ -359,10 +376,10 @@ const handleTouchEnd = (closeFn) => {
           :class="[
             'w-10 h-10 rounded-2xl flex items-center justify-center text-sm transition cursor-pointer relative',
             store.activeCategoryId === cat.id 
-              ? 'ring-2 ring-violet-500 bg-violet-50 dark:bg-violet-955' 
+              ? 'ring-2 ring-violet-500 bg-violet-50 dark:bg-violet-950' 
               : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700'
           ]"
-          :title="cat.name"
+          :title="cat.name" aria-label="cat.name"
         >
           <span>{{ cat.icon || '📂' }}</span>
         </button>
@@ -379,10 +396,10 @@ const handleTouchEnd = (closeFn) => {
           :class="[
             'w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-extrabold transition cursor-pointer relative group',
             store.activeProjectId === p.id 
-              ? 'bg-gradient-to-tr from-violet-600 to-indigo-650 text-white shadow-lg shadow-violet-500/30 ring-2 ring-violet-400' 
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-violet-100 dark:hover:bg-violet-955/50'
+              ? 'bg-gradient-to-tr from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/30 ring-2 ring-violet-400' 
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-violet-100 dark:hover:bg-violet-950/50'
           ]"
-          :title="p.name"
+          :title="p.name" aria-label="p.name"
         >
           <span>{{ p.name ? p.name.charAt(0) : 'م' }}</span>
         </button>
@@ -395,7 +412,7 @@ const handleTouchEnd = (closeFn) => {
         <button 
           @click="store.toggleSidebar()"
           class="text-xs font-bold text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-1"
-          title="طَي القائمة الجانبية"
+          title="طَي القائمة الجانبية" aria-label="طَي القائمة الجانبية"
         >
           <span>«</span>
           <span>طَي القائمة</span>
@@ -409,13 +426,13 @@ const handleTouchEnd = (closeFn) => {
       <div class="flex items-center justify-between mb-3">
         <button 
           @click="showCategoryForm = !showCategoryForm"
-          class="text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-955/30 px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1"
-          title="إضافة تصنيف جديد"
+          class="text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1"
+          title="إضافة تصنيف جديد" aria-label="إضافة تصنيف جديد"
         >
           <span>＋</span>
           <span>تصنيف</span>
         </button>
-        <h3 class="text-xs font-bold text-slate-450 dark:text-slate-400 uppercase tracking-wider">التصنيفات</h3>
+        <h3 class="text-xs font-bold text-slate-400 dark:text-slate-400">التصنيفات</h3>
       </div>
 
       <!-- Category Pills (horizontal scrollable) -->
@@ -427,12 +444,12 @@ const handleTouchEnd = (closeFn) => {
             'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all duration-200 cursor-pointer shrink-0',
             store.activeCategoryId === null
               ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100 shadow-md shadow-slate-900/20'
-              : 'bg-slate-50 dark:bg-slate-955 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
+              : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
           ]"
         >
           <span>📋</span>
           <span>الكل</span>
-          <span class="text-[9px] opacity-70 font-extrabold">{{ activeProjectsList.length }}</span>
+          <span class="text-[10px] opacity-70 font-extrabold">{{ activeProjectsList.length }}</span>
         </button>
 
         <!-- Category pills -->
@@ -451,15 +468,15 @@ const handleTouchEnd = (closeFn) => {
               autofocus
             />
             <div class="flex gap-0.5">
-              <button 
+              <button aria-label="خيارات التصنيف" 
                 v-for="c in categoryColors.slice(0, 6)" :key="c"
                 @click="editCatColor = c"
                 :class="['w-4 h-4 rounded-full border-2 transition cursor-pointer', editCatColor === c ? 'border-slate-900 dark:border-white scale-110' : 'border-transparent']"
                 :style="{ backgroundColor: c }"
               ></button>
             </div>
-            <button @click="saveEditCategory" class="text-emerald-500 hover:text-emerald-600 text-sm font-bold cursor-pointer">✓</button>
-            <button @click="editingCategoryId = null" class="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer">✕</button>
+            <button aria-label="حفظ اسم التصنيف" @click="saveEditCategory" class="text-emerald-500 hover:text-emerald-600 text-sm font-bold cursor-pointer">✓</button>
+            <button aria-label="إلغاء التعديل" @click="editingCategoryId = null" class="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer">✕</button>
           </div>
           
           <!-- Normal pill -->
@@ -470,7 +487,7 @@ const handleTouchEnd = (closeFn) => {
               'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all duration-200 cursor-pointer shrink-0',
               store.activeCategoryId === cat.id
                 ? 'text-white shadow-md'
-                : 'bg-white dark:bg-slate-955 border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
+                : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
             ]"
             :style="store.activeCategoryId === cat.id 
               ? { backgroundColor: cat.color || '#8b5cf6', borderColor: cat.color || '#8b5cf6', boxShadow: `0 4px 12px ${(cat.color || '#8b5cf6')}40` } 
@@ -479,17 +496,17 @@ const handleTouchEnd = (closeFn) => {
           >
             <span>{{ cat.icon || '📂' }}</span>
             <span>{{ cat.name }}</span>
-            <span class="text-[9px] opacity-70 font-extrabold">{{ cat.projects_count ?? getCategoryProjectCount(cat.id) }}</span>
+            <span class="text-[10px] opacity-70 font-extrabold">{{ cat.projects_count ?? getCategoryProjectCount(cat.id) }}</span>
           </button>
 
           <!-- Context menu trigger (appears on hover) -->
           <div 
             v-if="editingCategoryId !== cat.id"
-            class="absolute -top-1 -left-1 opacity-0 group-hover/cat:opacity-100 transition"
+            class="absolute -top-1 -left-1 opacity-100 sm:opacity-0 sm:group-hover/cat:opacity-100 sm:focus-within:opacity-100 transition"
           >
-            <button 
+            <button aria-label="خيارات التصنيف" 
               @click.stop="showCategoryMenu = showCategoryMenu === cat.id ? null : cat.id"
-              class="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[8px] flex items-center justify-center cursor-pointer hover:bg-slate-300 dark:hover:bg-slate-600 transition"
+              class="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] flex items-center justify-center cursor-pointer hover:bg-slate-300 dark:hover:bg-slate-600 transition"
             >⋯</button>
           </div>
           
@@ -506,7 +523,7 @@ const handleTouchEnd = (closeFn) => {
             </button>
             <button 
               @click="handleDeleteCategory(cat.id)" 
-              class="w-full text-right px-3 py-1.5 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-955/20 transition cursor-pointer flex items-center gap-2"
+              class="w-full text-right px-3 py-1.5 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition cursor-pointer flex items-center gap-2"
             >
               <span>🗑️</span><span>حذف</span>
             </button>
@@ -521,12 +538,12 @@ const handleTouchEnd = (closeFn) => {
             'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all duration-200 cursor-pointer shrink-0',
             store.activeCategoryId === 'none'
               ? 'bg-slate-600 text-white border-slate-600 shadow-md shadow-slate-600/20'
-              : 'bg-slate-50 dark:bg-slate-955 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 border-dashed'
+              : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 border-dashed'
           ]"
         >
           <span>📌</span>
           <span>بدون تصنيف</span>
-          <span class="text-[9px] opacity-70 font-extrabold">{{ getUncategorizedCount() }}</span>
+          <span class="text-[10px] opacity-70 font-extrabold">{{ getUncategorizedCount() }}</span>
         </button>
       </div>
 
@@ -539,7 +556,7 @@ const handleTouchEnd = (closeFn) => {
               type="text"
               placeholder="اسم التصنيف الجديد..."
               @keyup.enter="handleCreateCategory"
-              class="flex-1 bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
+              class="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
               autofocus
             />
           </div>
@@ -548,7 +565,7 @@ const handleTouchEnd = (closeFn) => {
           <div class="space-y-1.5">
             <span class="text-[10px] font-bold text-slate-400">اللون:</span>
             <div class="flex flex-wrap gap-1.5">
-              <button 
+              <button aria-label="اختيار لون التصنيف" 
                 v-for="c in categoryColors" :key="c"
                 @click="newCatColor = c"
                 :class="['w-5 h-5 rounded-full border-2 transition cursor-pointer hover:scale-110', newCatColor === c ? 'border-slate-900 dark:border-white scale-110 ring-2 ring-offset-1' : 'border-transparent']"
@@ -597,7 +614,7 @@ const handleTouchEnd = (closeFn) => {
         <span class="text-[10px] font-bold text-slate-400">
           {{ filteredProjectsByCategory.length }} مشروع
         </span>
-        <h3 class="text-xs font-bold text-slate-450 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+        <h3 class="text-xs font-bold text-slate-400 dark:text-slate-400 flex items-center gap-1.5">
           <span>مشاريع</span>
           <span v-if="store.activeCategoryId && store.activeCategoryId !== 'none'" class="text-violet-600 dark:text-violet-400 normal-case">
             {{ store.projectCategories.find(c => c.id === store.activeCategoryId)?.name }}
@@ -613,16 +630,16 @@ const handleTouchEnd = (closeFn) => {
           v-model="projectSearchQuery"
           type="text"
           placeholder="ابحث عن مشروع..."
-          class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl pr-8 pl-8 py-2 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-violet-500 transition"
+          class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pr-8 pl-8 py-2 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-violet-500 transition"
         />
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 absolute right-2.5 top-2.5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 absolute right-2.5 top-2.5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         <button 
           v-if="projectSearchQuery"
           @click="projectSearchQuery = ''"
           class="absolute left-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold transition cursor-pointer"
-          title="مسح البحث"
+          title="مسح البحث" aria-label="مسح البحث"
         >✕</button>
       </div>
 
@@ -648,7 +665,7 @@ const handleTouchEnd = (closeFn) => {
               ? 'ring-2 ring-violet-500/50 shadow-glass-glow' 
               : '',
             draggedProjectIndex === idx ? 'opacity-30 border-dashed border-violet-500 scale-95' : '',
-            dragOverProjectIndex === idx && draggedProjectIndex !== idx ? 'ring-2 ring-violet-500 border-violet-500 bg-violet-50/40 dark:bg-violet-955/30' : ''
+            dragOverProjectIndex === idx && draggedProjectIndex !== idx ? 'ring-2 ring-violet-500 border-violet-500 bg-violet-50/40 dark:bg-violet-950/30' : ''
           ]"
         >
           <!-- Selected accent right bar -->
@@ -663,7 +680,7 @@ const handleTouchEnd = (closeFn) => {
             class="text-slate-300 dark:text-slate-600 hover:text-violet-500 dark:hover:text-violet-400 cursor-grab active:cursor-grabbing p-0.5 -mr-1 transition shrink-0 self-center"
             title="اسحب لترتيب المشروع"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 8h16M4 16h16" />
             </svg>
           </div>
@@ -672,13 +689,13 @@ const handleTouchEnd = (closeFn) => {
           <div class="space-y-1.5 pr-1.5 flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap justify-between">
               <div class="flex items-center gap-1.5 flex-wrap min-w-0">
-                <h4 class="text-sm font-bold text-slate-855 dark:text-slate-100 truncate">{{ p.name }}</h4>
+                <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{{ p.name }}</h4>
                 <!-- Interactive Category Selector Badge on Project Card -->
                 <select
                   :value="p.categoryId || ''"
                   @click.stop
                   @change="changeProjectCategory(p, $event.target.value)"
-                  class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border shrink-0 bg-transparent focus:outline-none cursor-pointer transition hover:opacity-80"
+                  class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md border shrink-0 bg-transparent focus:outline-none cursor-pointer transition hover:opacity-80"
                   :style="{ 
                     backgroundColor: (store.projectCategories.find(c => c.id === p.categoryId)?.color || '#64748b') + '20',
                     color: store.projectCategories.find(c => c.id === p.categoryId)?.color || '#64748b',
@@ -697,7 +714,7 @@ const handleTouchEnd = (closeFn) => {
                   </option>
                 </select>
               </div>
-              <span class="text-[9.5px] font-extrabold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-955/50 px-2 py-0.5 rounded-lg border border-violet-200 dark:border-violet-800/60 shrink-0" title="إجمالي عدد المهام في هذا المشروع">
+              <span class="text-[10px] font-extrabold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 rounded-lg border border-violet-200 dark:border-violet-800/60 shrink-0" title="إجمالي عدد المهام في هذا المشروع">
                 {{ getProjectTotalTaskCount(p.id) }} مهمة
               </span>
             </div>
@@ -706,11 +723,11 @@ const handleTouchEnd = (closeFn) => {
               <span 
                 v-for="s in p.statuses" 
                 :key="s" 
-                :class="['text-[9px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1.5', getStatusColor(s)]"
+                :class="['text-[10px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1.5', getStatusColor(s)]"
                 :title="`${s}: ${getTaskCountByStatus(p.id, s)} مهمة`"
               >
                 <span>{{ s }}</span>
-                <span class="px-1.5 py-0.2 rounded-full text-[8.5px] font-black bg-slate-900/10 dark:bg-white/15">
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-slate-900/10 dark:bg-white/15">
                   {{ getTaskCountByStatus(p.id, s) }}
                 </span>
               </span>
@@ -719,27 +736,27 @@ const handleTouchEnd = (closeFn) => {
             <!-- Project Assigned Members List & Manage Button -->
             <div class="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-2 flex-wrap" @click.stop>
               <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="text-[9.5px] font-bold text-slate-400">الأعضاء:</span>
+                <span class="text-[10px] font-bold text-slate-400">الأعضاء:</span>
                 <span 
                   v-for="u in store.users.filter(u => (p.memberIds || []).includes(u.id))" 
                   :key="u.id" 
                   @click.stop="toggleProjectMember(p, u.id)"
-                  class="text-[9.5px] font-bold px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/30 flex items-center gap-1 group/u cursor-pointer hover:bg-rose-500/10 hover:text-rose-600 hover:border-rose-500/30 transition"
+                  class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/30 flex items-center gap-1 group/u cursor-pointer hover:bg-rose-500/10 hover:text-rose-600 hover:border-rose-500/30 transition"
                   :title="'انقر لإزالة ' + u.name + ' من المشروع'"
                 >
                   <span>👤 {{ u.name }}</span>
-                  <span class="text-[9px] opacity-60 group-hover/u:opacity-100">✕</span>
+                  <span class="text-[10px] opacity-60 group-hover/u:opacity-100">✕</span>
                 </span>
-                <span v-if="(p.memberIds || []).length === 0" class="text-[9.5px] text-slate-400 italic">لم يحدد أعضاء</span>
+                <span v-if="(p.memberIds || []).length === 0" class="text-[10px] text-slate-400 italic">لم يحدد أعضاء</span>
               </div>
 
               <!-- Button to open Member Search Popup Modal -->
               <button 
                 @click="openMemberModal(p)"
-                class="bg-slate-100 hover:bg-violet-50 dark:bg-slate-800 dark:hover:bg-violet-955/30 text-slate-700 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 font-bold px-2.5 py-1.5 min-h-[38px] rounded-xl text-[10px] border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1 shrink-0 active-scale"
+                class="bg-slate-100 hover:bg-violet-50 dark:bg-slate-800 dark:hover:bg-violet-950/30 text-slate-700 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 font-bold px-2.5 py-1.5 min-h-[44px] rounded-xl text-[10px] border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1 shrink-0 active-scale"
               >
                 <span>👥 إدارة الأعضاء</span>
-                <span class="bg-violet-600 text-white font-extrabold text-[9px] px-1.5 py-0.2 rounded-md">
+                <span class="bg-violet-600 text-white font-extrabold text-[10px] px-1.5 py-0.2 rounded-md">
                   {{ (p.memberIds || []).length }}
                 </span>
               </button>
@@ -747,11 +764,11 @@ const handleTouchEnd = (closeFn) => {
           </div>
           
           <button 
-            @click.stop="store.deleteProject(p.id)"
-            class="opacity-100 sm:opacity-0 group-hover:opacity-100 p-2 min-h-[40px] min-w-[40px] flex items-center justify-center text-slate-455 hover:text-rose-550 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition duration-200 cursor-pointer self-start active-scale"
-            title="نقل المشروع لسلة المهملات"
+            @click.stop="confirmDeleteProject(p)"
+            class="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-rose-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition duration-200 cursor-pointer self-start active-scale"
+            title="نقل المشروع لسلة المهملات" aria-label="نقل المشروع لسلة المهملات"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
@@ -763,7 +780,7 @@ const handleTouchEnd = (closeFn) => {
     <!--  CREATE NEW PROJECT FORM                   -->
     <!-- ═══════════════════════════════════════════ -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 shadow-[0_4px_12px_rgba(0,0,0,0.01)] space-y-4">
-      <h3 class="text-xs font-bold text-slate-455 dark:text-slate-400 uppercase tracking-wider block">إنشاء مشروع جديد</h3>
+      <h3 class="text-xs font-bold text-slate-500 dark:text-slate-400 block">إنشاء مشروع جديد</h3>
       
       <div class="space-y-4">
         <div>
@@ -772,7 +789,7 @@ const handleTouchEnd = (closeFn) => {
             v-model="newProjName" 
             type="text" 
             placeholder="مثال: تطبيق الويب..."
-            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl px-3 py-2 text-sm text-slate-850 dark:text-slate-200 focus:outline-none"
+            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none"
           />
         </div>
 
@@ -782,7 +799,7 @@ const handleTouchEnd = (closeFn) => {
             v-model="newProjDesc" 
             type="text" 
             placeholder="وصف المشروع..."
-            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-855 rounded-xl px-3 py-2 text-sm text-slate-850 dark:text-slate-200 focus:outline-none"
+            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none"
           />
         </div>
 
@@ -791,7 +808,7 @@ const handleTouchEnd = (closeFn) => {
           <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">التصنيف</label>
           <select 
             v-model="selectedCategoryId" 
-            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl px-3 py-2.5 text-sm text-slate-855 dark:text-slate-200 focus:outline-none cursor-pointer"
+            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-slate-200 focus:outline-none cursor-pointer"
           >
             <option value="">
               {{ store.activeCategoryId && store.activeCategoryId !== 'none' 
@@ -814,7 +831,7 @@ const handleTouchEnd = (closeFn) => {
           <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">اختر قالب المشروع</label>
           <select 
             v-model="selectedTemplateId" 
-            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl px-3 py-2.5 text-sm text-slate-855 dark:text-slate-200 focus:outline-none cursor-pointer"
+            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-slate-200 focus:outline-none cursor-pointer"
           >
             <option value="">مشروع فارغ (افتراضي بدون حقول)</option>
             <option 
@@ -834,9 +851,9 @@ const handleTouchEnd = (closeFn) => {
             <label 
               v-for="u in store.users" 
               :key="u.id" 
-              class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-955 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 cursor-pointer hover:border-violet-400"
+              class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 cursor-pointer hover:border-violet-400"
             >
-              <input type="checkbox" :value="u.id" v-model="selectedMemberIds" class="rounded text-violet-650 focus:ring-violet-500 h-4 w-4" />
+              <input type="checkbox" :value="u.id" v-model="selectedMemberIds" class="rounded text-violet-600 focus:ring-violet-500 h-4 w-4" />
               <span>👤 {{ u.name }} ({{ u.roleName }})</span>
             </label>
           </div>
@@ -855,20 +872,20 @@ const handleTouchEnd = (closeFn) => {
     <!-- ═══════════════════════════════════════════ -->
     <!--  BIN / DELETED PROJECTS                    -->
     <!-- ═══════════════════════════════════════════ -->
-    <div v-if="deletedProjects.length > 0" class="bg-slate-50/50 dark:bg-slate-955/20 border border-slate-200/60 dark:border-slate-855 rounded-2xl p-5 space-y-4">
-      <h3 class="text-xs font-bold text-slate-455 dark:text-slate-400 uppercase tracking-wider block">سلة المحذوفات (المشاريع المهملة)</h3>
+    <div v-if="deletedProjects.length > 0" class="bg-slate-50/50 dark:bg-slate-950/20 border border-slate-200/60 dark:border-slate-900 rounded-2xl p-5 space-y-4">
+      <h3 class="text-xs font-bold text-slate-500 dark:text-slate-400 block">سلة المحذوفات (المشاريع المهملة)</h3>
       <div class="space-y-3">
         <div 
           v-for="p in deletedProjects" 
           :key="p.id" 
-          class="flex items-center justify-between p-3.5 bg-white dark:bg-slate-900 border border-slate-200/40 dark:border-slate-805 rounded-xl text-right flex-row-reverse"
+          class="flex items-center justify-between p-3.5 bg-white dark:bg-slate-900 border border-slate-200/40 dark:border-slate-800 rounded-xl text-right flex-row-reverse"
         >
           <div class="min-w-0 flex-1 pr-2 text-right">
-            <h4 class="text-xs font-bold text-slate-700 dark:text-slate-350 truncate">{{ p.name }}</h4>
+            <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{{ p.name }}</h4>
           </div>
           <button 
             @click="store.restoreProject(p.id)" 
-            class="text-[10px] font-bold text-violet-650 hover:text-violet-750 bg-violet-50 dark:bg-violet-955/35 dark:text-violet-400 py-1.5 px-2.5 rounded-lg cursor-pointer transition"
+            class="text-[10px] font-bold text-violet-600 hover:text-violet-700 bg-violet-50 dark:bg-violet-950/35 dark:text-violet-400 py-1.5 px-2.5 rounded-lg cursor-pointer transition"
           >
             استعادة
           </button>
@@ -886,15 +903,23 @@ const handleTouchEnd = (closeFn) => {
 
         <!-- Modal Content -->
         <div 
-          @touchstart="handleTouchStart"
-          @touchmove="handleTouchMove"
-          @touchend="handleTouchEnd(() => showMemberModal = false)"
           class="relative z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/30 dark:border-slate-700/60 shadow-2xl rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-md max-h-[85vh] overflow-y-auto w-full space-y-5 text-right transform transition-all duration-300"
         >
-          <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto my-2.5 shrink-0 sm:hidden cursor-grab"></div>
+          <!-- Drag handle. The dismiss gesture lives HERE, not on the
+               scrollable panel: bound to the panel, any scroll past 50px
+               closed the sheet and discarded the user's edits. -->
+          <div
+            @touchstart="handleTouchStart"
+            @touchmove="handleTouchMove"
+            @touchend="handleTouchEnd(() => showMemberModal = false)"
+            class="shrink-0 sm:hidden flex justify-center py-2.5 cursor-grab touch-none"
+            aria-hidden="true"
+          >
+            <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full"></div>
+          </div>
 
           <!-- Close button -->
-          <button 
+          <button aria-label="إغلاق نافذة الأعضاء" 
             @click="showMemberModal = false" 
             class="absolute top-4 left-4 p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer font-extrabold text-sm"
           >
@@ -906,7 +931,7 @@ const handleTouchEnd = (closeFn) => {
             <div class="flex items-center gap-2">
               <span class="p-2 bg-violet-500/10 text-violet-600 dark:text-violet-400 rounded-xl text-lg">👥</span>
               <div>
-                <h3 class="text-base font-extrabold text-slate-855 dark:text-slate-100">
+                <h3 class="text-base font-extrabold text-slate-900 dark:text-slate-100">
                   إدارة أعضاء المشروع
                 </h3>
                 <span class="text-xs font-bold text-violet-600 dark:text-violet-400">{{ selectedProjectForMembers?.name }}</span>
@@ -923,7 +948,7 @@ const handleTouchEnd = (closeFn) => {
               type="text"
               v-model="memberSearchQuery"
               placeholder="ابحث باسم العضو أو البريد الإلكتروني..."
-              class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl pr-9 pl-4 py-2.5 text-xs sm:text-sm text-slate-850 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition font-sans"
+              class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pr-9 pl-4 py-2.5 text-xs sm:text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition font-sans"
             />
             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">🔍</span>
           </div>
@@ -937,7 +962,7 @@ const handleTouchEnd = (closeFn) => {
             <div 
               v-for="u in filteredUsersForModal" 
               :key="u.id"
-              class="p-3 bg-slate-50/60 dark:bg-slate-955/40 border border-slate-200/60 dark:border-slate-855 rounded-2xl flex items-center justify-between gap-3 transition hover:border-slate-350 dark:hover:border-slate-700"
+              class="p-3 bg-slate-50/60 dark:bg-slate-950/40 border border-slate-200/60 dark:border-slate-900 rounded-2xl flex items-center justify-between gap-3 transition hover:border-slate-300 dark:hover:border-slate-700"
             >
               <!-- Right Avatar & User details -->
               <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -946,8 +971,8 @@ const handleTouchEnd = (closeFn) => {
                 </div>
                 <div class="min-w-0 text-right">
                   <div class="flex items-center gap-1.5">
-                    <span class="text-xs font-bold text-slate-855 dark:text-slate-100 truncate">{{ u.name }}</span>
-                    <span class="text-[9px] font-extrabold px-1.5 py-0.2 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded">{{ u.roleName }}</span>
+                    <span class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{{ u.name }}</span>
+                    <span class="text-[10px] font-extrabold px-1.5 py-0.2 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded">{{ u.roleName }}</span>
                   </div>
                   <span class="text-[10px] text-slate-400 font-mono block truncate text-right">{{ u.email }}</span>
                 </div>

@@ -269,7 +269,7 @@ const selectItem = (item) => {
       :placeholder="placeholder || 'اكتب التفاصيل... (استخدم / للملفات والمجلدات، و @ للمنشَن)'"
       :disabled="disabled"
       :class="[
-        'w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-855 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition-all font-sans leading-relaxed resize-none',
+        'w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition-all font-sans leading-relaxed resize-none',
         inputClass
       ]"
       @input="handleInput"
@@ -289,7 +289,7 @@ const selectItem = (item) => {
       :placeholder="placeholder || 'اكتب... (استخدم / للملفات أو @ للمنشن)'"
       :disabled="disabled"
       :class="[
-        'w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-855 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition-all font-sans',
+        'w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition-all font-sans',
         inputClass
       ]"
       @input="handleInput"
@@ -307,11 +307,11 @@ const selectItem = (item) => {
         class="absolute z-50 bottom-full mb-2 right-0 w-full sm:w-80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-right select-none animate-fade-in"
       >
         <!-- Header badge -->
-        <div class="bg-slate-100/80 dark:bg-slate-955/80 px-3.5 py-2 border-b border-slate-200/60 dark:border-slate-800 flex items-center justify-between flex-row-reverse text-[10px] font-bold text-slate-500 dark:text-slate-400">
+        <div class="bg-slate-100/80 dark:bg-slate-950/80 px-3.5 py-2 border-b border-slate-200/60 dark:border-slate-800 flex items-center justify-between flex-row-reverse text-[10px] font-bold text-slate-500 dark:text-slate-400">
           <span class="flex items-center gap-1.5">
             <span>{{ triggerType === '@' ? '👥 منشن عضو في المشروع' : '📁 منشن ملف أو مجلد أو مهمة' }}</span>
           </span>
-          <span class="font-mono text-[9px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">
+          <span class="font-mono text-[10px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">
             {{ filteredSuggestions.length }} نتائج
           </span>
         </div>
@@ -340,7 +340,7 @@ const selectItem = (item) => {
             <!-- Left Type Badge -->
             <span 
               :class="[
-                'text-[9px] font-extrabold px-2 py-0.5 rounded-md shrink-0',
+                'text-[10px] font-extrabold px-2 py-0.5 rounded-md shrink-0',
                 selectedIndex === idx 
                   ? 'bg-white/20 text-white' 
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
@@ -352,7 +352,7 @@ const selectItem = (item) => {
         </div>
 
         <!-- Footer helper hint -->
-        <div class="bg-slate-50/50 dark:bg-slate-955/30 px-3 py-1.5 border-t border-slate-100 dark:border-slate-850 text-[9.5px] text-slate-400 font-semibold text-center">
+        <div class="bg-slate-50/50 dark:bg-slate-950/30 px-3 py-1.5 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 font-semibold text-center">
           💡 استخدم أسهم الفأرة/الكيبورد وسجل باختيار Enter
         </div>
       </div>

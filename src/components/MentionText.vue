@@ -175,7 +175,7 @@ const handleFileClick = (token, e) => {
         role="link"
       >
         <span>{{ token.text }}</span>
-        <span class="text-[9px] opacity-60 group-hover/pill:opacity-100 transition">↗</span>
+        <span class="text-[10px] opacity-60 group-hover/pill:opacity-100 transition">↗</span>
       </span>
 
       <!-- URL mentions: also explicit window.open -->
@@ -192,7 +192,7 @@ const handleFileClick = (token, e) => {
         role="link"
       >
         <span>{{ token.text }}</span>
-        <span class="text-[9px] opacity-60 group-hover/pill:opacity-100 transition">↗</span>
+        <span class="text-[10px] opacity-60 group-hover/pill:opacity-100 transition">↗</span>
       </span>
 
       <!-- Non-file mentions (folder, note, task, user) -->
@@ -208,7 +208,7 @@ const handleFileClick = (token, e) => {
         :title="token.type === 'user' ? 'عضو منشن' : 'انقر للانتقال إلى ' + token.text"
       >
         <span>{{ token.text }}</span>
-        <span v-if="token.type !== 'user'" class="text-[9px] opacity-60 group-hover/pill:opacity-100 transition">🔗</span>
+        <span v-if="token.type !== 'user'" class="text-[10px] opacity-60 group-hover/pill:opacity-100 transition">🔗</span>
       </span>
 
       <span v-else>{{ token.text }}</span>

@@ -8,7 +8,7 @@ const permissions = ref([])
 const loadingUsers = ref(false)
 
 // Active Tab State
-const activeTab = ref('database') // 'database' | 'users' | 'proj-templates' | 'task-templates'
+const activeTab = ref('users') // 'users' | 'proj-templates' | 'task-templates'
 
 // User Management states
 const isEditing = ref(false)
@@ -136,7 +136,7 @@ const fetchUsersAndRoles = async () => {
 
 // Permalink Router Hash Syncing
 const updateHashFromTab = (tab) => {
-  let hash = '#settings-db'
+  let hash = '#settings-users'
   if (tab === 'users') hash = '#settings-users'
   if (tab === 'proj-templates') hash = '#settings-proj-templates'
   if (tab === 'task-templates') hash = '#settings-task-templates'
@@ -154,8 +154,7 @@ const handleHashChange = () => {
   if (hash.startsWith('#settings-')) {
     store.activeView = 'settings'
     const sub = hash.replace('#settings-', '')
-    if (sub === 'db') activeTab.value = 'database'
-    else if (sub === 'users') activeTab.value = 'users'
+    if (sub === 'users' || sub === 'db') activeTab.value = 'users'
     else if (sub === 'proj-templates') activeTab.value = 'proj-templates'
     else if (sub === 'task-templates') activeTab.value = 'task-templates'
   }
@@ -436,35 +435,21 @@ const handleSaveTaskTemplate = async () => {
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start text-right font-sans" dir="rtl">
     
     <!-- Right Sidebar Settings list (Horizontal scrollable on mobile) -->
-    <div class="lg:col-span-3 bg-slate-50/50 dark:bg-slate-955/20 border border-slate-200/60 dark:border-slate-850 p-2.5 rounded-3xl text-right flex flex-row overflow-x-auto lg:flex-col gap-2 scrollbar-hide shrink-0">
-      <span class="hidden lg:block text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 py-2 text-right">أقسان تهيئة النظام</span>
+    <div class="lg:col-span-3 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-200/60 dark:border-slate-800 p-2.5 rounded-3xl text-right flex flex-row overflow-x-auto lg:flex-col gap-2 scrollbar-hide shrink-0">
+      <span class="hidden lg:block text-[10px] font-bold text-slate-400 px-4 py-2 text-right">أقسام تهيئة النظام</span>
 
       
-      <button 
-        @click="activeTab = 'database'"
-        :class="[
-          'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition duration-200 cursor-pointer text-right justify-start',
-          activeTab === 'database' 
-            ? 'bg-gradient-to-l from-violet-600 to-indigo-650 text-white shadow-md shadow-violet-500/20' 
-            : 'text-slate-655 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-950/30'
-        ]"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-        </svg>
-        <span>قاعدة البيانات</span>
-      </button>
  
       <button 
         @click="activeTab = 'users'"
         :class="[
           'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition duration-200 cursor-pointer text-right justify-start',
           activeTab === 'users' 
-            ? 'bg-gradient-to-l from-violet-600 to-indigo-650 text-white shadow-md shadow-violet-500/20' 
-            : 'text-slate-655 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-950/30'
+            ? 'bg-gradient-to-l from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/20' 
+            : 'text-slate-700 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-950/30'
         ]"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
         <span>المستخدمين والصلاحيات</span>
@@ -475,11 +460,11 @@ const handleSaveTaskTemplate = async () => {
         :class="[
           'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition duration-200 cursor-pointer text-right justify-start',
           activeTab === 'proj-templates' 
-            ? 'bg-gradient-to-l from-violet-600 to-indigo-650 text-white shadow-md shadow-violet-500/20' 
-            : 'text-slate-655 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-950/30'
+            ? 'bg-gradient-to-l from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/20' 
+            : 'text-slate-700 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-950/30'
         ]"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
         </svg>
         <span>قوالب المشاريع</span>
@@ -490,11 +475,11 @@ const handleSaveTaskTemplate = async () => {
         :class="[
           'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition duration-200 cursor-pointer text-right justify-start',
           activeTab === 'task-templates' 
-            ? 'bg-gradient-to-l from-violet-600 to-indigo-650 text-white shadow-md shadow-violet-500/20' 
-            : 'text-slate-655 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-950/30'
+            ? 'bg-gradient-to-l from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/20' 
+            : 'text-slate-700 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-950/30'
         ]"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
         <span>قوالب المهام</span>
@@ -504,69 +489,45 @@ const handleSaveTaskTemplate = async () => {
     <!-- Left Container Panel: Dynamic Tab View Stage (9 cols in RTL) -->
     <div class="lg:col-span-9 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-3xl p-6 shadow-sm min-h-[480px]">
       
-      <!-- Tab 1: Database Status -->
-      <div v-if="activeTab === 'database'" class="space-y-6">
-        <div class="border-b border-slate-100 dark:border-slate-805 pb-3">
-          <h3 class="text-sm font-extrabold text-slate-855 dark:text-slate-100">قاعدة بيانات النظام</h3>
-          <p class="text-xs text-slate-400 font-semibold mt-1">تأكيد حالة الاتصال بخادم MySQL العام للبيئة المحلية.</p>
-        </div>
-
-        <div class="flex items-center justify-between p-5 bg-emerald-500/[0.03] dark:bg-emerald-500/[0.01] border border-emerald-500/20 rounded-2xl flex-row-reverse">
-          <div class="space-y-1 text-right">
-            <span class="text-xs font-bold text-slate-455 block">نوع المحرك الرئيسي</span>
-            <h4 class="text-sm font-extrabold text-slate-800 dark:text-slate-100">MySQL Database Server</h4>
-            <div class="text-xs text-slate-500 font-mono mt-1">Host: 127.0.0.1 | Port: 3306 | Schema: mymind</div>
-          </div>
-          <div class="px-3.5 py-1 rounded-xl text-xs font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10">
-            متصل ونشط
-          </div>
-        </div>
-
-        <div class="bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 p-4 rounded-xl text-xs leading-relaxed text-slate-500 dark:text-slate-400 space-y-1.5">
-          <span class="font-extrabold text-slate-700 dark:text-slate-350 block">ملاحظة فنية:</span>
-          <p>يتم تخزين بيانات المشاريع والمهام والملفات والمرفقات ونظام الصلاحيات RBAC بالكامل في جداول مهيكلة علائقياً على خادم MySQL لضمان استدامة البيانات وقدرتها العالية على تحمل المعاملات الضخمة.</p>
-        </div>
-      </div>
-
       <!-- Tab 2: Users & Permissions -->
       <div v-if="activeTab === 'users'" class="space-y-6">
-        <div class="border-b border-slate-100 dark:border-slate-805 pb-3">
-          <h3 class="text-sm font-extrabold text-slate-855 dark:text-slate-100">المستخدمين وإدارة الصلاحيات (RBAC)</h3>
+        <div class="border-b border-slate-100 dark:border-slate-800 pb-3">
+          <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100">المستخدمين وإدارة الصلاحيات (RBAC)</h3>
           <p class="text-xs text-slate-400 font-semibold mt-1">إضافة أعضاء فريق عملك وتحديد أدوارهم وصلاحياتهم الوظيفية.</p>
         </div>
 
         <div v-if="store.hasPermission('manage-users')" class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
           <!-- Users Table -->
           <div class="xl:col-span-8 space-y-3">
-            <span class="text-xs font-extrabold text-slate-455 block">المستخدمين المسجلين</span>
-            <div class="border border-slate-200/60 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-955">
+            <span class="text-xs font-extrabold text-slate-500 block">المستخدمين المسجلين</span>
+            <div class="border border-slate-200/60 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-950">
               <!-- Desktop Table View (hidden sm:block) -->
               <div class="hidden sm:block">
                 <table class="w-full text-right border-collapse text-xs sm:text-sm">
                   <thead>
-                    <tr class="bg-slate-50/50 dark:bg-slate-955/20 border-b border-slate-150 dark:border-slate-800 text-xs font-extrabold text-slate-500">
+                    <tr class="bg-slate-50/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-800 text-xs font-extrabold text-slate-500">
                       <th class="py-3 px-4">الاسم</th>
                       <th class="py-3 px-4">الدور</th>
                       <th class="py-3 px-4 text-left">التحكم</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-slate-100 dark:divide-slate-855">
+                  <tbody class="divide-y divide-slate-100 dark:divide-slate-900">
                     <tr v-for="u in users" :key="u.id" class="hover:bg-slate-50/30 dark:hover:bg-slate-950/10 transition">
                       <td class="py-3 px-4 font-bold">
                         {{ u.name }}
                         <span class="block text-[10px] text-slate-400 font-mono font-medium">{{ u.email }}</span>
                       </td>
                       <td class="py-3 px-4">
-                        <span class="inline-flex px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-50 dark:bg-rose-955/20 text-rose-650 dark:text-rose-400 border border-rose-200/20">
+                        <span class="inline-flex px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 border border-rose-200/20">
                           {{ u.role ? u.role.name : 'بدون دور' }}
                         </span>
                       </td>
-                      <td class="py-3 px-4 text-left space-x-2 space-x-reverse">
+                      <td class="py-3 px-4 text-left space-x-2">
                         <button 
                           v-if="u.id !== store.currentUser?.id"
                           @click="handleImpersonate(u)"
-                          title="تسجيل الدخول كـ هذا المستخدم"
-                          class="px-2.5 py-1 text-xs bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 font-bold rounded-xl transition cursor-pointer min-h-[36px] inline-flex items-center gap-1 border border-indigo-200/50 dark:border-indigo-800/50"
+                          title="تسجيل الدخول كـ هذا المستخدم" aria-label="تسجيل الدخول كـ هذا المستخدم"
+                          class="px-2.5 py-1 text-xs bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 font-bold rounded-xl transition cursor-pointer min-h-[44px] inline-flex items-center gap-1 border border-indigo-200/50 dark:border-indigo-800/50"
                         >
                           <span>🔑</span>
                           <span>دخول كـ</span>
@@ -580,14 +541,14 @@ const handleSaveTaskTemplate = async () => {
               </div>
 
               <!-- Mobile Cards View (block sm:hidden) -->
-              <div class="block sm:hidden divide-y divide-slate-100 dark:divide-slate-855">
+              <div class="block sm:hidden divide-y divide-slate-100 dark:divide-slate-900">
                 <div v-for="u in users" :key="'mob-user-' + u.id" class="p-3.5 space-y-2.5 hover:bg-slate-50/30 dark:hover:bg-slate-950/10 transition text-right">
                   <div class="flex items-center justify-between gap-2">
                     <div class="font-bold text-xs">
                       {{ u.name }}
                       <span class="block text-[10px] text-slate-400 font-mono font-medium">{{ u.email }}</span>
                     </div>
-                    <span class="inline-flex px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-50 dark:bg-rose-955/20 text-rose-650 dark:text-rose-400 border border-rose-200/20 shrink-0">
+                    <span class="inline-flex px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 border border-rose-200/20 shrink-0">
                       {{ u.role ? u.role.name : 'بدون دور' }}
                     </span>
                   </div>
@@ -595,8 +556,8 @@ const handleSaveTaskTemplate = async () => {
                     <button 
                       v-if="u.id !== store.currentUser?.id"
                       @click="handleImpersonate(u)"
-                      title="تسجيل الدخول كـ هذا المستخدم"
-                      class="px-2.5 py-1 text-xs bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 font-bold rounded-xl transition cursor-pointer min-h-[36px] flex items-center gap-1 border border-indigo-200/50 dark:border-indigo-800/50"
+                      title="تسجيل الدخول كـ هذا المستخدم" aria-label="تسجيل الدخول كـ هذا المستخدم"
+                      class="px-2.5 py-1 text-xs bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 font-bold rounded-xl transition cursor-pointer min-h-[44px] flex items-center gap-1 border border-indigo-200/50 dark:border-indigo-800/50"
                     >
                       <span>🔑</span>
                       <span>دخول كـ</span>
@@ -610,15 +571,15 @@ const handleSaveTaskTemplate = async () => {
           </div>
 
           <!-- Create User Form -->
-          <div class="xl:col-span-4 bg-slate-50/50 dark:bg-slate-955/10 border border-slate-250/60 dark:border-slate-850 p-4 rounded-2xl space-y-3">
+          <div class="xl:col-span-4 bg-slate-50/50 dark:bg-slate-950/10 border border-slate-200/60 dark:border-slate-800 p-4 rounded-2xl space-y-3">
             <div class="flex items-center justify-between flex-row-reverse mb-2">
-              <span class="text-xs font-extrabold text-slate-750 dark:text-slate-205">
+              <span class="text-xs font-extrabold text-slate-700 dark:text-slate-200">
                 {{ isEditing ? 'تعديل بيانات العضو' : 'إضافة عضو جديد' }}
               </span>
               <button 
                 v-if="isEditing" 
                 @click.prevent="resetForm" 
-                class="text-[9px] font-bold text-rose-650 bg-rose-50 dark:bg-rose-955 px-2 py-0.5 rounded border border-rose-100 transition cursor-pointer"
+                class="text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950 px-2 py-0.5 rounded border border-rose-100 transition cursor-pointer"
               >
                 + جديد
               </button>
@@ -627,19 +588,19 @@ const handleSaveTaskTemplate = async () => {
             <form @submit.prevent="handleSaveUser" class="space-y-3">
               <div>
                 <label class="block text-[10px] font-bold text-slate-500 mb-1">الاسم الكامل *</label>
-                <input v-model="userName" type="text" placeholder="الاسم..." class="w-full bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-2.5 py-2 text-xs focus:outline-none" />
+                <input v-model="userName" type="text" placeholder="الاسم..." class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs focus:outline-none" />
               </div>
               <div>
                 <label class="block text-[10px] font-bold text-slate-500 mb-1">البريد الإلكتروني *</label>
-                <input v-model="userEmail" type="email" placeholder="mail@..." class="w-full bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-2.5 py-2 text-xs focus:outline-none" />
+                <input v-model="userEmail" type="email" placeholder="mail@..." class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs focus:outline-none" />
               </div>
               <div>
                 <label class="block text-[10px] font-bold text-slate-500 mb-1">{{ isEditing ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور *' }}</label>
-                <input v-model="userPassword" type="password" placeholder="******" class="w-full bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-2.5 py-2 text-xs focus:outline-none" />
+                <input v-model="userPassword" type="password" placeholder="******" class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs focus:outline-none" />
               </div>
               <div>
                 <label class="block text-[10px] font-bold text-slate-500 mb-1">الدور الوظيفي *</label>
-                <select v-model="userRoleId" class="w-full bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-2.5 py-2 text-xs focus:outline-none cursor-pointer">
+                <select v-model="userRoleId" class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs focus:outline-none cursor-pointer">
                   <option value="" disabled>اختر دور العضو...</option>
                   <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
                 </select>
@@ -648,32 +609,32 @@ const handleSaveTaskTemplate = async () => {
               <div v-if="formError" class="text-[10px] text-rose-500 font-bold">{{ formError }}</div>
               <div v-if="formSuccess" class="text-[10px] text-emerald-500 font-bold">{{ formSuccess }}</div>
 
-              <div class="flex space-x-1.5 space-x-reverse pt-1">
+              <div class="flex space-x-1.5 pt-1">
                 <button type="submit" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 rounded-xl text-xs transition cursor-pointer shadow-md shadow-rose-500/10">{{ isEditing ? 'تعديل' : 'إضافة' }}</button>
               </div>
             </form>
           </div>
         </div>
 
-        <div v-else class="text-xs text-rose-555 italic bg-rose-500/5 p-4 rounded-xl border border-rose-200/20 text-center font-bold">
+        <div v-else class="text-xs text-rose-600 italic bg-rose-500/5 p-4 rounded-xl border border-rose-200/20 text-center font-bold">
           غير مصرح لحسابك الجاري بإدارة أعضاء الفريق ومستخدمي النظام.
         </div>
 
         <!-- Role descriptions matrix -->
         <div class="pt-4 border-t border-slate-100 dark:border-slate-800">
-          <span class="text-xs font-extrabold text-slate-455 block mb-3">تفصيل مصفوفة الصلاحيات</span>
+          <span class="text-xs font-extrabold text-slate-500 block mb-3">تفصيل مصفوفة الصلاحيات</span>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="border border-slate-100 dark:border-slate-800 rounded-xl p-3.5 space-y-1">
               <span class="text-xs font-extrabold text-rose-600 block">مدير (Admin)</span>
-              <p class="text-[11px] text-slate-455 leading-normal">إشراف كلي على المشاريع والمهام وإضافة وحذف الأعضاء وإعداد القوالب العامة.</p>
+              <p class="text-[11px] text-slate-500 leading-normal">إشراف كلي على المشاريع والمهام وإضافة وحذف الأعضاء وإعداد القوالب العامة.</p>
             </div>
             <div class="border border-slate-100 dark:border-slate-800 rounded-xl p-3.5 space-y-1">
-              <span class="text-xs font-extrabold text-rose-650 block">عضو (Member)</span>
-              <p class="text-[11px] text-slate-455 leading-normal">تخطيط وإنشاء المهام، سحب وإفلات العناصر، المساهمة في محادثات المشروع ورفع الملفات.</p>
+              <span class="text-xs font-extrabold text-rose-600 block">عضو (Member)</span>
+              <p class="text-[11px] text-slate-500 leading-normal">تخطيط وإنشاء المهام، سحب وإفلات العناصر، المساهمة في محادثات المشروع ورفع الملفات.</p>
             </div>
             <div class="border border-slate-100 dark:border-slate-800 rounded-xl p-3.5 space-y-1">
               <span class="text-xs font-extrabold text-slate-500 block">مشاهد (Viewer)</span>
-              <p class="text-[11px] text-slate-455 leading-normal">عرض ومراقبة لوحات العمل وسير العمل في وضع القراءة فقط دون تعديل أو مشاركة في الشات.</p>
+              <p class="text-[11px] text-slate-500 leading-normal">عرض ومراقبة لوحات العمل وسير العمل في وضع القراءة فقط دون تعديل أو مشاركة في الشات.</p>
             </div>
           </div>
         </div>
@@ -681,14 +642,14 @@ const handleSaveTaskTemplate = async () => {
 
       <!-- Tab 3: Project Templates -->
       <div v-if="activeTab === 'proj-templates'" class="space-y-6 animate-fade-in">
-        <div class="border-b border-slate-100 dark:border-slate-850 pb-3 flex items-center justify-between flex-row-reverse">
+        <div class="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between flex-row-reverse">
           <div class="text-right">
-            <h3 class="text-sm font-extrabold text-slate-855 dark:text-slate-100 font-extrabold">قوالب المشاريع</h3>
+            <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100 font-extrabold">قوالب المشاريع</h3>
             <p class="text-xs text-slate-400 font-semibold mt-1">تحديد الحالات والربط التلقائي بقوالب المهام.</p>
           </div>
           <button 
             @click="resetProjTemplateForm"
-            class="text-[10px] font-bold text-violet-600 hover:text-violet-750 bg-violet-50 dark:bg-violet-955/20 px-3 py-1.5 rounded-xl border border-violet-100 dark:border-violet-850/30 transition cursor-pointer"
+            class="text-[10px] font-bold text-violet-600 hover:text-violet-700 bg-violet-50 dark:bg-violet-950/20 px-3 py-1.5 rounded-xl border border-violet-100 dark:border-violet-800/30 transition cursor-pointer"
           >
             + قالب جديد
           </button>
@@ -698,22 +659,22 @@ const handleSaveTaskTemplate = async () => {
           
           <!-- Templates List -->
           <div class="xl:col-span-7 space-y-3">
-            <span class="text-xs font-extrabold text-slate-455 block">مكتبة قوالب المشاريع</span>
+            <span class="text-xs font-extrabold text-slate-500 block">مكتبة قوالب المشاريع</span>
             
             <div v-if="store.projectTemplates.length === 0" class="text-xs text-slate-400 italic py-4 text-center">لا توجد قوالب مشاريع مسجلة حالياً.</div>
             <div 
               v-for="tpl in store.projectTemplates" 
               :key="tpl.id"
-              class="p-3.5 bg-slate-50/50 dark:bg-slate-955/20 border border-slate-200/60 dark:border-slate-850 rounded-2xl flex flex-col justify-between gap-3 text-right"
+              class="p-3.5 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-200/60 dark:border-slate-800 rounded-2xl flex flex-col justify-between gap-3 text-right"
             >
               <div class="space-y-1.5">
                 <div class="flex items-center gap-2 justify-start flex-row-reverse">
-                  <span v-if="tpl.is_default" class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200/20 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md">
+                  <span v-if="tpl.is_default" class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200/20 text-[10px] font-extrabold px-1.5 py-0.5 rounded-md">
                     القالب الافتراضي
                   </span>
-                  <h4 class="text-xs font-extrabold text-slate-855 dark:text-slate-100">{{ tpl.name }}</h4>
+                  <h4 class="text-xs font-extrabold text-slate-900 dark:text-slate-100">{{ tpl.name }}</h4>
                 </div>
-                <div class="text-[10px] text-slate-455 leading-relaxed">
+                <div class="text-[10px] text-slate-500 leading-relaxed">
                   <span><b>الحالات:</b> {{ tpl.statuses?.join(' | ') }}</span><br/>
                   <span v-if="tpl.task_template_ids && tpl.task_template_ids.length > 0">
                     <b>المهام المربوطة:</b>
@@ -723,8 +684,8 @@ const handleSaveTaskTemplate = async () => {
                 </div>
               </div>
 
-              <div class="flex space-x-2 space-x-reverse justify-start border-t border-slate-200 dark:border-slate-805 pt-2 flex-row-reverse">
-                <button @click="startEditProjTemplate(tpl)" class="text-[10px] font-extrabold text-violet-650 bg-violet-50 dark:bg-violet-955/20 px-2.5 py-1 rounded-lg border border-violet-100 dark:border-violet-850/30 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center">تعديل</button>
+              <div class="flex space-x-2 justify-start border-t border-slate-200 dark:border-slate-800 pt-2 flex-row-reverse">
+                <button @click="startEditProjTemplate(tpl)" class="text-[10px] font-extrabold text-violet-600 bg-violet-50 dark:bg-violet-950/20 px-2.5 py-1 rounded-lg border border-violet-100 dark:border-violet-800/30 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center">تعديل</button>
                 <button v-if="!tpl.is_default" @click="store.setProjectTemplateDefault(tpl.id)" class="text-[10px] font-extrabold text-slate-600 hover:text-slate-800 bg-white dark:bg-slate-950 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-800 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center">تعيين كافتراضي</button>
                 <button @click="store.deleteProjectTemplate(tpl.id)" class="text-[10px] font-extrabold text-rose-500 hover:text-rose-700 bg-white dark:bg-slate-950 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-800 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center">حذف</button>
               </div>
@@ -732,28 +693,28 @@ const handleSaveTaskTemplate = async () => {
           </div>
 
           <!-- Create/Edit Form -->
-          <div class="xl:col-span-5 bg-slate-50/50 dark:bg-slate-955/10 border border-slate-250/60 dark:border-slate-850 p-4 rounded-2xl space-y-4">
-            <span class="text-xs font-extrabold text-slate-750 dark:text-slate-205 block">
+          <div class="xl:col-span-5 bg-slate-50/50 dark:bg-slate-950/10 border border-slate-200/60 dark:border-slate-800 p-4 rounded-2xl space-y-4">
+            <span class="text-xs font-extrabold text-slate-700 dark:text-slate-200 block">
               {{ editingProjTemplateId ? 'تعديل قالب مشروع' : 'إنشاء قالب مشروع جديد' }}
             </span>
             
             <div class="space-y-3">
               <div>
                 <label class="block text-[10px] font-bold text-slate-500 mb-1">اسم قالب المشروع *</label>
-                <input v-model="newProjTemplateName" type="text" placeholder="مثال: قالب التطوير..." class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-805 rounded-xl px-2.5 py-2 text-xs focus:outline-none" />
+                <input v-model="newProjTemplateName" type="text" placeholder="مثال: قالب التطوير..." class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs focus:outline-none" />
               </div>
               <div>
                 <label class="block text-[10px] font-bold text-slate-500 mb-1">الحالات للمشروع (مفصولة بفاصلة) *</label>
-                <input v-model="newProjTemplateStatuses" type="text" placeholder="بانتظار البدء, قيد العمل..." class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-805 rounded-xl px-2.5 py-2 text-xs focus:outline-none" />
+                <input v-model="newProjTemplateStatuses" type="text" placeholder="بانتظار البدء, قيد العمل..." class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs focus:outline-none" />
               </div>
 
               <!-- Linked task templates checklist selector -->
               <div class="space-y-2">
                 <label class="block text-[10px] font-bold text-slate-500 mb-1.5">اربط قوالب المهام التلقائية بهذا المشروع</label>
                 <div v-if="store.taskTemplates.length === 0" class="text-[10px] text-slate-400 italic">لا توجد قوالب مهام متاحة للربط. قم بإنشائها أولاً.</div>
-                <div v-else class="space-y-2 max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-955">
+                <div v-else class="space-y-2 max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-950">
                   <div v-for="t in store.taskTemplates" :key="t.id" class="flex items-center justify-between flex-row-reverse gap-2">
-                    <label :for="'lnk-task-' + t.id" class="text-xs text-slate-700 dark:text-slate-350 cursor-pointer select-none">
+                    <label :for="'lnk-task-' + t.id" class="text-xs text-slate-700 dark:text-slate-300 cursor-pointer select-none">
                       {{ t.name }}
                     </label>
                     <input 
@@ -785,14 +746,14 @@ const handleSaveTaskTemplate = async () => {
       <div v-if="activeTab === 'task-templates'" class="space-y-8 animate-fade-in">
         
         <!-- Header Section -->
-        <div class="border-b border-slate-100 dark:border-slate-850 pb-3 flex items-center justify-between flex-row-reverse">
+        <div class="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between flex-row-reverse">
           <div class="text-right">
-            <h3 class="text-sm font-extrabold text-slate-855 dark:text-slate-100">قوالب المهام الديناميكية</h3>
+            <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100">قوالب المهام الديناميكية</h3>
             <p class="text-xs text-slate-400 font-semibold mt-1">تجهيز قوالب فارغة وبناء شكل وتنسيق حقول نموذج المهام حقل حقل.</p>
           </div>
           <button 
             @click="resetTaskTemplateForm"
-            class="text-[10px] font-bold text-violet-600 hover:text-violet-750 bg-violet-50 dark:bg-violet-955/20 px-3 py-1.5 rounded-xl border border-violet-100 dark:border-violet-850/30 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+            class="text-[10px] font-bold text-violet-600 hover:text-violet-700 bg-violet-50 dark:bg-violet-950/20 px-3 py-1.5 rounded-xl border border-violet-100 dark:border-violet-800/30 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             + قالب جديد
           </button>
@@ -800,23 +761,23 @@ const handleSaveTaskTemplate = async () => {
 
         <!-- Library of Task Templates list (Horizontal Cards grid for selection) -->
         <div class="space-y-2">
-          <span class="text-xs font-extrabold text-slate-455 block">مكتبة قوالب المهام المتوفرة</span>
+          <span class="text-xs font-extrabold text-slate-500 block">مكتبة قوالب المهام المتوفرة</span>
           <div v-if="store.taskTemplates.length === 0" class="text-xs text-slate-400 italic">لا توجد قوالب مهام مسجلة. قم بإنشاء أول قالب أدناه.</div>
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             <div 
               v-for="tpl in store.taskTemplates" 
               :key="tpl.id"
-              class="p-3 bg-slate-50/50 dark:bg-slate-955/20 border border-slate-200/60 dark:border-slate-850 rounded-2xl flex flex-col justify-between gap-3 text-right"
+              class="p-3 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-200/60 dark:border-slate-800 rounded-2xl flex flex-col justify-between gap-3 text-right"
             >
               <div>
-                <h4 class="text-xs font-extrabold text-slate-855 dark:text-slate-100">{{ tpl.name }}</h4>
-                <span class="text-[9px] text-slate-400 font-medium block mt-1">
+                <h4 class="text-xs font-extrabold text-slate-900 dark:text-slate-100">{{ tpl.name }}</h4>
+                <span class="text-[10px] text-slate-400 font-medium block mt-1">
                   يحتوي على: {{ tpl.custom_fields_values?.length || 0 }} حقول
                 </span>
               </div>
-              <div class="flex space-x-1.5 space-x-reverse border-t border-slate-200 dark:border-slate-805 pt-2 flex-row-reverse">
-                <button @click="startEditTaskTemplate(tpl)" class="text-[9px] font-extrabold text-violet-650 bg-violet-50 dark:bg-violet-955/20 px-2 py-0.5 rounded-lg border border-violet-100 dark:border-violet-850/30 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center">تعديل</button>
-                <button @click="store.deleteTaskTemplate(tpl.id)" class="text-[9px] font-extrabold text-rose-500 hover:text-rose-700 bg-white dark:bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-800 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center">حذف</button>
+              <div class="flex space-x-1.5 border-t border-slate-200 dark:border-slate-800 pt-2 flex-row-reverse">
+                <button @click="startEditTaskTemplate(tpl)" class="text-[10px] font-extrabold text-violet-600 bg-violet-50 dark:bg-violet-950/20 px-2 py-0.5 rounded-lg border border-violet-100 dark:border-violet-800/30 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center">تعديل</button>
+                <button @click="store.deleteTaskTemplate(tpl.id)" class="text-[10px] font-extrabold text-rose-500 hover:text-rose-700 bg-white dark:bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-800 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center">حذف</button>
               </div>
             </div>
           </div>
@@ -827,13 +788,13 @@ const handleSaveTaskTemplate = async () => {
           
           <!-- RIGHT PANEL: Field Configurations & Spawner (7 cols) -->
           <div class="lg:col-span-7 bg-slate-50/[0.02] border border-slate-200/60 dark:border-slate-800 p-5 rounded-2xl space-y-4">
-            <span class="text-xs font-extrabold text-slate-750 dark:text-slate-205 block">تخصيص القالب والاسم الرئيسي</span>
+            <span class="text-xs font-extrabold text-slate-700 dark:text-slate-200 block">تخصيص القالب والاسم الرئيسي</span>
             
             <div class="space-y-4">
               <!-- Template Name -->
               <div>
                 <label class="block text-[10px] font-bold text-slate-500 mb-1">اسم قالب المهمة *</label>
-                <input v-model="newTaskTemplateName" type="text" placeholder="مثال: قالب التصاميم الهندسية..." class="w-full bg-white dark:bg-slate-955 border border-slate-200/80 rounded-xl px-2.5 py-2 text-xs focus:outline-none" />
+                <input v-model="newTaskTemplateName" type="text" placeholder="مثال: قالب التصاميم الهندسية..." class="w-full bg-white dark:bg-slate-950 border border-slate-200/80 rounded-xl px-2.5 py-2 text-xs focus:outline-none" />
               </div>
 
               <!-- Spawner: Add fields one-by-one -->
@@ -842,8 +803,8 @@ const handleSaveTaskTemplate = async () => {
                 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label class="block text-[9px] font-bold text-slate-400 mb-1">نوع الحقل</label>
-                    <select v-model="tempFieldType" class="w-full bg-white dark:bg-slate-955 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer">
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">نوع الحقل</label>
+                    <select v-model="tempFieldType" class="w-full bg-white dark:bg-slate-950 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer">
                       <option value="short_text">نص قصير (Short Text / Input)</option>
                       <option value="long_text">نص طويل (Long Text / Textarea)</option>
                       <option value="number">رقم (Number)</option>
@@ -860,15 +821,15 @@ const handleSaveTaskTemplate = async () => {
                     </select>
                   </div>
                   <div>
-                    <label class="block text-[9px] font-bold text-slate-400 mb-1">اسم الحقل *</label>
-                    <input v-model="tempFieldName" type="text" placeholder="اسم الحقل..." class="w-full bg-white dark:bg-slate-955 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none" />
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">اسم الحقل *</label>
+                    <input v-model="tempFieldName" type="text" placeholder="اسم الحقل..." class="w-full bg-white dark:bg-slate-950 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none" />
                   </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label class="block text-[9px] font-bold text-slate-400 mb-1">عرض الحقل في نموذج المهمة</label>
-                    <select v-model="tempFieldWidth" class="w-full bg-white dark:bg-slate-955 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer">
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">عرض الحقل في نموذج المهمة</label>
+                    <select v-model="tempFieldWidth" class="w-full bg-white dark:bg-slate-950 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer">
                       <option value="full">100% (عرض كامل)</option>
                       <option value="half">50% (نصف عرض)</option>
                       <option value="thirty">30% (عرض 30%)</option>
@@ -876,12 +837,12 @@ const handleSaveTaskTemplate = async () => {
                     </select>
                   </div>
                   <div>
-                    <label class="block text-[9px] font-bold text-slate-400 mb-1">قيمة الحقل الافتراضية</label>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">قيمة الحقل الافتراضية</label>
                     
                     <select 
                       v-if="tempFieldType === 'checkbox'"
                       v-model="tempFieldValue" 
-                      class="w-full bg-white dark:bg-slate-955 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer"
+                      class="w-full bg-white dark:bg-slate-950 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer"
                     >
                       <option value="">غير محدد</option>
                       <option value="true">محدد (نعم)</option>
@@ -893,7 +854,7 @@ const handleSaveTaskTemplate = async () => {
                       v-model="tempFieldValue"
                       rows="2"
                       placeholder="اكتب القيمة الافتراضية الطويلة..."
-                      class="w-full bg-white dark:bg-slate-955 border border-slate-200/80 rounded-lg px-2.5 py-1 text-xs focus:outline-none resize-none"
+                      class="w-full bg-white dark:bg-slate-950 border border-slate-200/80 rounded-lg px-2.5 py-1 text-xs focus:outline-none resize-none"
                     ></textarea>
 
                     <input 
@@ -901,7 +862,7 @@ const handleSaveTaskTemplate = async () => {
                       v-model="tempFieldValue"
                       type="text"
                       placeholder="اكتب الخيارات مفصولة بفاصلة (مثال: عاجل, متوسط, منخفض)..."
-                      class="w-full bg-white dark:bg-slate-955 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
+                      class="w-full bg-white dark:bg-slate-950 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
                     />
 
                     <input 
@@ -909,21 +870,21 @@ const handleSaveTaskTemplate = async () => {
                       v-model="tempFieldValue"
                       type="number"
                       placeholder="مثال: 15"
-                      class="w-full bg-white dark:bg-slate-955 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
+                      class="w-full bg-white dark:bg-slate-950 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
                     />
 
                     <input 
                       v-else-if="tempFieldType === 'date'"
                       v-model="tempFieldValue"
                       type="date"
-                      class="w-full bg-white dark:bg-slate-955 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer"
+                      class="w-full bg-white dark:bg-slate-950 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer"
                     />
 
                     <input 
                       v-else-if="tempFieldType === 'date_time'"
                       v-model="tempFieldValue"
                       type="datetime-local"
-                      class="w-full bg-white dark:bg-slate-955 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer"
+                      class="w-full bg-white dark:bg-slate-950 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer"
                     />
 
                     <input 
@@ -938,12 +899,12 @@ const handleSaveTaskTemplate = async () => {
                       v-model="tempFieldValue"
                       type="text"
                       placeholder="القيمة الافتراضية..."
-                      class="w-full bg-white dark:bg-slate-955 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
+                      class="w-full bg-white dark:bg-slate-950 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
                     />
                   </div>
                 </div>
 
-                <button @click="addFieldToTaskTemplate" class="bg-violet-50 hover:bg-violet-100 text-violet-650 dark:bg-violet-955/20 dark:text-violet-400 font-bold px-3 py-1.5 rounded-lg text-[10px] transition cursor-pointer">
+                <button @click="addFieldToTaskTemplate" class="bg-violet-50 hover:bg-violet-100 text-violet-600 dark:bg-violet-950/20 dark:text-violet-400 font-bold px-3 py-1.5 rounded-lg text-[10px] transition cursor-pointer">
                   + ربط وإضافة الحقل للقالب
                 </button>
               </div>
@@ -962,9 +923,9 @@ const handleSaveTaskTemplate = async () => {
 
           <!-- LEFT PANEL: Draggable List of Fields (5 cols) -->
           <div class="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-5 rounded-2xl space-y-3">
-            <div class="flex items-center justify-between flex-row-reverse pb-1.5 border-b border-slate-100 dark:border-slate-850">
-              <span class="text-xs font-extrabold text-slate-750">ترتيب حقول القالب</span>
-              <span class="text-[9px] font-bold text-slate-400">اسحب الحقل للترتيب (⋮⋮)</span>
+            <div class="flex items-center justify-between flex-row-reverse pb-1.5 border-b border-slate-100 dark:border-slate-800">
+              <span class="text-xs font-extrabold text-slate-700">ترتيب حقول القالب</span>
+              <span class="text-[10px] font-bold text-slate-400">اسحب الحقل للترتيب (⋮⋮)</span>
             </div>
 
             <div v-if="newTaskTemplateFields.length === 0" class="text-xs text-slate-400 italic text-center py-12">
@@ -981,7 +942,7 @@ const handleSaveTaskTemplate = async () => {
                 @drop="handleDrop(idx)"
                 @dragend="handleDragEnd"
                 :class="[
-                  'flex items-center justify-between p-2.5 rounded-xl bg-slate-50/50 dark:bg-slate-955/10 border border-slate-200/60 dark:border-slate-850 text-xs flex-row-reverse transition duration-200 cursor-grab active:cursor-grabbing select-none',
+                  'flex items-center justify-between p-2.5 rounded-xl bg-slate-50/50 dark:bg-slate-950/10 border border-slate-200/60 dark:border-slate-800 text-xs flex-row-reverse transition duration-200 cursor-grab active:cursor-grabbing select-none',
                   dragSrcIndex === idx ? 'opacity-40 border-rose-500 border-dashed bg-rose-500/[0.02]' : 'hover:border-slate-300 dark:hover:border-slate-800'
                 ]"
               >
@@ -989,8 +950,8 @@ const handleSaveTaskTemplate = async () => {
                   <!-- Drag Handle -->
                   <span class="text-slate-400 dark:text-slate-600 font-mono text-sm leading-none cursor-grab active:cursor-grabbing">⋮⋮</span>
                   <div class="text-right">
-                    <span class="font-extrabold text-slate-850 dark:text-slate-200 block text-xs">{{ f.name }}</span>
-                    <span class="text-[9px] text-slate-400 font-semibold">
+                    <span class="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">{{ f.name }}</span>
+                    <span class="text-[10px] text-slate-400 font-semibold">
                       النوع: {{ f.type }} | العرض: {{ f.width === 'quarter' ? '25%' : f.width === 'thirty' ? '30%' : f.width === 'half' ? '50%' : '100%' }}
                     </span>
                   </div>
@@ -998,7 +959,7 @@ const handleSaveTaskTemplate = async () => {
                 
                 <button 
                   @click.stop="removeFieldFromTaskTemplate(idx)" 
-                  class="text-rose-500 hover:text-rose-700 font-extrabold px-2 py-0.5 rounded hover:bg-rose-50 dark:hover:bg-rose-955/20 transition cursor-pointer"
+                  class="text-rose-500 hover:text-rose-700 font-extrabold px-2 py-0.5 rounded hover:bg-rose-50 dark:hover:bg-rose-950/20 transition cursor-pointer"
                 >
                   حذف
                 </button>
@@ -1019,7 +980,7 @@ const handleSaveTaskTemplate = async () => {
           <div class="max-w-2xl mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden text-right" dir="rtl">
             
             <!-- Mock Header -->
-            <div class="bg-slate-50/50 dark:bg-slate-950/20 px-6 py-4 border-b border-slate-150 dark:border-slate-800 flex items-center justify-between flex-row-reverse">
+            <div class="bg-slate-50/50 dark:bg-slate-950/20 px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-row-reverse">
               <span class="text-xs font-extrabold text-slate-800 dark:text-slate-100">إضافة مهمة جديدة</span>
               <div class="h-6 w-6 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs text-slate-500 font-bold select-none cursor-not-allowed">X</div>
             </div>
@@ -1029,18 +990,18 @@ const handleSaveTaskTemplate = async () => {
               
               <!-- Mock Template Selection Info -->
               <div class="bg-violet-500/[0.02] border border-violet-500/10 rounded-xl p-3.5 flex items-center justify-between flex-row-reverse">
-                <span class="text-xs font-bold text-violet-650 dark:text-violet-400">قالب المهام النشط: {{ newTaskTemplateName || 'قالب جديد' }}</span>
-                <span class="text-[9px] bg-violet-500/10 text-violet-650 px-2 py-0.5 rounded font-extrabold">وضع المعاينة</span>
+                <span class="text-xs font-bold text-violet-600 dark:text-violet-400">قالب المهام النشط: {{ newTaskTemplateName || 'قالب جديد' }}</span>
+                <span class="text-[10px] bg-violet-500/10 text-violet-600 px-2 py-0.5 rounded font-extrabold">وضع المعاينة</span>
               </div>
 
               <!-- Mock Title field (Editable, binds to newTaskTemplateTitleVal) -->
               <div class="w-full space-y-1.5">
-                <label class="block text-xs font-bold text-slate-550 dark:text-slate-400">عنوان المهمة *</label>
+                <label class="block text-xs font-bold text-slate-500 dark:text-slate-400">عنوان المهمة *</label>
                 <input 
                   type="text" 
                   v-model="newTaskTemplateTitleVal" 
                   placeholder="اكتب عنوان المهمة الافتراضي لهذا القالب..." 
-                  class="w-full bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-violet-500"
+                  class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-violet-500"
                 />
               </div>
 
@@ -1064,17 +1025,17 @@ const handleSaveTaskTemplate = async () => {
                   >
                     <!-- Divider type renders section header -->
                     <div v-if="f.type === 'divider'" class="w-full border-t border-slate-200 dark:border-slate-800 my-4 pt-2 flex items-center justify-between">
-                      <span class="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{{ f.name }}</span>
+                      <span class="text-xs font-extrabold text-slate-500 dark:text-slate-400">{{ f.name }}</span>
                     </div>
 
                     <div v-else class="w-full space-y-1.5">
-                      <label class="block text-xs font-bold text-slate-550 dark:text-slate-400">{{ f.name }}</label>
+                      <label class="block text-xs font-bold text-slate-500 dark:text-slate-400">{{ f.name }}</label>
                       
                       <!-- Long Text -->
                       <textarea 
                         v-if="f.type === 'long_text'" 
                         disabled 
-                        class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl px-3.5 py-2 text-xs text-slate-455 resize-none h-16" 
+                        class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-500 resize-none h-16" 
                         :placeholder="f.value || 'اكتب التفاصيل...'"
                       ></textarea>
 
@@ -1082,14 +1043,14 @@ const handleSaveTaskTemplate = async () => {
                       <select 
                         v-else-if="f.type === 'dropdown'" 
                         disabled 
-                        class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-3.5 py-2 text-xs text-slate-500 focus:outline-none"
+                        class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-500 focus:outline-none"
                       >
                         <option v-for="opt in (f.value || '').split(',').map(o => o.trim()).filter(Boolean)" :key="opt">{{ opt }}</option>
                       </select>
 
                       <!-- Multi-Select -->
                       <div v-else-if="f.type === 'multi_select'" class="flex flex-wrap gap-2 pt-1">
-                        <label v-for="opt in (f.value || '').split(',').map(o => o.trim()).filter(Boolean)" :key="opt" class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-955 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-[10px] text-slate-500">
+                        <label v-for="opt in (f.value || '').split(',').map(o => o.trim()).filter(Boolean)" :key="opt" class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-[10px] text-slate-500">
                           <input type="checkbox" disabled class="rounded text-violet-600" />
                           <span>{{ opt }}</span>
                         </label>
@@ -1110,7 +1071,7 @@ const handleSaveTaskTemplate = async () => {
                       </div>
 
                       <!-- User Picker -->
-                      <select v-else-if="f.type === 'user_picker'" disabled class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-3.5 py-2.5 text-xs text-slate-500">
+                      <select v-else-if="f.type === 'user_picker'" disabled class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-500">
                         <option>اختر مستخدماً من المشروع...</option>
                       </select>
 
@@ -1120,10 +1081,10 @@ const handleSaveTaskTemplate = async () => {
                       </div>
 
                       <!-- Date Picker -->
-                      <input v-else-if="f.type === 'date'" type="date" disabled :value="f.value" class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-3.5 py-2 text-xs text-slate-500" />
+                      <input v-else-if="f.type === 'date'" type="date" disabled :value="f.value" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-500" />
 
                       <!-- Date & Time Picker -->
-                      <input v-else-if="f.type === 'date_time'" type="datetime-local" disabled :value="f.value" class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-3.5 py-2 text-xs text-slate-500" />
+                      <input v-else-if="f.type === 'date_time'" type="datetime-local" disabled :value="f.value" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-500" />
 
                       <!-- Short Text / Number / URL -->
                       <input 
@@ -1131,7 +1092,7 @@ const handleSaveTaskTemplate = async () => {
                         :type="f.type === 'number' ? 'number' : f.type === 'url' ? 'url' : 'text'" 
                         disabled 
                         :value="f.value" 
-                        class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-805 rounded-xl px-3.5 py-2.5 text-xs text-slate-500" 
+                        class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-500" 
                       />
                     </div>
                   </div>
@@ -1141,7 +1102,7 @@ const handleSaveTaskTemplate = async () => {
             </div>
 
             <!-- Mock Footer -->
-            <div class="bg-slate-50/30 dark:bg-slate-955/10 px-6 py-4 border-t border-slate-150 dark:border-slate-800 flex justify-start space-x-2 space-x-reverse flex-row-reverse">
+            <div class="bg-slate-50/30 dark:bg-slate-950/10 px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex justify-start space-x-2 flex-row-reverse">
               <button disabled class="bg-violet-600/40 text-white font-bold py-2 px-4 rounded-xl text-xs cursor-not-allowed">إنشاء المهمة</button>
               <button disabled class="bg-slate-100 dark:bg-slate-800 text-slate-500 py-2 px-4 rounded-xl text-xs cursor-not-allowed">إلغاء</button>
             </div>
