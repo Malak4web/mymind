@@ -81,9 +81,13 @@ jobs:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
 
     env:
-      DEPLOY_HOST: ${{ secrets.SSH_HOST }}
-      DEPLOY_USER: ${{ secrets.SSH_USER }}
-      DEPLOY_PORT: ${{ secrets.SSH_PORT }}
+      # Password auth restored at the owner's request so deploys keep working
+      # with the existing SSH_PASSWORD secret. To move back to key auth, set
+      # these three from secrets and swap `password:` for
+      # `key: ${{ secrets.SSH_PRIVATE_KEY }}` in the two steps below.
+      DEPLOY_HOST: 173.212.237.82
+      DEPLOY_USER: root
+      DEPLOY_PORT: 2212
       DEPLOY_PATH: /var/www/mind
 
     steps:
@@ -128,7 +132,7 @@ jobs:
         with:
           host: ${{ env.DEPLOY_HOST }}
           username: ${{ env.DEPLOY_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          password: ${{ secrets.SSH_PASSWORD }}
           port: ${{ env.DEPLOY_PORT }}
           source: "."
           target: ${{ env.DEPLOY_PATH }}
@@ -141,7 +145,7 @@ jobs:
         with:
           host: ${{ env.DEPLOY_HOST }}
           username: ${{ env.DEPLOY_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          password: ${{ secrets.SSH_PASSWORD }}
           port: ${{ env.DEPLOY_PORT }}
           script: |
             set -euo pipefail
@@ -177,8 +181,11 @@ jobs:
             php artisan event:cache || true
 
             # Baseline permissions: readable, not writable, never world-writable.
-            find . -type f -not -path './storage/*' -exec chmod 644 {} \;
-            find . -type d -not -path './storage/*' -exec chmod 755 {} \;
+            # `+` batches the paths into few chmod calls. With `\;` this forks
+            # once per file and takes minutes on a vendor tree, blowing the
+            # job timeout.
+            find . -type f -not -path './storage/*' -exec chmod 644 {} +
+            find . -type d -not -path './storage/*' -exec chmod 755 {} +
             chmod +x artisan
 
             # Secrets stay owner-only.
@@ -189,7 +196,9 @@ jobs:
             chmod -R 775 storage bootstrap/cache database
             [ -f database/database.sqlite ] && chmod 660 database/database.sqlite || true
 
-            chown -R "$USER":www-data storage bootstrap/cache database 2>/dev/null || true
+            # `set -u` aborts on an unbound USER and `|| true` cannot catch an
+            # expansion error, which would fail the deploy after upload+migrate.
+            chown -R "${USER:-root}":www-data storage bootstrap/cache database 2>/dev/null || true
 
             # Fail loudly if debug somehow survived.
             if php artisan tinker --execute="exit(config('app.debug') ? 1 : 0);"; then
