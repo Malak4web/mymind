@@ -17,8 +17,10 @@ import HabitDetail from './components/HabitDetail.vue'
 import MobileBottomNav from './components/MobileBottomNav.vue'
 import QuickInspector from './components/QuickInspector.vue'
 import ToastHost from './components/ToastHost.vue'
+import PublicUsers from './components/PublicUsers.vue'
 
 const activeHabitId = ref(null)
+const isPublicUsersPage = ref(false)
 const showMobileProjectsSheet = ref(false)
 const showMobileMoreSheet = ref(false)
 
@@ -130,6 +132,12 @@ watch(() => store.theme, (newTheme) => {
 const handleHashChange = () => {
   const hash = window.location.hash
 
+  if (hash === '#public-users' || hash === '#users') {
+    isPublicUsersPage.value = true
+    return
+  }
+  isPublicUsersPage.value = false
+
   if (hash.startsWith('#routines/habit-')) {
     const hId = parseInt(hash.replace('#routines/habit-', ''))
     if (!isNaN(hId)) {
@@ -196,8 +204,13 @@ watch(() => store.projects.length, (newLen) => {
 </script>
 
 <template>
+  <!-- Public Users Page -->
+  <div v-if="isPublicUsersPage">
+    <PublicUsers />
+  </div>
+
   <!-- Authentication Gate -->
-  <div v-if="!store.isAuthenticated">
+  <div v-else-if="!store.isAuthenticated">
     <Login />
   </div>
 

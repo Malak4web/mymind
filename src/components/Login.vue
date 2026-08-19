@@ -541,8 +541,16 @@ const scrollToSection = (id) => {
             </button>
           </form>
 
-          <!-- Onboarding Help Credentials -->
-          
+          <!-- Public Users Quick Access -->
+          <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 text-center">
+            <a 
+              href="#public-users" 
+              class="inline-flex items-center gap-2 text-xs font-bold text-violet-600 dark:text-violet-400 hover:underline"
+            >
+              <span>👥</span>
+              <span>عرض قائمة الحسابات والمديرين (Public Users)</span>
+            </a>
+          </div>
 
         </div>
       </div>
