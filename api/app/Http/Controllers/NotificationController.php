@@ -8,57 +8,75 @@ use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Notification::orderBy('created_at', 'desc')->get());
+        $user = $this->currentUser($request);
+
+        return response()->json(
+            Notification::where('user_id', $user->id)
+                ->orderBy('created_at', 'desc')
+                ->get()
+        );
     }
 
     public function store(Request $request)
     {
+        $user = $this->currentUser($request);
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'text' => 'required|string'
         ]);
 
         $notification = Notification::create([
+            'user_id' => $user->id,
             'title' => $validated['title'],
             'text' => $validated['text'],
             'is_read' => false
         ]);
 
-        broadcast(new DataChanged($request->user()->id, 'notifications'))->toOthers();
+        broadcast(new DataChanged($user->id, 'notifications'))->toOthers();
 
         return response()->json($notification, 201);
     }
 
-    public function markRead($id)
+    public function markRead(Request $request, $id)
     {
-        $notification = Notification::findOrFail($id);
+        $user = $this->currentUser($request);
+
+        $notification = Notification::where('user_id', $user->id)->findOrFail($id);
         $notification->update(['is_read' => true]);
 
-        broadcast(new DataChanged(request()->user()->id, 'notifications'))->toOthers();
+        broadcast(new DataChanged($user->id, 'notifications'))->toOthers();
 
         return response()->json($notification);
     }
 
-    public function markAllRead()
+    public function markAllRead(Request $request)
     {
-        Notification::where('is_read', false)->update(['is_read' => true]);
+        $user = $this->currentUser($request);
 
-        broadcast(new DataChanged(request()->user()->id, 'notifications'))->toOthers();
+        Notification::where('user_id', $user->id)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+
+        broadcast(new DataChanged($user->id, 'notifications'))->toOthers();
 
         return response()->json(['message' => 'تم تحديد جميع الإشعارات كمقروءة']);
     }
 
-    public function createTestingHelper()
+    public function createTestingHelper(Request $request)
     {
+        $user = $this->currentUser($request);
+
         $notification = Notification::create([
+            'user_id' => $user->id,
             'title' => 'تنبيه اختبار',
             'text' => 'محتوى تنبيه اختبار TDD',
             'is_read' => false
         ]);
 
-        broadcast(new DataChanged(request()->user()->id, 'notifications'))->toOthers();
+        broadcast(new DataChanged($user->id, 'notifications'))->toOthers();
 
         return response()->json($notification, 201);
     }

@@ -11,6 +11,7 @@ class DailyTask extends Model
 
     protected $fillable = [
         'user_id',
+        'due_date',
         'title',
         'category',
         'priority',
@@ -19,6 +20,7 @@ class DailyTask extends Model
     ];
 
     protected $casts = [
-        'completed' => 'boolean'
+        'completed' => 'boolean',
+        'due_date' => 'date:Y-m-d'
     ];
 }

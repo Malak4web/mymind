@@ -10,12 +10,17 @@ class NoteController extends Controller
 {
     public function index($projectId)
     {
+        $this->authorizedProject($projectId);
+
         $notes = Note::where('project_id', $projectId)->get();
         return response()->json($notes);
     }
 
     public function store(Request $request, $projectId)
     {
+        $this->authorizedProject($projectId);
+        $this->assertPermission('manage-projects');
+
         $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'nullable|string',
@@ -37,6 +42,8 @@ class NoteController extends Controller
     public function update(Request $request, $id)
     {
         $note = Note::findOrFail($id);
+        $this->authorizedProject($note->project_id, withTrashed: true);
+        $this->assertPermission('manage-projects');
 
         $request->validate([
             'title' => 'required|string|max:255',
@@ -58,6 +65,9 @@ class NoteController extends Controller
     public function destroy($id)
     {
         $note = Note::findOrFail($id);
+        $this->authorizedProject($note->project_id, withTrashed: true);
+        $this->assertPermission('manage-projects');
+
         $projectId = $note->project_id;
         $note->delete();
 

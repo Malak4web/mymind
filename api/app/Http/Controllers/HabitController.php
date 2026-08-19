@@ -10,21 +10,18 @@ class HabitController extends Controller
 {
     public function index(Request $request)
     {
-        $user = $request->user();
-        $query = Habit::query();
+        $user = $this->currentUser($request);
 
-        if ($user) {
-            $query->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id)->orWhereNull('user_id');
-            });
-        }
-
-        return response()->json($query->orderBy('created_at', 'desc')->get());
+        return response()->json(
+            Habit::where('user_id', $user->id)
+                ->orderBy('created_at', 'desc')
+                ->get()
+        );
     }
 
     public function store(Request $request)
     {
-        $user = $request->user();
+        $user = $this->currentUser($request);
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'category' => 'nullable|string',
@@ -41,7 +38,7 @@ class HabitController extends Controller
         ]);
 
         $habit = Habit::create([
-            'user_id' => $user ? $user->id : null,
+            'user_id' => $user->id,
             'title' => $validated['title'],
             'category' => $validated['category'] ?? 'عام',
             'icon' => $validated['icon'] ?? '📌',
@@ -65,7 +62,8 @@ class HabitController extends Controller
 
     public function update(Request $request, $id)
     {
-        $habit = Habit::findOrFail($id);
+        $habit = $this->currentUser($request)->habits()->findOrFail($id);
+
         $validated = $request->validate([
             'title' => 'nullable|string|max:255',
             'category' => 'nullable|string',
@@ -92,7 +90,7 @@ class HabitController extends Controller
 
     public function destroy(Request $request, $id)
     {
-        $habit = Habit::findOrFail($id);
+        $habit = $this->currentUser($request)->habits()->findOrFail($id);
         $habit->delete();
 
         if ($request->user()) {
@@ -104,7 +102,7 @@ class HabitController extends Controller
 
     public function sync(Request $request)
     {
-        $user = $request->user();
+        $user = $this->currentUser($request);
         $habits = $request->input('habits', []);
 
         if (is_array($habits)) {
@@ -112,11 +110,8 @@ class HabitController extends Controller
                 if (empty($h['title'])) continue;
 
                 $existing = Habit::where('title', $h['title'])
-                    ->where(function($q) use ($user) {
-                        if ($user) {
-                            $q->where('user_id', $user->id)->orWhereNull('user_id');
-                        }
-                    })->first();
+                    ->where('user_id', $user->id)
+                    ->first();
 
                 if ($existing) {
                     $existing->update([
@@ -134,7 +129,7 @@ class HabitController extends Controller
                     ]);
                 } else {
                     Habit::create([
-                        'user_id' => $user ? $user->id : null,
+                        'user_id' => $user->id,
                         'title' => $h['title'],
                         'category' => $h['category'] ?? 'عام',
                         'icon' => $h['icon'] ?? '📌',

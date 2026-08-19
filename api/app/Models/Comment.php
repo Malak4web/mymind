@@ -5,13 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Notification extends Model
+class Comment extends Model
 {
-    protected $fillable = ['user_id', 'title', 'text', 'is_read'];
+    protected $fillable = ['task_id', 'user_id', 'author_name', 'body'];
 
-    protected $casts = [
-        'is_read' => 'boolean'
-    ];
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(Task::class);
+    }
 
     public function user(): BelongsTo
     {

@@ -12,12 +12,17 @@ class FolderController extends Controller
 {
     public function index($projectId)
     {
+        $this->authorizedProject($projectId);
+
         $folders = Folder::where('project_id', $projectId)->get();
         return response()->json($folders);
     }
 
     public function store(Request $request, $projectId)
     {
+        $this->authorizedProject($projectId);
+        $this->assertPermission('manage-projects');
+
         $request->validate([
             'name' => 'required|string|max:255',
             'parent_id' => 'nullable|exists:folders,id'
@@ -44,6 +49,9 @@ class FolderController extends Controller
     public function destroy($id)
     {
         $folder = Folder::findOrFail($id);
+        $this->authorizedProject($folder->project_id, withTrashed: true);
+        $this->assertPermission('manage-projects');
+
         $projectId = $folder->project_id;
 
         DB::transaction(function () use ($folder) {

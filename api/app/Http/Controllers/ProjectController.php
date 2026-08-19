@@ -17,9 +17,19 @@ class ProjectController extends Controller
             return response()->json(['error' => 'Unauthenticated'], 401);
         }
 
-        $query = Project::with(['customFields', 'users', 'category'])->where('is_deleted', false);
+        // `trashed=1` lists the bin. Without it, only live projects. The bin
+        // panel in the sidebar could never populate before this existed.
+        $wantsTrashed = $request->boolean('trashed');
 
-        if (!$user->role || $user->role->name !== 'مدير') {
+        $query = Project::with(['customFields', 'users', 'category']);
+
+        if ($wantsTrashed) {
+            $query->onlyTrashed();
+        } else {
+            $query->where('is_deleted', false);
+        }
+
+        if (! $user->isAdmin()) {
             $query->whereHas('users', function ($uq) use ($user) {
                 $uq->where('users.id', $user->id);
             });
@@ -30,6 +40,7 @@ class ProjectController extends Controller
             $pData['member_ids'] = $p->users->pluck('id')->all();
             $pData['category_id'] = $p->category_id;
             $pData['category_name'] = $p->category?->name;
+            $pData['is_deleted'] = (bool) $p->is_deleted;
 
             // Compute task status counts for this project
             $statusCounts = Task::where('project_id', $p->id)
@@ -48,6 +59,8 @@ class ProjectController extends Controller
 
     public function store(Request $request)
     {
+        $this->assertPermission('manage-projects');
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -56,6 +69,8 @@ class ProjectController extends Controller
             'custom_statuses' => 'nullable|array',
             'category_id' => 'nullable|exists:project_categories,id'
         ]);
+
+        $this->assertOwnedCategory($request, $validated['category_id'] ?? null);
 
         $statuses = ['بانتظار البدء', 'قيد العمل', 'تحت المراجعة', 'مكتمل'];
         $customFields = [];
@@ -202,6 +217,8 @@ class ProjectController extends Controller
 
     public function show($id)
     {
+        $this->authorizedProject($id);
+
         $project = Project::with(['customFields', 'users'])->where('is_deleted', false)->findOrFail($id);
         $pData = $project->toArray();
         $pData['member_ids'] = $project->users->pluck('id')->all();
@@ -210,7 +227,8 @@ class ProjectController extends Controller
 
     public function update(Request $request, $id)
     {
-        $project = Project::findOrFail($id);
+        $project = $this->authorizedProject($id);
+        $this->assertPermission('manage-projects');
         
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -218,6 +236,8 @@ class ProjectController extends Controller
             'statuses' => 'nullable|array',
             'category_id' => 'nullable|exists:project_categories,id'
         ]);
+
+        $this->assertOwnedCategory($request, $validated['category_id'] ?? null);
 
         $project->update($validated);
 
@@ -235,7 +255,9 @@ class ProjectController extends Controller
 
     public function destroy($id)
     {
-        $project = Project::findOrFail($id);
+        $project = $this->authorizedProject($id);
+        $this->assertPermission('manage-projects');
+
         $project->update(['is_deleted' => true]);
         $project->delete(); // SoftDeletes call
 
@@ -247,6 +269,9 @@ class ProjectController extends Controller
     public function restore($id)
     {
         $project = Project::onlyTrashed()->findOrFail($id);
+        $this->assertProjectAccess($project);
+        $this->assertPermission('manage-projects');
+
         $project->restore();
         $project->update(['is_deleted' => false]);
 
@@ -257,7 +282,9 @@ class ProjectController extends Controller
 
     public function addStatus(Request $request, $id)
     {
-        $project = Project::findOrFail($id);
+        $project = $this->authorizedProject($id);
+        $this->assertPermission('manage-projects');
+
         $validated = $request->validate([
             'status' => 'required|string'
         ]);
@@ -275,7 +302,9 @@ class ProjectController extends Controller
 
     public function deleteStatus(Request $request, $id)
     {
-        $project = Project::findOrFail($id);
+        $project = $this->authorizedProject($id);
+        $this->assertPermission('manage-projects');
+
         $validated = $request->validate([
             'status' => 'required|string',
             'fallback_status' => 'nullable|string'
@@ -304,5 +333,23 @@ class ProjectController extends Controller
         broadcast(new DataChanged($request->user()->id, 'projects'))->toOthers();
 
         return response()->json($project);
+    }
+
+    /**
+     * A project may only be filed under a category its owner created.
+     */
+    private function assertOwnedCategory(Request $request, $categoryId): void
+    {
+        if (empty($categoryId)) {
+            return;
+        }
+
+        $owned = \App\Models\ProjectCategory::whereKey($categoryId)
+            ->where('user_id', $request->user()->id)
+            ->exists();
+
+        if (! $owned) {
+            abort(403, 'غير مصرح لك باستخدام هذا التصنيف.');
+        }
     }
 }

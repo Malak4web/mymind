@@ -10,13 +10,17 @@ class DailyTaskController extends Controller
 {
     public function index(Request $request)
     {
-        $user = $request->user();
-        $query = DailyTask::query();
+        $user = $this->currentUser($request);
 
-        if ($user) {
-            $query->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id)->orWhereNull('user_id');
-            });
+        $query = DailyTask::where('user_id', $user->id);
+
+        // The journal is date-navigated; without this filter every day showed
+        // the same list forever.
+        if ($request->filled('date')) {
+            $query->whereDate('due_date', $request->query('date'));
+        } elseif ($request->filled('from') && $request->filled('to')) {
+            $query->whereDate('due_date', '>=', $request->query('from'))
+                  ->whereDate('due_date', '<=', $request->query('to'));
         }
 
         return response()->json($query->orderBy('created_at', 'desc')->get());
@@ -24,17 +28,19 @@ class DailyTaskController extends Controller
 
     public function store(Request $request)
     {
-        $user = $request->user();
+        $user = $this->currentUser($request);
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'category' => 'nullable|string',
             'priority' => 'nullable|string',
+            'due_date' => 'nullable|date',
             'due_time' => 'nullable|string',
             'completed' => 'nullable|boolean'
         ]);
 
         $task = DailyTask::create([
-            'user_id' => $user ? $user->id : null,
+            'user_id' => $user->id,
+            'due_date' => $validated['due_date'] ?? now()->toDateString(),
             'title' => $validated['title'],
             'category' => $validated['category'] ?? 'عام',
             'priority' => $validated['priority'] ?? 'متوسطة',
@@ -51,11 +57,13 @@ class DailyTaskController extends Controller
 
     public function update(Request $request, $id)
     {
-        $task = DailyTask::findOrFail($id);
+        $task = $this->currentUser($request)->dailyTasks()->findOrFail($id);
+
         $validated = $request->validate([
             'title' => 'nullable|string|max:255',
             'category' => 'nullable|string',
             'priority' => 'nullable|string',
+            'due_date' => 'nullable|date',
             'due_time' => 'nullable|string',
             'completed' => 'nullable|boolean'
         ]);
@@ -71,7 +79,7 @@ class DailyTaskController extends Controller
 
     public function destroy(Request $request, $id)
     {
-        $task = DailyTask::findOrFail($id);
+        $task = $this->currentUser($request)->dailyTasks()->findOrFail($id);
         $task->delete();
 
         if ($request->user()) {
@@ -83,7 +91,7 @@ class DailyTaskController extends Controller
 
     public function sync(Request $request)
     {
-        $user = $request->user();
+        $user = $this->currentUser($request);
         $tasks = $request->input('tasks', []);
 
         if (is_array($tasks)) {
@@ -91,11 +99,8 @@ class DailyTaskController extends Controller
                 if (empty($t['title'])) continue;
                 
                 $existing = DailyTask::where('title', $t['title'])
-                    ->where(function($q) use ($user) {
-                        if ($user) {
-                            $q->where('user_id', $user->id)->orWhereNull('user_id');
-                        }
-                    })->first();
+                    ->where('user_id', $user->id)
+                    ->first();
 
                 if ($existing) {
                     $existing->update([
@@ -106,7 +111,8 @@ class DailyTaskController extends Controller
                     ]);
                 } else {
                     DailyTask::create([
-                        'user_id' => $user ? $user->id : null,
+                        'user_id' => $user->id,
+                        'due_date' => $t['dueDate'] ?? ($t['due_date'] ?? now()->toDateString()),
                         'title' => $t['title'],
                         'category' => $t['category'] ?? 'عام',
                         'priority' => $t['priority'] ?? 'متوسطة',

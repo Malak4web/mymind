@@ -13,7 +13,8 @@ class CustomFieldController extends Controller
 {
     public function storeDefinition(Request $request, $projectId)
     {
-        Project::findOrFail($projectId);
+        $this->authorizedProject($projectId);
+        $this->assertPermission('manage-projects');
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -34,6 +35,9 @@ class CustomFieldController extends Controller
 
     public function deactivateDefinition($projectId, $fieldId)
     {
+        $this->authorizedProject($projectId);
+        $this->assertPermission('manage-projects');
+
         $field = CustomFieldDefinition::where('project_id', $projectId)->findOrFail($fieldId);
         $field->update(['active' => false]);
 
@@ -45,6 +49,8 @@ class CustomFieldController extends Controller
     public function setValue(Request $request, $taskId)
     {
         $task = Task::findOrFail($taskId);
+        $this->authorizedProject($task->project_id, withTrashed: true);
+        $this->assertPermission('manage-tasks');
 
         $validated = $request->validate([
             'custom_field_definition_id' => 'required|exists:custom_field_definitions,id',

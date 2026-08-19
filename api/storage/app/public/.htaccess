@@ -1,0 +1,44 @@
+# Defense in depth for user-uploaded files (SEC-01).
+# Uploads are extension-whitelisted in the controllers; this makes sure that
+# even if something slips through, the web server never executes it.
+#
+# Every directive below is either FileInfo/Limit context or guarded by
+# <IfModule>, so a restrictive AllowOverride cannot turn this file into a 500.
+
+# mod_php: turn the interpreter off for this tree entirely
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php8.c>
+    php_flag engine off
+</IfModule>
+
+# Mirrors Laravel's own public/.htaccess guard so AllowOverride Options
+# is not required for this file to load.
+<IfModule mod_negotiation.c>
+    Options -Indexes -MultiViews
+</IfModule>
+
+# PHP-FPM / CGI: strip any handler that could execute these files, and deny
+# them outright. FileInfo context, so this works under AllowOverride FileInfo.
+<FilesMatch "\.(?i:php|php[3-8]|phtml|phps|phar|pl|py|rb|cgi|sh|bash|jsp|asp|aspx|htaccess)$">
+    SetHandler none
+    RemoveHandler .php .php3 .php4 .php5 .php6 .php7 .php8 .phtml .phar .cgi .pl .py .sh
+    ForceType text/plain
+
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set Content-Security-Policy "default-src 'none'; sandbox"
+</IfModule>

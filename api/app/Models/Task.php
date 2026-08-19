@@ -33,6 +33,11 @@ class Task extends Model
         return $this->hasMany(CustomFieldValue::class);
     }
 
+    public function comments(): HasMany
+    {
+        return $this->hasMany(Comment::class);
+    }
+
     protected static function booted()
     {
         static::created(function ($task) {

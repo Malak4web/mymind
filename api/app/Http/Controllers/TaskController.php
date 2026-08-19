@@ -11,18 +11,21 @@ class TaskController extends Controller
 {
     public function index($projectId)
     {
-        $project = Project::findOrFail($projectId);
-        return response()->json($project->tasks()->with(['attachments', 'customFieldValues.definition'])->get());
+        $project = $this->authorizedProject($projectId);
+
+        return response()->json($project->tasks()->with(['attachments', 'customFieldValues.definition', 'comments'])->get());
     }
 
     public function store(Request $request, $projectId)
     {
-        $project = Project::findOrFail($projectId);
+        $project = $this->authorizedProject($projectId);
+        $this->assertPermission('manage-tasks');
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'status' => 'nullable|string',
+            'priority' => 'nullable|string|max:255',
             'start_date' => 'nullable|date',
             'deadline' => 'nullable|date'
         ]);
@@ -57,6 +60,7 @@ class TaskController extends Controller
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'status' => $validated['status'] ?? ($project->statuses[0] ?? 'بانتظار البدء'),
+            'priority' => $validated['priority'] ?? 'متوسط',
             'start_date' => $validated['start_date'] ?? null,
             'deadline' => $validated['deadline'] ?? null
         ]);
@@ -69,15 +73,23 @@ class TaskController extends Controller
     public function update(Request $request, $id)
     {
         $task = Task::findOrFail($id);
+        $this->authorizedProject($task->project_id, withTrashed: true);
+        $this->assertPermission('manage-tasks');
 
         $validated = $request->validate([
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'status' => 'nullable|string',
+            'priority' => 'nullable|string|max:255',
             'start_date' => 'nullable|date',
             'deadline' => 'nullable|date',
             'project_id' => 'nullable|integer|exists:projects,id'
         ]);
+
+        // Moving a task between projects requires access to the destination too.
+        if (!empty($validated['project_id']) && (int) $validated['project_id'] !== (int) $task->project_id) {
+            $this->assertProjectAccess(Project::findOrFail($validated['project_id']));
+        }
 
         $start = $request->input('start_date', $task->start_date);
         $end = $request->input('deadline', $task->deadline);
@@ -117,6 +129,9 @@ class TaskController extends Controller
     public function destroy($id)
     {
         $task = Task::findOrFail($id);
+        $this->authorizedProject($task->project_id, withTrashed: true);
+        $this->assertPermission('manage-tasks');
+
         $projectId = $task->project_id;
         $task->delete();
 

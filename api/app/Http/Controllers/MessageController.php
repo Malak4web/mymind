@@ -10,7 +10,7 @@ class MessageController extends Controller
 {
     public function indexProjectMessages($projectId)
     {
-        Project::findOrFail($projectId);
+        $this->authorizedProject($projectId);
         
         $messages = Message::where('project_id', $projectId)
                            ->whereNull('task_id')
@@ -22,6 +22,9 @@ class MessageController extends Controller
 
     public function indexTaskMessages($taskId)
     {
+        $task = \App\Models\Task::findOrFail($taskId);
+        $this->authorizedProject($task->project_id, withTrashed: true);
+
         $messages = Message::where('task_id', $taskId)
                            ->orderBy('created_at', 'asc')
                            ->get();
@@ -31,7 +34,7 @@ class MessageController extends Controller
 
     public function store(Request $request, $projectId)
     {
-        Project::findOrFail($projectId);
+        $this->authorizedProject($projectId);
 
         $validated = $request->validate([
             'sender' => 'required|string|max:255',
@@ -55,6 +58,7 @@ class MessageController extends Controller
     public function destroy($id)
     {
         $message = Message::findOrFail($id);
+        $this->authorizedProject($message->project_id, withTrashed: true);
         $message->update([
             'is_deleted' => true,
             'text' => 'تم حذف هذه الرسالة'

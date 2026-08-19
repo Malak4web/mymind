@@ -11,23 +11,42 @@ class ProjectFileController extends Controller
 {
     public function index($projectId)
     {
+        $this->authorizedProject($projectId);
+
         $files = ProjectFile::where('project_id', $projectId)->get();
+
         return response()->json($files);
     }
 
     public function store(Request $request, $projectId)
     {
+        $project = $this->authorizedProject($projectId);
+        $this->assertPermission('manage-projects');
+
         $request->validate([
-            'file' => 'required|file|max:20480', // max 20MB
-            'folder_id' => 'nullable|exists:folders,id'
+            'file' => [
+                'required',
+                'file',
+                'max:20480', // 20 MB
+                'extensions:'.implode(',', AttachmentController::ALLOWED_EXTENSIONS),
+            ],
+            'folder_id' => 'nullable|exists:folders,id',
         ]);
+
+        // A folder from another project must not be usable as a target.
+        if ($request->filled('folder_id')) {
+            $folder = \App\Models\Folder::find($request->folder_id);
+            if (! $folder || (int) $folder->project_id !== (int) $project->id) {
+                return response()->json(['error' => 'المجلد لا ينتمي إلى هذا المشروع'], 422);
+            }
+        }
 
         $uploadedFile = $request->file('file');
         $originalName = $uploadedFile->getClientOriginalName();
-        
+
         // Save to public storage
         $path = $uploadedFile->store('project_files', 'public');
-        
+
         // Format size
         $bytes = $uploadedFile->getSize();
         if ($bytes >= 1048576) {
@@ -57,8 +76,11 @@ class ProjectFileController extends Controller
     public function destroy($id)
     {
         $file = ProjectFile::findOrFail($id);
+        $this->authorizedProject($file->project_id);
+        $this->assertPermission('manage-projects');
+
         $projectId = $file->project_id;
-        
+
         // Extract relative storage path and delete physical file
         $relativePath = str_replace('/storage/', '', $file->path);
         Storage::disk('public')->delete($relativePath);
@@ -73,10 +95,16 @@ class ProjectFileController extends Controller
     public function download($id)
     {
         $file = ProjectFile::findOrFail($id);
+        $this->authorizedProject($file->project_id);
+
         $relativePath = str_replace('/storage/', '', $file->path);
+
         if (Storage::disk('public')->exists($relativePath)) {
-            return Storage::disk('public')->response($relativePath, $file->name);
+            return Storage::disk('public')->download($relativePath, $file->name, [
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
         }
+
         return response()->json(['error' => 'File not found'], 404);
     }
 }
