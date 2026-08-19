@@ -16,7 +16,7 @@ jobs:
   frontend-ci:
     name: Build & Test Frontend (Vue + Vite)
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
 
     steps:
       - name: Checkout Code
@@ -31,18 +31,24 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm install
 
+      # Colour classes on shades outside Tailwind's scale compile to nothing,
+      # so the element silently inherits instead. 507 of these had accumulated
+      # unnoticed, including the dark-mode page background. Fail the build.
+      - name: Check for dead Tailwind colour classes
+        run: npm run lint:classes
+
       - name: Run Frontend Tests
-        run: timeout 20s npx vitest run --passWithNoTests || true
-        timeout-minutes: 1
+        run: npx vitest run --passWithNoTests
+        timeout-minutes: 3
 
       - name: Build Frontend
         run: npm run build
-        timeout-minutes: 1
+        timeout-minutes: 2
 
   backend-ci:
     name: Build & Test Backend (Laravel API)
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
 
     steps:
       - name: Checkout Code
@@ -71,8 +77,14 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: [frontend-ci, backend-ci]
-    timeout-minutes: 4
+    timeout-minutes: 6
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    env:
+      DEPLOY_HOST: ${{ secrets.SSH_HOST }}
+      DEPLOY_USER: ${{ secrets.SSH_USER }}
+      DEPLOY_PORT: ${{ secrets.SSH_PORT }}
+      DEPLOY_PATH: /var/www/mind
 
     steps:
       - name: Checkout Code
@@ -100,15 +112,26 @@ jobs:
           npm install
           npm run build
 
+      # Everything below is uploaded verbatim. Anything not needed at runtime
+      # is removed first so it never reaches a web-accessible directory --
+      # .git in particular can expose the full source history. See SEC-07.
+      - name: Strip non-deployable files
+        run: |
+          rm -rf .git .github .agents node_modules src .vscode
+          rm -f  ./*.log ./*.flag ./*.txt run_*.js run_*.cjs verify_suite.cjs
+          rm -rf api/tests api/.git
+          echo "--- payload ---"
+          du -sh . && ls -A
+
       - name: Deploy via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: 173.212.237.82
-          username: root
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: 2212
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ env.DEPLOY_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ env.DEPLOY_PORT }}
           source: "."
-          target: "/var/www/mind"
+          target: ${{ env.DEPLOY_PATH }}
           rm: false
           strip_components: 0
           tar_tmp_path: "/tmp"
@@ -116,41 +139,61 @@ jobs:
       - name: Execute Post-Deployment Scripts
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 173.212.237.82
-          username: root
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: 2212
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ env.DEPLOY_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ env.DEPLOY_PORT }}
           script: |
-            cd /var/www/mind
+            set -euo pipefail
+            cd ${{ env.DEPLOY_PATH }}
 
-            # Install backend dependencies on remote target if needed
-            if [ -d "api" ]; then
-              cd api
-              composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
-              
-              # Run database migrations
-              php artisan migrate --force
+            if [ ! -d "api" ]; then
+              echo "api/ missing - aborting"; exit 1
+            fi
 
-              # Recreate storage symlink
-              php artisan storage:link --force || true
+            cd api
+            composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
-              # Clear & cache application config, routes, views, and events
-              php artisan optimize:clear
-              php artisan config:cache
-              php artisan route:cache
-              php artisan view:cache
-              php artisan event:cache || true
+            # Production settings are enforced here, not trusted from the
+            # server's existing .env. Debug output leaks APP_KEY and the
+            # Pusher secret in stack traces. See SEC-09.
+            if [ -f .env ]; then
+              sed -i 's|^APP_ENV=.*|APP_ENV=production|'  .env
+              sed -i 's|^APP_DEBUG=.*|APP_DEBUG=false|'   .env
+              sed -i 's|^LOG_LEVEL=.*|LOG_LEVEL=error|'   .env
+              grep -q '^APP_ENV='   .env || echo 'APP_ENV=production' >> .env
+              grep -q '^APP_DEBUG=' .env || echo 'APP_DEBUG=false'    >> .env
+            else
+              echo ".env missing on the server - aborting"; exit 1
+            fi
 
-              # Set directory & file permissions safely
-              find . -type f -exec chmod 644 {} \;
-              find . -type d -exec chmod 755 {} \;
-              chmod +x artisan
-              
-              # Ensure SQLite database file and folder have write permissions for web server (www-data)
-              mkdir -p database
-              touch database/database.sqlite
-              chmod -R 777 database
-              chmod 666 database/database.sqlite 2>/dev/null || true
-              chmod -R 775 storage bootstrap/cache database
-              chown -R www-data:www-data storage bootstrap/cache database 2>/dev/null || true
+            php artisan migrate --force
+            php artisan storage:link --force || true
+
+            php artisan optimize:clear
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            php artisan event:cache || true
+
+            # Baseline permissions: readable, not writable, never world-writable.
+            find . -type f -not -path './storage/*' -exec chmod 644 {} \;
+            find . -type d -not -path './storage/*' -exec chmod 755 {} \;
+            chmod +x artisan
+
+            # Secrets stay owner-only.
+            chmod 600 .env
+
+            # Only the runtime-writable trees get group write.
+            mkdir -p database storage/app/public
+            chmod -R 775 storage bootstrap/cache database
+            [ -f database/database.sqlite ] && chmod 660 database/database.sqlite || true
+
+            chown -R "$USER":www-data storage bootstrap/cache database 2>/dev/null || true
+
+            # Fail loudly if debug somehow survived.
+            if php artisan tinker --execute="exit(config('app.debug') ? 1 : 0);"; then
+              echo "APP_DEBUG is off."
+            else
+              echo "APP_DEBUG is still enabled - failing the deploy."; exit 1
             fi
