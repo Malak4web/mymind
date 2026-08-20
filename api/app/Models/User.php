@@ -64,6 +64,11 @@ class User extends Authenticatable
         return $this->hasMany(DailyNote::class);
     }
 
+    public function ideas(): HasMany
+    {
+        return $this->hasMany(Idea::class);
+    }
+
     public function isAdmin(): bool
     {
         return $this->role !== null && $this->role->name === self::ADMIN_ROLE;

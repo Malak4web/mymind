@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { store } from '../store'
 import MobileBottomSheet from './MobileBottomSheet.vue'
+import IdeasBoard from './IdeasBoard.vue'
 
 // Date helpers
 const formatDateKey = (dateObj) => {
@@ -613,22 +614,22 @@ const handleDeleteDailyNote = (noteId) => {
       <div class="relative flex items-center justify-between gap-1.5 py-1 px-1.5 bg-slate-100/90 dark:bg-slate-800/90 rounded-xl">
         <!-- Active Sliding Pill Indicator -->
         <div
-          class="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 shadow-md shadow-violet-600/30 transition-all duration-300 ease-out"
-          :class="activeTab === 'habits' ? 'right-1' : 'right-[calc(50%+2px)]'"
+          class="absolute top-1 bottom-1 w-[calc(33.333%-4px)] rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 shadow-md shadow-violet-600/30 transition-all duration-300 ease-out"
+          :class="activeTab === 'habits' ? 'right-1' : (activeTab === 'journal' ? 'right-[calc(33.333%+1px)]' : 'right-[calc(66.666%+2px)]')"
         ></div>
 
         <button
           @click="activeTab = 'habits'"
           :class="[
-            'relative z-10 flex-1 px-3 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[44px] min-w-[44px] sm:min-w-[44px] cursor-pointer',
+            'relative z-10 flex-1 px-2 sm:px-3 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-1 sm:gap-1.5 min-h-[44px] sm:min-h-[44px] min-w-[44px] sm:min-w-[44px] cursor-pointer',
             activeTab === 'habits'
               ? 'text-white'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           ]"
         >
-          <span>⚡ العادات اليومية</span>
+          <span>⚡ العادات</span>
           <span :class="[
-            'px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold transition-colors',
+            'px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold transition-colors',
             activeTab === 'habits' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
           ]">
             {{ activeHabits.length }}
@@ -638,18 +639,36 @@ const handleDeleteDailyNote = (noteId) => {
         <button
           @click="activeTab = 'journal'"
           :class="[
-            'relative z-10 flex-1 px-3 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[44px] min-w-[44px] sm:min-w-[44px] cursor-pointer',
+            'relative z-10 flex-1 px-2 sm:px-3 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-1 sm:gap-1.5 min-h-[44px] sm:min-h-[44px] min-w-[44px] sm:min-w-[44px] cursor-pointer',
             activeTab === 'journal'
               ? 'text-white'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           ]"
         >
-          <span>📝 اليوميات (تاسكات سريعة)</span>
+          <span>📝 اليوميات</span>
           <span :class="[
-            'px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold transition-colors',
+            'px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold transition-colors',
             activeTab === 'journal' ? 'bg-white/20 text-white' : 'bg-violet-500/15 text-violet-600 dark:text-violet-300'
           ]">
             {{ store.dailyTasks ? store.dailyTasks.length : 0 }}
+          </span>
+        </button>
+
+        <button
+          @click="activeTab = 'ideas'"
+          :class="[
+            'relative z-10 flex-1 px-2 sm:px-3 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-1 sm:gap-1.5 min-h-[44px] sm:min-h-[44px] min-w-[44px] sm:min-w-[44px] cursor-pointer',
+            activeTab === 'ideas'
+              ? 'text-white'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          ]"
+        >
+          <span>💡 أفكاري</span>
+          <span :class="[
+            'px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold transition-colors',
+            activeTab === 'ideas' ? 'bg-white/20 text-white' : 'bg-amber-500/15 text-amber-600 dark:text-amber-300'
+          ]">
+            {{ store.ideas ? store.ideas.length : 0 }}
           </span>
         </button>
       </div>
@@ -1284,6 +1303,12 @@ const handleDeleteDailyNote = (noteId) => {
 
     </div>
     <!-- End Daily Tasks / Journal Tab View -->
+
+    <!-- Ideas Tab View (أفكاري) -->
+    <div v-if="activeTab === 'ideas'">
+      <IdeasBoard />
+    </div>
+    <!-- End Ideas Tab View -->
 
     <!-- Micro Floating Action Button (Micro-FAB) -->
     <button

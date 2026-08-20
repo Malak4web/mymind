@@ -18,6 +18,7 @@ use App\Http\Controllers\NoteController;
 use App\Http\Controllers\DailyTaskController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DailyNoteController;
+use App\Http\Controllers\IdeaController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Broadcast;
@@ -221,4 +222,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/habits/sync', [\App\Http\Controllers\HabitController::class, 'sync']);
     Route::put('/habits/{id}', [\App\Http\Controllers\HabitController::class, 'update']);
     Route::delete('/habits/{id}', [\App\Http\Controllers\HabitController::class, 'destroy']);
+
+    // Ideas routes (أفكاري)
+    Route::get('/ideas', [IdeaController::class, 'index']);
+    Route::post('/ideas', [IdeaController::class, 'store']);
+    Route::post('/ideas/sync', [IdeaController::class, 'sync']);
+    Route::post('/ideas/reorder', [IdeaController::class, 'reorder']);
+    Route::post('/ideas/upload-image', [IdeaController::class, 'uploadImage']);
+    Route::get('/ideas/{id}', [IdeaController::class, 'show']);
+    Route::put('/ideas/{id}', [IdeaController::class, 'update']);
+    Route::delete('/ideas/{id}', [IdeaController::class, 'destroy']);
 });

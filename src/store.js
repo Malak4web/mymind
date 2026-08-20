@@ -146,6 +146,53 @@ export const store = reactive({
   // Dynamic Categories for Daily Tasks & Routines (User Scoped)
   dailyTaskCategories: ['عام', 'عمل', 'شخصي', 'صحة', 'دراسة', 'عاجل'],
 
+  // Ideas Board State (أفكاري)
+  ideas: (() => {
+    try {
+      const saved = localStorage.getItem('mymind_ideas')
+      if (saved) return JSON.parse(saved)
+    } catch (e) {
+      console.error('فشل تحميل الأفكار من التخزين المحلي', e)
+    }
+    return [
+      {
+        id: 1,
+        title: 'استكشاف تصميم هوية بصرية جديدة بالذكاء الاصطناعي',
+        content: 'توليد أفكار لشعارات وأيقونات وتطوير باليتات ألوان متناسقة للواجهات الداكنة والفاتحة.',
+        images: [],
+        color: 'amber',
+        category: 'إبداع',
+        is_pinned: true,
+        idea_date: new Date().toISOString().slice(0, 10),
+        sort_order: 0,
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 2,
+        title: 'خطة إطلاق ميزة المزامنة الحية',
+        content: 'إعداد سيناريوهات اختبار التزامن اللحظي عبر Pusher وتجربة الأداء على شبكات الجوال الضعيفة.',
+        images: [],
+        color: 'violet',
+        category: 'مشاريع',
+        is_pinned: false,
+        idea_date: new Date().toISOString().slice(0, 10),
+        sort_order: 1,
+        createdAt: new Date().toISOString()
+      }
+    ]
+  })(),
+
+  // Dynamic Categories for Ideas Board
+  ideaCategories: (() => {
+    try {
+      const saved = localStorage.getItem('mymind_idea_categories')
+      if (saved) return JSON.parse(saved)
+    } catch (e) {
+      // fallback
+    }
+    return ['عام', 'إبداع', 'مشاريع', 'محتوى', 'شخصي', 'تسويق', 'تطوير']
+  })(),
+
 
 
 
@@ -239,6 +286,7 @@ export const store = reactive({
         await this.loadDailyTasks()
         await this.loadDailyNotes()
         await this.loadHabits()
+        await this.loadIdeas()
         this.startRealtimeSync()
       } else {
         // Token expired/invalid
@@ -262,6 +310,7 @@ export const store = reactive({
     this.folders = []
     this.projectFiles = []
     this.notes = []
+    this.ideas = []
     this.activeDocumentFolderId = null
     this.notifications = []
     this.trashedProjects = []
@@ -1913,6 +1962,9 @@ export const store = reactive({
       case 'daily_notes':
         this.loadDailyNotes(true)
         break
+      case 'ideas':
+        this.loadIdeas(true)
+        break
       default:
         console.log(`[Pusher] نوع غير معروف: ${type}`)
     }
@@ -2518,6 +2570,315 @@ export const store = reactive({
     this.habits = [...this.habits]
     this.saveHabits()
     this._saveHabitToServer(habit)
+  },
+
+  // ── Ideas Board Management (أفكاري) ──────────────────────────────────
+  _ideasWritesPending: 0,
+  _ideasSyncing: false,
+
+  saveIdeas() {
+    try {
+      localStorage.setItem('mymind_ideas', JSON.stringify(this.ideas))
+    } catch (e) {
+      console.error('فشل حفظ الأفكار في التخزين المحلي', e)
+    }
+  },
+
+  saveIdeaCategories() {
+    try {
+      localStorage.setItem('mymind_idea_categories', JSON.stringify(this.ideaCategories))
+    } catch (e) {
+      console.error('فشل حفظ تصنيفات الأفكار', e)
+    }
+  },
+
+  async loadIdeas(isSilent = false) {
+    if (this._ideasWritesPending > 0) return
+    if (this._ideasSyncing) return
+    this._ideasSyncing = true
+
+    try {
+      const res = await fetch(`${this.apiBase}/ideas`, {
+        headers: this.getAuthHeaders()
+      })
+      if (!res.ok) {
+        this._ideasSyncing = false
+        return
+      }
+
+      const rawIdeas = await res.json()
+      if (!Array.isArray(rawIdeas)) { this._ideasSyncing = false; return }
+
+      if (this._ideasWritesPending > 0) { this._ideasSyncing = false; return }
+
+      const serverIdeas = rawIdeas.map(item => ({
+        id: item.id,
+        title: item.title,
+        content: item.content || '',
+        images: Array.isArray(item.images) ? item.images : [],
+        color: item.color || 'amber',
+        category: item.category || 'عام',
+        is_pinned: Boolean(item.is_pinned),
+        idea_date: item.idea_date ? String(item.idea_date).slice(0, 10) : new Date().toISOString().slice(0, 10),
+        sort_order: typeof item.sort_order === 'number' ? item.sort_order : 0,
+        createdAt: item.created_at || new Date().toISOString()
+      }))
+
+      // MERGE strategy: keep local-only ideas (unsynced) + server ideas
+      const serverIdSet = new Set(serverIdeas.map(t => String(t.id)))
+      const serverTitleSet = new Set(serverIdeas.map(t => (t.title || '').trim().toLowerCase()))
+      const localOnlyIdeas = (this.ideas || []).filter(t => {
+        const id = Number(t.id)
+        return id > 1_000_000_000
+          && !serverIdSet.has(String(t.id))
+          && !serverTitleSet.has((t.title || '').trim().toLowerCase())
+      })
+
+      const merged = [...localOnlyIdeas, ...serverIdeas]
+      const currentJson = JSON.stringify(this.ideas)
+      const newJson = JSON.stringify(merged)
+      if (currentJson !== newJson) {
+        this.ideas = merged
+        this.saveIdeas()
+      }
+
+      if (localOnlyIdeas.length > 0) {
+        this._pushUnsyncedIdeas(localOnlyIdeas)
+      }
+    } catch (e) {
+      if (!isSilent) console.error('فشل تحميل الأفكار من السيرفر', e)
+    } finally {
+      this._ideasSyncing = false
+    }
+  },
+
+  async _pushUnsyncedIdeas(items) {
+    for (const item of items) {
+      try {
+        const res = await fetch(`${this.apiBase}/ideas`, {
+          method: 'POST',
+          headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            title: item.title,
+            content: item.content,
+            images: item.images,
+            color: item.color,
+            category: item.category,
+            is_pinned: item.is_pinned,
+            idea_date: item.idea_date,
+            sort_order: item.sort_order
+          })
+        })
+        if (res.ok) {
+          const created = await res.json()
+          const idx = this.ideas.findIndex(t => t.id === item.id)
+          if (idx !== -1 && created.id) {
+            this.ideas[idx].id = created.id
+            this.ideas = [...this.ideas]
+            this.saveIdeas()
+          }
+        }
+      } catch (e) {
+        // Will retry on next sync cycle
+      }
+    }
+  },
+
+  async addIdea(ideaData) {
+    const tempId = Date.now()
+    const newIdea = {
+      id: tempId,
+      title: ideaData.title || '',
+      content: ideaData.content || '',
+      images: Array.isArray(ideaData.images) ? ideaData.images : [],
+      color: ideaData.color || 'amber',
+      category: ideaData.category || 'عام',
+      is_pinned: Boolean(ideaData.is_pinned),
+      idea_date: ideaData.idea_date || new Date().toISOString().slice(0, 10),
+      sort_order: typeof ideaData.sort_order === 'number' ? ideaData.sort_order : 0,
+      createdAt: new Date().toISOString()
+    }
+
+    if (newIdea.is_pinned) {
+      this.ideas = [newIdea, ...this.ideas]
+    } else {
+      const firstUnpinnedIndex = this.ideas.findIndex(i => !i.is_pinned)
+      if (firstUnpinnedIndex === -1) {
+        this.ideas = [...this.ideas, newIdea]
+      } else {
+        this.ideas.splice(firstUnpinnedIndex, 0, newIdea)
+        this.ideas = [...this.ideas]
+      }
+    }
+
+    this.saveIdeas()
+    this._ideasWritesPending++
+
+    try {
+      const res = await fetch(`${this.apiBase}/ideas`, {
+        method: 'POST',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          title: newIdea.title,
+          content: newIdea.content,
+          images: newIdea.images,
+          color: newIdea.color,
+          category: newIdea.category,
+          is_pinned: newIdea.is_pinned,
+          idea_date: newIdea.idea_date,
+          sort_order: newIdea.sort_order
+        })
+      })
+
+      if (res.ok) {
+        const created = await res.json()
+        const idx = this.ideas.findIndex(t => t.id === tempId)
+        if (idx !== -1 && created && created.id) {
+          this.ideas[idx].id = created.id
+          this.ideas = [...this.ideas]
+          this.saveIdeas()
+        }
+        return { ...newIdea, ...(created || {}) }
+      }
+    } catch (e) {
+      console.error('فشل حفظ الفكرة على السيرفر، تم الحفظ محلياً', e)
+    } finally {
+      this._ideasWritesPending = Math.max(0, this._ideasWritesPending - 1)
+    }
+    return newIdea
+  },
+
+  async updateIdea(id, data) {
+    const idx = this.ideas.findIndex(i => String(i.id) === String(id))
+    if (idx === -1) return
+
+    this.ideas[idx] = { ...this.ideas[idx], ...data }
+    this.ideas = [...this.ideas]
+    this.saveIdeas()
+    this._ideasWritesPending++
+
+    try {
+      const payload = {}
+      if (data.title !== undefined) payload.title = data.title
+      if (data.content !== undefined) payload.content = data.content
+      if (data.images !== undefined) payload.images = data.images
+      if (data.color !== undefined) payload.color = data.color
+      if (data.category !== undefined) payload.category = data.category
+      if (data.is_pinned !== undefined) payload.is_pinned = data.is_pinned
+      if (data.idea_date !== undefined) payload.idea_date = data.idea_date
+      if (data.sort_order !== undefined) payload.sort_order = data.sort_order
+
+      const res = await fetch(`${this.apiBase}/ideas/${id}`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload)
+      })
+
+      if (res.ok) {
+        const updated = await res.json()
+        return updated
+      }
+    } catch (e) {
+      console.error('فشل تحديث الفكرة على السيرفر', e)
+    } finally {
+      this._ideasWritesPending = Math.max(0, this._ideasWritesPending - 1)
+    }
+  },
+
+  async deleteIdea(id) {
+    this.ideas = this.ideas.filter(i => String(i.id) !== String(id))
+    this.saveIdeas()
+    this._ideasWritesPending++
+
+    try {
+      await fetch(`${this.apiBase}/ideas/${id}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      })
+    } catch (e) {
+      console.error('فشل حذف الفكرة من السيرفر', e)
+    } finally {
+      this._ideasWritesPending = Math.max(0, this._ideasWritesPending - 1)
+    }
+  },
+
+  async togglePinIdea(id) {
+    const idea = this.ideas.find(i => String(i.id) === String(id))
+    if (!idea) return
+    const newPinned = !idea.is_pinned
+    await this.updateIdea(id, { is_pinned: newPinned })
+    this.ideas.sort((a, b) => {
+      if (a.is_pinned === b.is_pinned) return (a.sort_order || 0) - (b.sort_order || 0)
+      return a.is_pinned ? -1 : 1
+    })
+    this.ideas = [...this.ideas]
+    this.saveIdeas()
+  },
+
+  async reorderIdeas(orderedIds) {
+    const map = new Map(this.ideas.map(i => [String(i.id), i]))
+    const newIdeas = []
+    orderedIds.forEach((id, index) => {
+      const item = map.get(String(id))
+      if (item) {
+        item.sort_order = index
+        newIdeas.push(item)
+      }
+    })
+    this.ideas.forEach(i => {
+      if (!orderedIds.map(String).includes(String(i.id))) {
+        newIdeas.push(i)
+      }
+    })
+
+    this.ideas = newIdeas
+    this.saveIdeas()
+    this._ideasWritesPending++
+
+    try {
+      await fetch(`${this.apiBase}/ideas/reorder`, {
+        method: 'POST',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ ids: orderedIds })
+      })
+    } catch (e) {
+      console.error('فشل حفظ ترتيب الأفكار على السيرفر', e)
+    } finally {
+      this._ideasWritesPending = Math.max(0, this._ideasWritesPending - 1)
+    }
+  },
+
+  async uploadIdeaImage(file) {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const res = await fetch(`${this.apiBase}/ideas/upload-image`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: formData
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.message || 'فشل رفع الصورة')
+    }
+
+    return await res.json()
+  },
+
+  addIdeaCategory(name) {
+    const trimmed = name.trim()
+    if (!trimmed || this.ideaCategories.includes(trimmed)) return false
+    this.ideaCategories.push(trimmed)
+    this.saveIdeaCategories()
+    return true
+  },
+
+  deleteIdeaCategory(name) {
+    if (name === 'عام') return false
+    this.ideaCategories = this.ideaCategories.filter(c => c !== name)
+    this.saveIdeaCategories()
+    return true
   }
 })
 
