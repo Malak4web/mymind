@@ -406,6 +406,8 @@ const filteredDailyTasks = computed(() => {
     list = list.filter(t => !t.completed)
   } else if (dailyTaskStatusFilter.value === 'completed') {
     list = list.filter(t => t.completed)
+  } else if (dailyTaskStatusFilter.value === 'reminders') {
+    list = list.filter(t => !t.completed && t.reminderAt)
   }
 
   if (dailyTaskCategoryFilter.value !== 'all') {
@@ -432,20 +434,146 @@ const dailyTasksStats = computed(() => {
   }
 })
 
+// Reminder State and Handlers
+const isReminderModalOpen = ref(false)
+const activeReminderTask = ref(null)
+const reminderForm = ref({
+  date: new Date().toISOString().slice(0, 10),
+  time: '12:00',
+  repeat: 'none'
+})
+
+const showQuickReminderInput = ref(false)
+const newDailyTaskReminderTime = ref('')
+const newDailyTaskReminderRepeat = ref('none')
+
+const openReminderModal = (task) => {
+  activeReminderTask.value = task
+  if (task.reminderAt) {
+    const d = new Date(task.reminderAt)
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      const h = String(d.getHours()).padStart(2, '0')
+      const min = String(d.getMinutes()).padStart(2, '0')
+      reminderForm.value = {
+        date: `${y}-${m}-${day}`,
+        time: `${h}:${min}`,
+        repeat: task.reminderRepeat || 'none'
+      }
+    }
+  } else {
+    const now = new Date()
+    now.setHours(now.getHours() + 1)
+    const y = now.getFullYear()
+    const m = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    const h = String(now.getHours()).padStart(2, '0')
+    const min = String(now.getMinutes()).padStart(2, '0')
+    reminderForm.value = {
+      date: `${y}-${m}-${day}`,
+      time: `${h}:${min}`,
+      repeat: 'none'
+    }
+  }
+
+  try {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  } catch (e) {}
+
+  isReminderModalOpen.value = true
+}
+
+const applyReminderPreset = (type) => {
+  const now = new Date()
+  if (type === '1hr') {
+    now.setHours(now.getHours() + 1)
+  } else if (type === 'tonight') {
+    now.setHours(20, 0, 0, 0)
+  } else if (type === 'tomorrow_morning') {
+    now.setDate(now.getDate() + 1)
+    now.setHours(9, 0, 0, 0)
+  } else if (type === 'next_week') {
+    now.setDate(now.getDate() + 7)
+    now.setHours(10, 0, 0, 0)
+  }
+
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const h = String(now.getHours()).padStart(2, '0')
+  const min = String(now.getMinutes()).padStart(2, '0')
+  reminderForm.value.date = `${y}-${m}-${day}`
+  reminderForm.value.time = `${h}:${min}`
+}
+
+const handleSaveReminder = async () => {
+  if (!activeReminderTask.value) return
+  const { date, time, repeat } = reminderForm.value
+  if (!date || !time) {
+    alert('يرجى تحديد التاريخ والوقت للتذكير')
+    return
+  }
+
+  const reminderIso = new Date(`${date}T${time}:00`).toISOString()
+  await store.setTaskReminder(activeReminderTask.value.id, {
+    reminderAt: reminderIso,
+    reminderRepeat: repeat || 'none'
+  })
+
+  isReminderModalOpen.value = false
+}
+
+const handleRemoveReminder = async (taskId) => {
+  await store.removeTaskReminder(taskId)
+  isReminderModalOpen.value = false
+}
+
+const formatReminderDisplay = (task) => {
+  if (!task.reminderAt) return ''
+  const d = new Date(task.reminderAt)
+  if (isNaN(d.getTime())) return ''
+  
+  const now = new Date()
+  const isTodayDate = d.toDateString() === now.toDateString()
+  const timeStr = d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+  const dateStr = isTodayDate ? 'اليوم' : d.toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })
+  
+  const repeatLabel = task.reminderRepeat === 'daily' ? '🔁 يومي' :
+                      task.reminderRepeat === 'weekly' ? '🔁 أسبوعي' :
+                      task.reminderRepeat === 'monthly' ? '🔁 شهري' : ''
+
+  return `${dateStr} ${timeStr} ${repeatLabel}`.trim()
+}
+
 const handleCreateDailyTask = () => {
   const title = newDailyTaskTitle.value.trim()
   if (!title) return
+
+  let reminderAt = null
+  if (showQuickReminderInput.value && newDailyTaskReminderTime.value) {
+    const todayStr = new Date().toISOString().slice(0, 10)
+    reminderAt = new Date(`${todayStr}T${newDailyTaskReminderTime.value}:00`).toISOString()
+  }
 
   store.addDailyTask({
     title,
     category: newDailyTaskCategory.value || 'عام',
     priority: newDailyTaskPriority.value || 'متوسطة',
     dueDate: selectedDateKey.value,
-    dueTime: newDailyTaskTime.value || ''
+    dueTime: newDailyTaskTime.value || '',
+    reminderAt,
+    reminderRepeat: newDailyTaskReminderRepeat.value || 'none'
   })
 
   newDailyTaskTitle.value = ''
   newDailyTaskTime.value = ''
+  newDailyTaskReminderTime.value = ''
+  newDailyTaskReminderRepeat.value = 'none'
+  showQuickReminderInput.value = false
   triggerConfetti()
 }
 
@@ -1039,7 +1167,7 @@ const handleDeleteDailyNote = (noteId) => {
               />
             </div>
 
-            <!-- Options Row: Category, Priority, Due Time, Submit -->
+            <!-- Options Row: Category, Priority, Due Time, Reminder Toggle, Submit -->
             <div class="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2">
               <!-- Category Selector -->
               <select
@@ -1067,6 +1195,22 @@ const handleDeleteDailyNote = (noteId) => {
                 title="تحديد موعد اختياري"
               />
 
+              <!-- Quick Reminder Toggle -->
+              <button
+                type="button"
+                @click="showQuickReminderInput = !showQuickReminderInput"
+                :class="[
+                  'px-2.5 py-2 sm:px-3 sm:py-3 rounded-lg sm:rounded-xl border text-xs font-bold transition flex items-center gap-1 min-h-[44px] sm:min-h-[48px] cursor-pointer',
+                  showQuickReminderInput
+                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                    : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-amber-600'
+                ]"
+                title="ضبط تذكير"
+              >
+                <span>🔔</span>
+                <span class="hidden sm:inline">تذكير</span>
+              </button>
+
               <!-- Submit Button -->
               <button
                 type="submit"
@@ -1076,6 +1220,28 @@ const handleDeleteDailyNote = (noteId) => {
                 <span>إضافة</span>
               </button>
             </div>
+          </div>
+
+          <!-- Expanded Quick Reminder Bar -->
+          <div v-if="showQuickReminderInput" class="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs">
+            <span class="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1">
+              <span>⏰ موعد التذكير اليوم:</span>
+            </span>
+            <input
+              v-model="newDailyTaskReminderTime"
+              type="time"
+              class="px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-slate-900 dark:text-white font-bold"
+              required
+            />
+            <select
+              v-model="newDailyTaskReminderRepeat"
+              class="px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-slate-900 dark:text-white font-bold"
+            >
+              <option value="none">بدون تكرار (مرة واحدة)</option>
+              <option value="daily">يتكرر يومياً 🔁</option>
+              <option value="weekly">يتكرر أسبوعياً 🔁</option>
+              <option value="monthly">يتكرر شهرياً 🔁</option>
+            </select>
           </div>
         </form>
       </div>
@@ -1160,6 +1326,19 @@ const handleDeleteDailyNote = (noteId) => {
             ]"
           >
             المعلقة ({{ store.dailyTasks ? store.dailyTasks.filter(t => !t.completed).length : 0 }})
+          </button>
+
+          <button
+            @click="dailyTaskStatusFilter = 'reminders'"
+            :class="[
+              'px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 min-h-[44px] sm:min-h-[44px] min-w-[44px] sm:min-w-[44px] flex items-center justify-center gap-1',
+              dailyTaskStatusFilter === 'reminders'
+                ? 'bg-amber-600 text-white shadow-sm shadow-amber-600/30'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            ]"
+          >
+            <span>🔔</span>
+            <span>تذكيرات ({{ store.dailyTasks ? store.dailyTasks.filter(t => !t.completed && t.reminderAt).length : 0 }})</span>
           </button>
 
           <button
@@ -1272,12 +1451,35 @@ const handleDeleteDailyNote = (noteId) => {
                 <span v-if="task.dueTime" class="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
                   ⏰ {{ task.dueTime }}
                 </span>
+
+                <!-- Active Reminder Badge -->
+                <button
+                  v-if="task.reminderAt"
+                  @click.stop="openReminderModal(task)"
+                  type="button"
+                  class="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1 font-bold hover:bg-amber-500/25 transition cursor-pointer"
+                  title="تعديل موعد التذكير"
+                >
+                  <span class="animate-pulse">🔔</span>
+                  <span>{{ formatReminderDisplay(task) }}</span>
+                </button>
               </div>
             </div>
           </div>
 
           <!-- Right side: Actions -->
           <div class="flex items-center gap-1 shrink-0">
+            <!-- Set Reminder Button (if not already set) -->
+            <button
+              v-if="!task.reminderAt"
+              @click.stop="openReminderModal(task)"
+              type="button"
+              class="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition cursor-pointer min-h-[44px] min-w-[44px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center"
+              title="ضبط تذكير" aria-label="ضبط تذكير"
+            >
+              🔔
+            </button>
+
             <!-- Delete Button -->
             <button
               @click="handleDeleteDailyTask(task.id)"
@@ -1747,6 +1949,171 @@ const handleDeleteDailyNote = (noteId) => {
             </div>
           </div>
         </div>
+      </div>
+    </MobileBottomSheet>
+
+    <!-- 4. Bottom Sheet: Reminder Setup Modal -->
+    <MobileBottomSheet 
+      :isOpen="isReminderModalOpen" 
+      @close="isReminderModalOpen = false"
+      :title="activeReminderTask ? `تذكير بمهمة: ${activeReminderTask.title}` : 'ضبط تذكير المهمة'"
+      icon="⏰"
+      maxWidth="max-w-md"
+    >
+      <div v-if="activeReminderTask" class="space-y-4 sm:space-y-5">
+        <!-- Quick Presets -->
+        <div>
+          <label class="block text-xs font-extrabold text-slate-700 dark:text-slate-300 mb-2">خيارات سريعة</label>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              @click="applyReminderPreset('1hr')"
+              class="px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-violet-500/15 hover:text-violet-600 dark:hover:text-violet-400 text-slate-700 dark:text-slate-300 text-xs font-bold transition cursor-pointer flex flex-col items-center justify-center gap-0.5 min-h-[44px]"
+            >
+              <span>⏳ بعد ساعة</span>
+            </button>
+            <button
+              type="button"
+              @click="applyReminderPreset('tonight')"
+              class="px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-violet-500/15 hover:text-violet-600 dark:hover:text-violet-400 text-slate-700 dark:text-slate-300 text-xs font-bold transition cursor-pointer flex flex-col items-center justify-center gap-0.5 min-h-[44px]"
+            >
+              <span>🌙 مساء اليوم</span>
+            </button>
+            <button
+              type="button"
+              @click="applyReminderPreset('tomorrow_morning')"
+              class="px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-violet-500/15 hover:text-violet-600 dark:hover:text-violet-400 text-slate-700 dark:text-slate-300 text-xs font-bold transition cursor-pointer flex flex-col items-center justify-center gap-0.5 min-h-[44px]"
+            >
+              <span>☀️ صباح الغد</span>
+            </button>
+            <button
+              type="button"
+              @click="applyReminderPreset('next_week')"
+              class="px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-violet-500/15 hover:text-violet-600 dark:hover:text-violet-400 text-slate-700 dark:text-slate-300 text-xs font-bold transition cursor-pointer flex flex-col items-center justify-center gap-0.5 min-h-[44px]"
+            >
+              <span>📅 الأسبوع القادم</span>
+            </button>
+          </div>
+        </div>
+
+        <form @submit.prevent="handleSaveReminder" class="space-y-4">
+          <!-- Date & Time Row -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-extrabold text-slate-700 dark:text-slate-300 mb-1.5">تاريخ التذكير</label>
+              <input
+                v-model="reminderForm.date"
+                type="date"
+                class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-bold focus:ring-2 focus:ring-violet-500 outline-none min-h-[44px]"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-extrabold text-slate-700 dark:text-slate-300 mb-1.5">وقت التنبيه</label>
+              <input
+                v-model="reminderForm.time"
+                type="time"
+                class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-bold focus:ring-2 focus:ring-violet-500 outline-none min-h-[44px]"
+                required
+              />
+            </div>
+          </div>
+
+          <!-- Recurrence / Repeat Frequency -->
+          <div>
+            <label class="block text-xs font-extrabold text-slate-700 dark:text-slate-300 mb-1.5">تكرار التذكير (تاريخ متجدد)</label>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
+              <button
+                type="button"
+                @click="reminderForm.repeat = 'none'"
+                :class="[
+                  'px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer min-h-[44px] flex items-center justify-center',
+                  reminderForm.repeat === 'none'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                ]"
+              >
+                مرة واحدة
+              </button>
+              <button
+                type="button"
+                @click="reminderForm.repeat = 'daily'"
+                :class="[
+                  'px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer min-h-[44px] flex items-center justify-center gap-1',
+                  reminderForm.repeat === 'daily'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                ]"
+              >
+                <span>🔁</span>
+                <span>يومي</span>
+              </button>
+              <button
+                type="button"
+                @click="reminderForm.repeat = 'weekly'"
+                :class="[
+                  'px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer min-h-[44px] flex items-center justify-center gap-1',
+                  reminderForm.repeat === 'weekly'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                ]"
+              >
+                <span>🔁</span>
+                <span>أسبوعي</span>
+              </button>
+              <button
+                type="button"
+                @click="reminderForm.repeat = 'monthly'"
+                :class="[
+                  'px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer min-h-[44px] flex items-center justify-center gap-1',
+                  reminderForm.repeat === 'monthly'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                ]"
+              >
+                <span>🔁</span>
+                <span>شهري</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Info Alert -->
+          <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] font-semibold text-amber-700 dark:text-amber-300 flex items-start gap-2">
+            <span class="text-sm">🔔</span>
+            <span>سيتم إرسال إشعار في مركز الإشعارات وإشعار منبثق على جهازك عند حلول الوقت المحدد، ويتجدد تلقائياً عند اختيار التكرار.</span>
+          </div>
+
+          <!-- Modal Actions -->
+          <div class="flex items-center justify-between gap-3 pt-3 border-t border-slate-200/60 dark:border-slate-800">
+            <button
+              v-if="activeReminderTask.reminderAt"
+              type="button"
+              @click="handleRemoveReminder(activeReminderTask.id)"
+              class="px-4 py-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 text-xs font-bold transition cursor-pointer min-h-[44px] flex items-center justify-center gap-1"
+            >
+              <span>🗑️</span>
+              <span>إلغاء التذكير</span>
+            </button>
+            <div v-else></div>
+
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                @click="isReminderModalOpen = false"
+                class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-200 transition cursor-pointer min-h-[44px]"
+              >
+                إلغاء
+              </button>
+              <button
+                type="submit"
+                class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-xs font-black hover:from-violet-500 hover:to-indigo-500 shadow-md shadow-violet-600/20 transition cursor-pointer min-h-[44px] flex items-center gap-1.5"
+              >
+                <span>💾</span>
+                <span>حفظ التذكير</span>
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
     </MobileBottomSheet>
 

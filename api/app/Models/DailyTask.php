@@ -16,11 +16,16 @@ class DailyTask extends Model
         'category',
         'priority',
         'due_time',
+        'reminder_at',
+        'reminder_repeat',
+        'reminder_sent_at',
         'completed'
     ];
 
     protected $casts = [
         'completed' => 'boolean',
-        'due_date' => 'date:Y-m-d'
+        'due_date' => 'date:Y-m-d',
+        'reminder_at' => 'datetime',
+        'reminder_sent_at' => 'datetime'
     ];
 }

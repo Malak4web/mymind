@@ -35,6 +35,9 @@ class DailyTaskController extends Controller
             'priority' => 'nullable|string',
             'due_date' => 'nullable|date',
             'due_time' => 'nullable|string',
+            'reminder_at' => 'nullable|date',
+            'reminder_repeat' => 'nullable|string|in:none,daily,weekly,monthly',
+            'reminder_sent_at' => 'nullable|date',
             'completed' => 'nullable|boolean'
         ]);
 
@@ -45,6 +48,9 @@ class DailyTaskController extends Controller
             'category' => $validated['category'] ?? 'عام',
             'priority' => $validated['priority'] ?? 'متوسطة',
             'due_time' => $validated['due_time'] ?? null,
+            'reminder_at' => $validated['reminder_at'] ?? null,
+            'reminder_repeat' => $validated['reminder_repeat'] ?? 'none',
+            'reminder_sent_at' => $validated['reminder_sent_at'] ?? null,
             'completed' => $validated['completed'] ?? false
         ]);
 
@@ -65,10 +71,20 @@ class DailyTaskController extends Controller
             'priority' => 'nullable|string',
             'due_date' => 'nullable|date',
             'due_time' => 'nullable|string',
+            'reminder_at' => 'nullable',
+            'reminder_repeat' => 'nullable|string|in:none,daily,weekly,monthly',
+            'reminder_sent_at' => 'nullable',
             'completed' => 'nullable|boolean'
         ]);
 
         $task->update(array_filter($validated, fn($val) => $val !== null));
+
+        // If client explicitly sets reminder_at to null
+        if ($request->has('reminder_at') && $request->input('reminder_at') === null) {
+            $task->reminder_at = null;
+            $task->reminder_repeat = 'none';
+            $task->save();
+        }
 
         if ($request->user()) {
             broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
@@ -102,11 +118,16 @@ class DailyTaskController extends Controller
                     ->where('user_id', $user->id)
                     ->first();
 
+                $reminderAt = $t['reminderAt'] ?? ($t['reminder_at'] ?? null);
+                $reminderRepeat = $t['reminderRepeat'] ?? ($t['reminder_repeat'] ?? 'none');
+
                 if ($existing) {
                     $existing->update([
                         'category' => $t['category'] ?? $existing->category,
                         'priority' => $t['priority'] ?? $existing->priority,
                         'due_time' => $t['dueTime'] ?? ($t['due_time'] ?? $existing->due_time),
+                        'reminder_at' => $reminderAt !== null ? $reminderAt : $existing->reminder_at,
+                        'reminder_repeat' => $reminderRepeat ?: $existing->reminder_repeat,
                         'completed' => isset($t['completed']) ? (bool)$t['completed'] : $existing->completed
                     ]);
                 } else {
@@ -117,6 +138,8 @@ class DailyTaskController extends Controller
                         'category' => $t['category'] ?? 'عام',
                         'priority' => $t['priority'] ?? 'متوسطة',
                         'due_time' => $t['dueTime'] ?? ($t['due_time'] ?? null),
+                        'reminder_at' => $reminderAt,
+                        'reminder_repeat' => $reminderRepeat,
                         'completed' => !empty($t['completed'])
                     ]);
                 }

@@ -323,4 +323,77 @@ describe('DailyRoutines.vue Component Tests', () => {
     expect(deleteDefault).toBe(false)
     expect(store.dailyTaskCategories).toContain('عام')
   })
+
+  it('sets and removes recurring reminder on a daily task', async () => {
+    store.dailyTasks = [
+      {
+        id: 101,
+        title: 'مهمة فحص دوري',
+        category: 'عمل',
+        priority: 'عالية',
+        dueDate: '2026-08-20',
+        dueTime: '10:00',
+        reminderAt: null,
+        reminderRepeat: 'none',
+        completed: false
+      }
+    ]
+
+    const wrapper = mount(DailyRoutines)
+    const journalTabBtn = wrapper.findAll('button').find(b => b.text().includes('اليوميات'))
+    await journalTabBtn.trigger('click')
+
+    // Open reminder modal
+    const reminderBtn = wrapper.find('button[title="ضبط تذكير"]')
+    expect(reminderBtn.exists()).toBe(true)
+    await reminderBtn.trigger('click')
+
+    // Set reminder
+    await store.setTaskReminder(101, {
+      reminderAt: '2026-08-20T14:00:00.000Z',
+      reminderRepeat: 'daily'
+    })
+
+    const task = store.dailyTasks.find(t => t.id === 101)
+    expect(task.reminderAt).toBe('2026-08-20T14:00:00.000Z')
+    expect(task.reminderRepeat).toBe('daily')
+
+    // Filter by reminders
+    const remindersFilterBtn = wrapper.findAll('button').find(b => b.text().includes('تذكيرات'))
+    expect(remindersFilterBtn.exists()).toBe(true)
+    await remindersFilterBtn.trigger('click')
+    expect(wrapper.text()).toContain('مهمة فحص دوري')
+
+    // Remove reminder
+    await store.removeTaskReminder(101)
+    expect(store.dailyTasks.find(t => t.id === 101).reminderAt).toBeNull()
+  })
+
+  it('reminder engine automatically advances recurring reminders and adds notifications', () => {
+    const pastTime = new Date(Date.now() - 60000).toISOString()
+    store.notifications = []
+    store.dailyTasks = [
+      {
+        id: 202,
+        title: 'اجتماع أسبوعي مجدول',
+        category: 'عمل',
+        priority: 'عالية',
+        dueDate: '2026-08-20',
+        reminderAt: pastTime,
+        reminderRepeat: 'weekly',
+        completed: false
+      }
+    ]
+
+    store._firedReminders.clear()
+    store._checkDueReminders()
+
+    // Expect an in-app notification to be triggered
+    expect(store.notifications.length).toBeGreaterThan(0)
+    expect(store.notifications[0].title).toContain('اجتماع أسبوعي مجدول')
+
+    // Expect reminderAt to advance to next week
+    const task = store.dailyTasks.find(t => t.id === 202)
+    expect(new Date(task.reminderAt).getTime()).toBeGreaterThan(Date.now())
+  })
 })

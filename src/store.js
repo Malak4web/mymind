@@ -288,6 +288,7 @@ export const store = reactive({
         await this.loadHabits()
         await this.loadIdeas()
         this.startRealtimeSync()
+        this._startReminderEngine()
       } else {
         // Token expired/invalid
         this.logout();
@@ -1408,6 +1409,16 @@ export const store = reactive({
       })
 
       if (res.ok) {
+        let created = {}
+        try { created = await res.json() } catch (e) {}
+        const newNotif = {
+          id: created.id || Date.now(),
+          title: created.title || title,
+          text: created.text || text,
+          isRead: Boolean(created.is_read),
+          timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+        }
+        this.notifications.unshift(newNotif)
         // Trigger browser push simulation
         if (this.pushPermission === 'granted') {
           console.log(`[إشعار سطح المكتب]: ${title} - ${text}`)
@@ -2003,6 +2014,9 @@ export const store = reactive({
         priority: t.priority || 'متوسطة',
         dueDate: t.due_date ? String(t.due_date).slice(0, 10) : null,
         dueTime: t.due_time || '',
+        reminderAt: t.reminder_at || null,
+        reminderRepeat: t.reminder_repeat || 'none',
+        reminderSentAt: t.reminder_sent_at || null,
         completed: Boolean(t.completed),
         createdAt: t.created_at || new Date().toISOString()
       }))
@@ -2053,6 +2067,8 @@ export const store = reactive({
             priority: task.priority,
             due_date: task.dueDate,
             due_time: task.dueTime,
+            reminder_at: task.reminderAt || null,
+            reminder_repeat: task.reminderRepeat || 'none',
             completed: task.completed
           })
         })
@@ -2088,6 +2104,9 @@ export const store = reactive({
       priority: 'متوسطة',
       dueDate: new Date().toISOString().slice(0, 10),
       dueTime: '',
+      reminderAt: taskData.reminderAt || null,
+      reminderRepeat: taskData.reminderRepeat || 'none',
+      reminderSentAt: null,
       completed: false,
       createdAt: new Date().toISOString(),
       ...taskData
@@ -2106,6 +2125,8 @@ export const store = reactive({
           priority: newTask.priority,
           due_date: newTask.dueDate,
           due_time: newTask.dueTime,
+          reminder_at: newTask.reminderAt,
+          reminder_repeat: newTask.reminderRepeat,
           completed: newTask.completed
         })
       })
@@ -2168,23 +2189,33 @@ export const store = reactive({
   async updateDailyTask(id, data) {
     const taskIndex = this.dailyTasks.findIndex(t => String(t.id) === String(id))
     if (taskIndex !== -1) {
-      this.dailyTasks[taskIndex] = { ...this.dailyTasks[taskIndex], ...data }
+      const current = this.dailyTasks[taskIndex]
+      const updated = { ...current, ...data }
+      if (data.reminder_at !== undefined) updated.reminderAt = data.reminder_at
+      if (data.reminder_repeat !== undefined) updated.reminderRepeat = data.reminder_repeat
+      if (data.reminder_sent_at !== undefined) updated.reminderSentAt = data.reminder_sent_at
+
+      this.dailyTasks[taskIndex] = updated
       this.dailyTasks = [...this.dailyTasks]
       this.saveDailyTasks()
       this._dailyWritesPending++
 
       try {
+        const payload = {}
+        if (data.title !== undefined) payload.title = data.title
+        if (data.category !== undefined) payload.category = data.category
+        if (data.priority !== undefined) payload.priority = data.priority
+        if (data.dueDate !== undefined || data.due_date !== undefined) payload.due_date = data.dueDate || data.due_date
+        if (data.dueTime !== undefined || data.due_time !== undefined) payload.due_time = data.dueTime || data.due_time
+        if (data.reminderAt !== undefined || data.reminder_at !== undefined) payload.reminder_at = data.reminderAt !== undefined ? data.reminderAt : data.reminder_at
+        if (data.reminderRepeat !== undefined || data.reminder_repeat !== undefined) payload.reminder_repeat = data.reminderRepeat || data.reminder_repeat
+        if (data.reminderSentAt !== undefined || data.reminder_sent_at !== undefined) payload.reminder_sent_at = data.reminderSentAt || data.reminder_sent_at
+        if (data.completed !== undefined) payload.completed = data.completed
+
         await fetch(`${this.apiBase}/daily-tasks/${id}`, {
           method: 'PUT',
           headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({
-            title: data.title,
-            category: data.category,
-            priority: data.priority,
-            due_date: data.dueDate,
-            due_time: data.dueTime,
-            completed: data.completed
-          })
+          body: JSON.stringify(payload)
         })
       } catch (e) {
         console.error('فشل تعديل المهمة اليومية على السيرفر', e)
@@ -2192,6 +2223,118 @@ export const store = reactive({
         this._dailyWritesPending = Math.max(0, this._dailyWritesPending - 1)
       }
     }
+  },
+
+  async setTaskReminder(taskId, { reminderAt, reminderRepeat = 'none' }) {
+    await this.updateDailyTask(taskId, {
+      reminderAt,
+      reminder_at: reminderAt,
+      reminderRepeat,
+      reminder_repeat: reminderRepeat
+    })
+    this.toastSuccess('تم ضبط التذكير بنجاح ⏰')
+  },
+
+  async removeTaskReminder(taskId) {
+    await this.updateDailyTask(taskId, {
+      reminderAt: null,
+      reminder_at: null,
+      reminderRepeat: 'none',
+      reminder_repeat: 'none'
+    })
+    this.toastSuccess('تم إلغاء التذكير')
+  },
+
+  // ── Smart Recurring Reminder Engine ────────────────────────────────
+  _reminderTimer: null,
+  _firedReminders: new Set(),
+
+  _startReminderEngine() {
+    if (this._reminderTimer) return
+    this._reminderTimer = setInterval(() => {
+      this._checkDueReminders()
+    }, 15000)
+    this._checkDueReminders()
+  },
+
+  _checkDueReminders() {
+    if (!this.dailyTasks || this.dailyTasks.length === 0) return
+    const now = new Date()
+
+    this.dailyTasks.forEach(task => {
+      if (task.completed || !task.reminderAt) return
+
+      const reminderTime = new Date(task.reminderAt)
+      if (isNaN(reminderTime.getTime())) return
+
+      if (reminderTime <= now) {
+        const fireKey = `${task.id}_${task.reminderAt}`
+        if (this._firedReminders.has(fireKey)) return
+        this._firedReminders.add(fireKey)
+
+        const repeatLabel = task.reminderRepeat === 'daily' ? ' (يتكرر يومياً)' :
+                            task.reminderRepeat === 'weekly' ? ' (يتكرر أسبوعياً)' :
+                            task.reminderRepeat === 'monthly' ? ' (يتكرر شهرياً)' : ''
+
+        const notifTitle = `⏰ تذكير بمهمة: ${task.title}`
+        const notifText = `موعد إنجاز المهمة [${task.title}] - تصنيف: ${task.category || 'عام'}${repeatLabel}`
+
+        // Immediate reactive store update
+        const memNotif = {
+          id: Date.now(),
+          title: notifTitle,
+          text: notifText,
+          isRead: false,
+          timestamp: now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+        }
+        this.notifications = [memNotif, ...this.notifications]
+
+        // Persist to server / broadcast
+        this.addNotification(notifTitle, notifText)
+
+        // Toast feedback
+        this.toastSuccess(`⏰ تذكير بمهمة: ${task.title}`, { timeout: 6000 })
+
+        // Browser native push notification
+        try {
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            new window.Notification(`⏰ تذكير بمهمة: ${task.title}`, {
+              body: `تصنيف: ${task.category || 'عام'} | الأولوية: ${task.priority || 'متوسطة'}${repeatLabel}`,
+              icon: '/favicon.ico'
+            })
+          }
+        } catch (e) {}
+
+        // Haptic feedback
+        try {
+          if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+            navigator.vibrate([150, 75, 150])
+          }
+        } catch (e) {}
+
+        // Calculate next recurrence if recurring
+        let nextReminderAt = null
+        if (task.reminderRepeat && task.reminderRepeat !== 'none') {
+          const nextDate = new Date(reminderTime)
+          if (task.reminderRepeat === 'daily') {
+            nextDate.setDate(nextDate.getDate() + 1)
+          } else if (task.reminderRepeat === 'weekly') {
+            nextDate.setDate(nextDate.getDate() + 7)
+          } else if (task.reminderRepeat === 'monthly') {
+            nextDate.setMonth(nextDate.getMonth() + 1)
+          }
+          nextReminderAt = nextDate.toISOString()
+        }
+
+        // Persist update
+        this.updateDailyTask(task.id, {
+          reminderAt: nextReminderAt,
+          reminder_at: nextReminderAt,
+          reminderSentAt: now.toISOString(),
+          reminder_sent_at: now.toISOString()
+        })
+      }
+    })
   },
 
   // Daily Task Categories Management (User Scoped)
