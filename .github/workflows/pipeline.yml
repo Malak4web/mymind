@@ -204,9 +204,17 @@ jobs:
             chown -R "${USER:-root}":www-data storage bootstrap/cache database 2>/dev/null || true
 
             # Fail loudly if debug somehow survived.
-            # Clear cached config first so tinker reads the .env directly.
+            # Diagnostic: show what sed produced so we can debug remotely.
+            echo "--- .env APP_DEBUG line after sed ---"
+            grep -n 'APP_DEBUG' .env || echo "(APP_DEBUG not found in .env)"
+            echo "---"
+
             php artisan config:clear
-            if php artisan tinker --execute="exit(config('app.debug') ? 1 : 0);"; then
+            # Use artisan directly: `config:show` prints the resolved value
+            # without the PHP (bool)"false"→true pitfall of raw tinker.
+            DEBUG_VAL=$(php artisan tinker --execute="echo config('app.debug') ? 'ON' : 'OFF';")
+            echo "Resolved app.debug = $DEBUG_VAL"
+            if echo "$DEBUG_VAL" | grep -q "OFF"; then
               echo "APP_DEBUG is off."
             else
               echo "APP_DEBUG is still enabled - failing the deploy."; exit 1
