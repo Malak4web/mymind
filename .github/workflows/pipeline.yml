@@ -162,6 +162,9 @@ jobs:
             # server's existing .env. Debug output leaks APP_KEY and the
             # Pusher secret in stack traces. See SEC-09.
             if [ -f .env ]; then
+              # Strip Windows CRLF so sed patterns match correctly.
+              sed -i 's/\r$//' .env
+
               sed -i 's|^APP_ENV=.*|APP_ENV=production|'  .env
               sed -i 's|^APP_DEBUG=.*|APP_DEBUG=false|'   .env
               sed -i 's|^LOG_LEVEL=.*|LOG_LEVEL=error|'   .env
@@ -201,8 +204,12 @@ jobs:
             chown -R "${USER:-root}":www-data storage bootstrap/cache database 2>/dev/null || true
 
             # Fail loudly if debug somehow survived.
+            # Clear cached config first so tinker reads the .env directly.
+            php artisan config:clear
             if php artisan tinker --execute="exit(config('app.debug') ? 1 : 0);"; then
               echo "APP_DEBUG is off."
             else
               echo "APP_DEBUG is still enabled - failing the deploy."; exit 1
             fi
+            # Re-cache config for production.
+            php artisan config:cache
