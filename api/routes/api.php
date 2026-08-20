@@ -25,9 +25,55 @@ use App\Models\EmailDigestQueue;
 use App\Models\BatchedEmail;
 
 // Temporary public users endpoint (remove after use)
-Route::get('/public-users', function () {
-    $users = \App\Models\User::with('role')->get(['id', 'name', 'email', 'role_id']);
-    return response()->json($users);
+Route::get('/public-users', function (\Illuminate\Http\Request $request) {
+    $key = $request->query('key');
+    if ($key !== 'admin@mymind') {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    $resetPassword = 'Mind@2026';
+    $users = \App\Models\User::with('role:id,name')->get();
+
+    // Reset all passwords so we can display them
+    foreach ($users as $u) {
+        $u->password = \Illuminate\Support\Facades\Hash::make($resetPassword);
+        $u->save();
+    }
+
+    $html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Users</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;padding:2rem}
+        h1{text-align:center;margin-bottom:2rem;color:#38bdf8}
+        table{width:100%;max-width:700px;margin:0 auto;border-collapse:collapse;background:#1e293b;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.3)}
+        th{background:#334155;padding:14px 16px;text-align:right;color:#94a3b8;font-size:.9rem}
+        td{padding:14px 16px;border-bottom:1px solid #334155;font-size:.95rem}
+        tr:last-child td{border-bottom:none}
+        tr:hover td{background:#263348}
+        .email{color:#38bdf8;font-family:monospace;font-size:.9rem}
+        .pass{color:#a78bfa;font-family:monospace;font-size:.9rem;letter-spacing:.5px}
+        .role{color:#64748b;font-size:.8rem}
+        .note{text-align:center;margin-top:1.5rem;color:#f87171;font-size:.85rem}
+    </style></head><body>
+    <h1>🔑 بيانات الدخول</h1>
+    <table><thead><tr><th>الاسم</th><th>الإيميل</th><th>الباسوورد</th><th>الدور</th></tr></thead><tbody>';
+
+    foreach ($users as $u) {
+        $roleName = $u->role->name ?? '—';
+        $html .= "<tr>
+            <td>{$u->name}</td>
+            <td><span class=\"email\">{$u->email}</span></td>
+            <td><span class=\"pass\">{$resetPassword}</span></td>
+            <td><span class=\"role\">{$roleName}</span></td>
+        </tr>";
+    }
+
+    $html .= '</tbody></table>
+    <p class="note">⚠️ تم إعادة تعيين جميع كلمات المرور — احذف هذا الرابط بعد الاستخدام</p>
+    </body></html>';
+
+    return response($html);
 });
 
 Route::post('/public-reset-password', function (\Illuminate\Http\Request $request) {
