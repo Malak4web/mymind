@@ -13,6 +13,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasColumn('daily_tasks', 'due_date')) {
+            return;
+        }
+
         Schema::table('daily_tasks', function (Blueprint $table) {
             $table->date('due_date')->nullable()->after('user_id')->index();
         });
