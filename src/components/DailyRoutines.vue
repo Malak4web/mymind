@@ -399,12 +399,7 @@ const handleDeleteCategory = (cat) => {
 
 
 const filteredDailyTasks = computed(() => {
-  // The journal sits under a day navigator, so it must be scoped to the
-  // selected day. Without this every date showed the same list forever.
-  let list = (store.dailyTasks || []).filter(t => {
-    const d = t.dueDate || t.due_date
-    return d ? String(d).slice(0, 10) === selectedDateKey.value : true
-  })
+  let list = store.dailyTasks || []
   
   if (dailyTaskStatusFilter.value === 'pending') {
     list = list.filter(t => !t.completed)
@@ -425,10 +420,7 @@ const filteredDailyTasks = computed(() => {
 })
 
 const dailyTasksStats = computed(() => {
-  const list = (store.dailyTasks || []).filter(t => {
-    const d = t.dueDate || t.due_date
-    return d ? String(d).slice(0, 10) === selectedDateKey.value : true
-  })
+  const list = store.dailyTasks || []
   const total = list.length
   if (total === 0) return { total: 0, completed: 0, percentage: 0 }
   const completed = list.filter(t => t.completed).length
