@@ -74,8 +74,12 @@ class IdeaController extends Controller
             'sort_order' => $validated['sort_order'] ?? ($maxSortOrder + 1),
         ]);
 
-        if ($request->user()) {
-            broadcast(new DataChanged($user->id, 'ideas'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($user->id, 'ideas'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in IdeaController: ' . $e->getMessage());
         }
 
         return response()->json($idea, 201);
@@ -106,8 +110,12 @@ class IdeaController extends Controller
 
         $idea->update(array_filter($validated, fn($v) => $v !== null));
 
-        if ($request->user()) {
-            broadcast(new DataChanged($user->id, 'ideas'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($user->id, 'ideas'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in IdeaController: ' . $e->getMessage());
         }
 
         return response()->json($idea);
@@ -130,8 +138,12 @@ class IdeaController extends Controller
 
         $idea->delete();
 
-        if ($request->user()) {
-            broadcast(new DataChanged($user->id, 'ideas'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($user->id, 'ideas'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in IdeaController: ' . $e->getMessage());
         }
 
         return response()->json(['message' => 'تم حذف الفكرة بنجاح']);
@@ -178,8 +190,12 @@ class IdeaController extends Controller
                 ->update(['sort_order' => $index]);
         }
 
-        if ($request->user()) {
-            broadcast(new DataChanged($user->id, 'ideas'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($user->id, 'ideas'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in IdeaController: ' . $e->getMessage());
         }
 
         return response()->json(['message' => 'تم حفظ الترتيب الجديد']);
@@ -224,8 +240,12 @@ class IdeaController extends Controller
             }
         }
 
-        if ($request->user()) {
-            broadcast(new DataChanged($user->id, 'ideas'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($user->id, 'ideas'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in IdeaController: ' . $e->getMessage());
         }
 
         return $this->index($request);

@@ -6,6 +6,17 @@ import { store } from '../store'
 describe('Milestone 5 Mobile Swipe & Touch Ergonomics Challenge', () => {
   beforeEach(() => {
     store.init()
+    store.habits = [
+      {
+        id: 1,
+        title: 'شرب 8 أكواب ماء',
+        category: 'صحة ورشاقة',
+        icon: '🥛',
+        color: 'from-blue-500 to-cyan-500',
+        frequency: [0, 1, 2, 3, 4, 5, 6],
+        logs: {}
+      }
+    ]
   })
 
   // Helper to simulate touch events

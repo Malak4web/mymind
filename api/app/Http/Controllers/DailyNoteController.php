@@ -42,7 +42,11 @@ class DailyNoteController extends Controller
             'content' => $validated['content'],
         ]);
 
-        broadcast(new DataChanged($user->id, 'daily_notes'))->toOthers();
+        try {
+            broadcast(new DataChanged($user->id, 'daily_notes'))->toOthers();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in DailyNoteController: ' . $e->getMessage());
+        }
 
         return response()->json($note, 201);
     }
@@ -52,7 +56,11 @@ class DailyNoteController extends Controller
         $note = $this->currentUser($request)->dailyNotes()->findOrFail($id);
         $note->delete();
 
-        broadcast(new DataChanged($request->user()->id, 'daily_notes'))->toOthers();
+        try {
+            broadcast(new DataChanged($request->user()->id, 'daily_notes'))->toOthers();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in DailyNoteController: ' . $e->getMessage());
+        }
 
         return response()->json(['message' => 'تم حذف الملاحظة بنجاح']);
     }

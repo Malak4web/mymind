@@ -40,158 +40,20 @@ export const store = reactive({
   taskTemplates: [],
   users: [],
 
-  // Habit & Routines State (يومياتي)
-  habits: (() => {
-    try {
-      const saved = localStorage.getItem('mymind_habits')
-      if (saved) return JSON.parse(saved)
-    } catch (e) {
-      console.error('فشل تحميل العادات من التخزين المحلي', e)
-    }
-    return [
-      {
-        id: 1,
-        title: 'شرب 8 أكواب ماء',
-        category: 'صحة ورشاقة',
-        icon: '🥛',
-        color: 'from-blue-500 to-cyan-500',
-        timeOfDay: 'anytime',
-        type: 'numeric',
-        targetValue: 8,
-        unit: 'كوب',
-        frequency: [0, 1, 2, 3, 4, 5, 6],
-        logs: {}
-      },
-      {
-        id: 2,
-        title: 'قراءة 15 دقيقة في كتاب',
-        category: 'تطوير ذات',
-        icon: '📖',
-        color: 'from-amber-500 to-orange-500',
-        timeOfDay: 'evening',
-        type: 'boolean',
-        targetValue: 1,
-        unit: 'مرة',
-        frequency: [0, 1, 2, 3, 4, 5, 6],
-        logs: {}
-      },
-      {
-        id: 3,
-        title: 'أذكار الصباح والمساء',
-        category: 'هدوء وروحانيات',
-        icon: '🤲',
-        color: 'from-emerald-500 to-teal-500',
-        timeOfDay: 'morning',
-        type: 'boolean',
-        targetValue: 1,
-        unit: 'مرة',
-        frequency: [0, 1, 2, 3, 4, 5, 6],
-        logs: {}
-      },
-      {
-        id: 4,
-        title: 'مشي 5000 خطوة',
-        category: 'صحة ورشاقة',
-        icon: '🏃‍♂️',
-        color: 'from-violet-500 to-purple-500',
-        timeOfDay: 'afternoon',
-        type: 'numeric',
-        targetValue: 5000,
-        unit: 'خطوة',
-        frequency: [0, 1, 2, 3, 4, 5, 6],
-        logs: {}
-      }
-    ]
-  })(),
+  // Habit & Routines State (يومياتي - خاص بكل مستخدم)
+  habits: [],
 
-  // Daily Quick Tasks State (اليوميات)
-  dailyTasks: (() => {
-    try {
-      const saved = localStorage.getItem('mymind_daily_tasks')
-      if (saved) return JSON.parse(saved)
-    } catch (e) {
-      console.error('فشل تحميل اليوميات من التخزين المحلي', e)
-    }
-    return [
-      {
-        id: 101,
-        title: 'مراجعة أهداف اليوم والمهام الأكثر أهمية',
-        category: 'شخصي',
-        priority: 'عالية',
-        dueTime: '09:00',
-        completed: false,
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 102,
-        title: 'متابعة رسائل البريد الإلكتروني والرد السريع',
-        category: 'عمل',
-        priority: 'متوسطة',
-        dueTime: '10:30',
-        completed: true,
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 103,
-        title: 'تمارين الاستطالة والاستراحة الصباحية',
-        category: 'صحة',
-        priority: 'منخفضة',
-        dueTime: '12:00',
-        completed: false,
-        createdAt: new Date().toISOString()
-      }
-    ]
-  })(),
+  // Daily Quick Tasks State (اليوميات - خاص بكل مستخدم)
+  dailyTasks: [],
 
   // Dynamic Categories for Daily Tasks & Routines (User Scoped)
   dailyTaskCategories: ['عام', 'عمل', 'شخصي', 'صحة', 'دراسة', 'عاجل'],
 
-  // Ideas Board State (أفكاري)
-  ideas: (() => {
-    try {
-      const saved = localStorage.getItem('mymind_ideas')
-      if (saved) return JSON.parse(saved)
-    } catch (e) {
-      console.error('فشل تحميل الأفكار من التخزين المحلي', e)
-    }
-    return [
-      {
-        id: 1,
-        title: 'استكشاف تصميم هوية بصرية جديدة بالذكاء الاصطناعي',
-        content: 'توليد أفكار لشعارات وأيقونات وتطوير باليتات ألوان متناسقة للواجهات الداكنة والفاتحة.',
-        images: [],
-        color: 'amber',
-        category: 'إبداع',
-        is_pinned: true,
-        idea_date: new Date().toISOString().slice(0, 10),
-        sort_order: 0,
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 2,
-        title: 'خطة إطلاق ميزة المزامنة الحية',
-        content: 'إعداد سيناريوهات اختبار التزامن اللحظي عبر Pusher وتجربة الأداء على شبكات الجوال الضعيفة.',
-        images: [],
-        color: 'violet',
-        category: 'مشاريع',
-        is_pinned: false,
-        idea_date: new Date().toISOString().slice(0, 10),
-        sort_order: 1,
-        createdAt: new Date().toISOString()
-      }
-    ]
-  })(),
+  // Ideas Board State (أفكاري - خاص بكل مستخدم)
+  ideas: [],
 
   // Dynamic Categories for Ideas Board
-  ideaCategories: (() => {
-    try {
-      const saved = localStorage.getItem('mymind_idea_categories')
-      if (saved) return JSON.parse(saved)
-    } catch (e) {
-      // fallback
-    }
-    return ['عام', 'إبداع', 'مشاريع', 'محتوى', 'شخصي', 'تسويق', 'تطوير']
-  })(),
+  ideaCategories: ['عام', 'إبداع', 'مشاريع', 'محتوى', 'شخصي', 'تسويق', 'تطوير'],
 
 
 
@@ -273,6 +135,17 @@ export const store = reactive({
       if (res.ok) {
         this.currentUser = await res.json()
         this.isAuthenticated = true
+
+        // Load user-scoped local cache first
+        try {
+          const cachedHabits = localStorage.getItem(this.getHabitsStorageKey())
+          if (cachedHabits) this.habits = JSON.parse(cachedHabits)
+          const cachedDailyTasks = localStorage.getItem(this.getDailyTasksStorageKey())
+          if (cachedDailyTasks) this.dailyTasks = JSON.parse(cachedDailyTasks)
+          const cachedIdeas = localStorage.getItem(this.getIdeasStorageKey())
+          if (cachedIdeas) this.ideas = JSON.parse(cachedIdeas)
+        } catch (e) {}
+
         this.loadDailyTaskCategories()
         await this.loadProjectCategories()
         await this.loadProjects()
@@ -312,6 +185,8 @@ export const store = reactive({
     this.projectFiles = []
     this.notes = []
     this.ideas = []
+    this.habits = []
+    this.dailyTasks = []
     this.activeDocumentFolderId = null
     this.notifications = []
     this.trashedProjects = []
@@ -2021,32 +1896,8 @@ export const store = reactive({
         createdAt: t.created_at || new Date().toISOString()
       }))
 
-      // MERGE strategy: keep local-only tasks (unsynced) + server tasks
-      // Local-only tasks have timestamp IDs (> 1 billion) and don't exist on server
-      const serverIdSet = new Set(serverTasks.map(t => String(t.id)))
-      const serverTitleSet = new Set(serverTasks.map(t => t.title.trim().toLowerCase()))
-      const localOnlyTasks = (this.dailyTasks || []).filter(t => {
-        const id = Number(t.id)
-        // Keep if: has a timestamp ID AND not already on server (by ID or title)
-        return id > 1_000_000_000 
-          && !serverIdSet.has(String(t.id))
-          && !serverTitleSet.has((t.title || '').trim().toLowerCase())
-      })
-
-      // Merged result: local unsynced tasks first, then server tasks
-      const merged = [...localOnlyTasks, ...serverTasks]
-
-      const currentJson = JSON.stringify(this.dailyTasks)
-      const newJson = JSON.stringify(merged)
-      if (currentJson !== newJson) {
-        this.dailyTasks = merged
-        this.saveDailyTasks()
-      }
-
-      // Push unsynced local tasks to server in the background
-      if (localOnlyTasks.length > 0) {
-        this._pushUnsyncedTasks(localOnlyTasks)
-      }
+      this.dailyTasks = serverTasks
+      this.saveDailyTasks()
     } catch (e) {
       if (!isSilent) console.error('فشل تحميل اليوميات من السيرفر', e)
     } finally {
@@ -2054,43 +1905,14 @@ export const store = reactive({
     }
   },
 
-  // Push local-only tasks to the server (fire-and-forget)
-  async _pushUnsyncedTasks(tasks) {
-    for (const task of tasks) {
-      try {
-        const res = await fetch(`${this.apiBase}/daily-tasks`, {
-          method: 'POST',
-          headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({
-            title: task.title,
-            category: task.category,
-            priority: task.priority,
-            due_date: task.dueDate,
-            due_time: task.dueTime,
-            reminder_at: task.reminderAt || null,
-            reminder_repeat: task.reminderRepeat || 'none',
-            completed: task.completed
-          })
-        })
-        if (res.ok) {
-          const created = await res.json()
-          // Replace timestamp ID with real server ID
-          const idx = this.dailyTasks.findIndex(t => t.id === task.id)
-          if (idx !== -1 && created.id) {
-            this.dailyTasks[idx].id = created.id
-            this.dailyTasks = [...this.dailyTasks]
-            this.saveDailyTasks()
-          }
-        }
-      } catch (e) {
-        // Will retry on next poll cycle
-      }
-    }
+  getDailyTasksStorageKey() {
+    const userId = this.currentUser?.id || 'guest'
+    return `mymind_daily_tasks_user_${userId}`
   },
 
   saveDailyTasks() {
     try {
-      localStorage.setItem('mymind_daily_tasks', JSON.stringify(this.dailyTasks))
+      localStorage.setItem(this.getDailyTasksStorageKey(), JSON.stringify(this.dailyTasks))
     } catch (e) {
       console.error('فشل حفظ اليوميات في التخزين المحلي', e)
     }
@@ -2420,27 +2242,8 @@ export const store = reactive({
         checklist: h.checklist || []
       }))
 
-      const serverIdSet = new Set(serverHabits.map(h => String(h.id)))
-      const serverTitleSet = new Set(serverHabits.map(h => (h.title || '').trim().toLowerCase()))
-
-      const localOnlyHabits = (this.habits || []).filter(h => {
-        const id = Number(h.id)
-        return id > 1_000_000_000
-          && !serverIdSet.has(String(h.id))
-          && !serverTitleSet.has((h.title || '').trim().toLowerCase())
-      })
-
-      const merged = [...localOnlyHabits, ...serverHabits]
-      const currentJson = JSON.stringify(this.habits)
-      const newJson = JSON.stringify(merged)
-      if (currentJson !== newJson) {
-        this.habits = merged
-        this.saveHabits()
-      }
-
-      if (localOnlyHabits.length > 0) {
-        this._pushUnsyncedHabits(localOnlyHabits)
-      }
+      this.habits = serverHabits
+      this.saveHabits()
     } catch (e) {
       if (!isSilent) console.error('فشل تحميل العادات من السيرفر', e)
     } finally {
@@ -2448,45 +2251,14 @@ export const store = reactive({
     }
   },
 
-  async _pushUnsyncedHabits(habits) {
-    for (const habit of habits) {
-      try {
-        const res = await fetch(`${this.apiBase}/habits`, {
-          method: 'POST',
-          headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({
-            title: habit.title,
-            category: habit.category,
-            icon: habit.icon,
-            color: habit.color,
-            time_of_day: habit.timeOfDay,
-            type: habit.type,
-            target_value: habit.targetValue,
-            unit: habit.unit,
-            frequency: habit.frequency,
-            logs: habit.logs,
-            notes_list: habit.notesList,
-            checklist: habit.checklist
-          })
-        })
-        if (res.ok) {
-          const created = await res.json()
-          const idx = this.habits.findIndex(h => h.id === habit.id)
-          if (idx !== -1 && created.id) {
-            this.habits[idx].id = created.id
-            this.habits = [...this.habits]
-            this.saveHabits()
-          }
-        }
-      } catch (e) {
-        // Will retry on next sync cycle
-      }
-    }
+  getHabitsStorageKey() {
+    const userId = this.currentUser?.id || 'guest'
+    return `mymind_habits_user_${userId}`
   },
 
   saveHabits() {
     try {
-      localStorage.setItem('mymind_habits', JSON.stringify(this.habits))
+      localStorage.setItem(this.getHabitsStorageKey(), JSON.stringify(this.habits))
     } catch (e) {
       console.error('فشل حفظ العادات في التخزين المحلي', e)
     }
@@ -2719,9 +2491,19 @@ export const store = reactive({
   _ideasWritesPending: 0,
   _ideasSyncing: false,
 
+  getIdeasStorageKey() {
+    const userId = this.currentUser?.id || 'guest'
+    return `mymind_ideas_user_${userId}`
+  },
+
+  getIdeaCategoriesStorageKey() {
+    const userId = this.currentUser?.id || 'guest'
+    return `mymind_idea_categories_user_${userId}`
+  },
+
   saveIdeas() {
     try {
-      localStorage.setItem('mymind_ideas', JSON.stringify(this.ideas))
+      localStorage.setItem(this.getIdeasStorageKey(), JSON.stringify(this.ideas))
     } catch (e) {
       console.error('فشل حفظ الأفكار في التخزين المحلي', e)
     }
@@ -2729,7 +2511,7 @@ export const store = reactive({
 
   saveIdeaCategories() {
     try {
-      localStorage.setItem('mymind_idea_categories', JSON.stringify(this.ideaCategories))
+      localStorage.setItem(this.getIdeaCategoriesStorageKey(), JSON.stringify(this.ideaCategories))
     } catch (e) {
       console.error('فشل حفظ تصنيفات الأفكار', e)
     }
@@ -2767,63 +2549,12 @@ export const store = reactive({
         createdAt: item.created_at || new Date().toISOString()
       }))
 
-      // MERGE strategy: keep local-only ideas (unsynced) + server ideas
-      const serverIdSet = new Set(serverIdeas.map(t => String(t.id)))
-      const serverTitleSet = new Set(serverIdeas.map(t => (t.title || '').trim().toLowerCase()))
-      const localOnlyIdeas = (this.ideas || []).filter(t => {
-        const id = Number(t.id)
-        return id > 1_000_000_000
-          && !serverIdSet.has(String(t.id))
-          && !serverTitleSet.has((t.title || '').trim().toLowerCase())
-      })
-
-      const merged = [...localOnlyIdeas, ...serverIdeas]
-      const currentJson = JSON.stringify(this.ideas)
-      const newJson = JSON.stringify(merged)
-      if (currentJson !== newJson) {
-        this.ideas = merged
-        this.saveIdeas()
-      }
-
-      if (localOnlyIdeas.length > 0) {
-        this._pushUnsyncedIdeas(localOnlyIdeas)
-      }
+      this.ideas = serverIdeas
+      this.saveIdeas()
     } catch (e) {
       if (!isSilent) console.error('فشل تحميل الأفكار من السيرفر', e)
     } finally {
       this._ideasSyncing = false
-    }
-  },
-
-  async _pushUnsyncedIdeas(items) {
-    for (const item of items) {
-      try {
-        const res = await fetch(`${this.apiBase}/ideas`, {
-          method: 'POST',
-          headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({
-            title: item.title,
-            content: item.content,
-            images: item.images,
-            color: item.color,
-            category: item.category,
-            is_pinned: item.is_pinned,
-            idea_date: item.idea_date,
-            sort_order: item.sort_order
-          })
-        })
-        if (res.ok) {
-          const created = await res.json()
-          const idx = this.ideas.findIndex(t => t.id === item.id)
-          if (idx !== -1 && created.id) {
-            this.ideas[idx].id = created.id
-            this.ideas = [...this.ideas]
-            this.saveIdeas()
-          }
-        }
-      } catch (e) {
-        // Will retry on next sync cycle
-      }
     }
   },
 

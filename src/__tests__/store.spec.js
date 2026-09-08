@@ -279,7 +279,7 @@ describe('store.js State & Actions Unit Tests', () => {
 
       expect(store.habits.length).toBe(initialCount + 1)
       expect(newHabit.title).toBe('قراءة قرآن')
-      expect(localStorage.getItem('mymind_habits')).toBeTruthy()
+      expect(localStorage.getItem(store.getHabitsStorageKey())).toBeTruthy()
     })
 
     it('toggleHabitLog() should update numeric and boolean habits', async () => {

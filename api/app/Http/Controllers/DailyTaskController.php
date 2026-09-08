@@ -54,8 +54,12 @@ class DailyTaskController extends Controller
             'completed' => $validated['completed'] ?? false
         ]);
 
-        if ($request->user()) {
-            broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in DailyTaskController: ' . $e->getMessage());
         }
 
         return response()->json($task, 201);
@@ -86,8 +90,12 @@ class DailyTaskController extends Controller
             $task->save();
         }
 
-        if ($request->user()) {
-            broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in DailyTaskController: ' . $e->getMessage());
         }
 
         return response()->json($task);
@@ -98,8 +106,12 @@ class DailyTaskController extends Controller
         $task = $this->currentUser($request)->dailyTasks()->findOrFail($id);
         $task->delete();
 
-        if ($request->user()) {
-            broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in DailyTaskController: ' . $e->getMessage());
         }
 
         return response()->json(['message' => 'تم حذف المهمة اليومية بنجاح']);
@@ -146,8 +158,12 @@ class DailyTaskController extends Controller
             }
         }
 
-        if ($request->user()) {
-            broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($request->user()->id, 'daily_tasks'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in DailyTaskController: ' . $e->getMessage());
         }
 
         return $this->index($request);

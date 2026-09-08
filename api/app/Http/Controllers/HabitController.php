@@ -53,8 +53,12 @@ class HabitController extends Controller
             'checklist' => $validated['checklist'] ?? []
         ]);
 
-        if ($request->user()) {
-            broadcast(new DataChanged($request->user()->id, 'habits'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($request->user()->id, 'habits'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in HabitController: ' . $e->getMessage());
         }
 
         return response()->json($habit, 201);
@@ -81,8 +85,12 @@ class HabitController extends Controller
 
         $habit->update(array_filter($validated, fn($val) => $val !== null));
 
-        if ($request->user()) {
-            broadcast(new DataChanged($request->user()->id, 'habits'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($request->user()->id, 'habits'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in HabitController: ' . $e->getMessage());
         }
 
         return response()->json($habit);
@@ -93,8 +101,12 @@ class HabitController extends Controller
         $habit = $this->currentUser($request)->habits()->findOrFail($id);
         $habit->delete();
 
-        if ($request->user()) {
-            broadcast(new DataChanged($request->user()->id, 'habits'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($request->user()->id, 'habits'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in HabitController: ' . $e->getMessage());
         }
 
         return response()->json(['message' => 'تم حذف العادة بنجاح']);
@@ -147,8 +159,12 @@ class HabitController extends Controller
             }
         }
 
-        if ($request->user()) {
-            broadcast(new DataChanged($request->user()->id, 'habits'))->toOthers();
+        try {
+            if ($request->user()) {
+                broadcast(new DataChanged($request->user()->id, 'habits'))->toOthers();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Broadcasting failed in HabitController: ' . $e->getMessage());
         }
 
         return $this->index($request);
