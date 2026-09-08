@@ -5,17 +5,41 @@ namespace App\Http\Controllers;
 use App\Events\DataChanged;
 use App\Models\Project;
 use App\Models\Task;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class ProjectController extends Controller
 {
+    private function ensureUserIdColumnExists(): void
+    {
+        try {
+            if (!Schema::hasColumn('projects', 'user_id')) {
+                Schema::table('projects', function (Blueprint $table) {
+                    $table->unsignedBigInteger('user_id')->nullable()->after('id')->index();
+                });
+                // Backfill existing projects with first member or user 1
+                $projects = Project::with('users')->get();
+                foreach ($projects as $project) {
+                    $firstMemberId = $project->users->first()?->id ?? 1;
+                    $project->update(['user_id' => $firstMemberId]);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error("Failed to ensure user_id column in projects: " . $e->getMessage());
+        }
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
         if (!$user) {
             return response()->json(['error' => 'Unauthenticated'], 401);
         }
+
+        $this->ensureUserIdColumnExists();
 
         // `trashed=1` lists the bin. Without it, only live projects. The bin
         // panel in the sidebar could never populate before this existed.
@@ -29,11 +53,13 @@ class ProjectController extends Controller
             $query->where('is_deleted', false);
         }
 
-        if (! $user->isAdmin()) {
-            $query->whereHas('users', function ($uq) use ($user) {
-                $uq->where('users.id', $user->id);
-            });
-        }
+        // Each user / admin only sees projects that they created or are an assigned member of
+        $query->where(function ($q) use ($user) {
+            $q->where('user_id', $user->id)
+              ->orWhereHas('users', function ($uq) use ($user) {
+                  $uq->where('users.id', $user->id);
+              });
+        });
 
         $projects = $query->get()->map(function ($p) {
             $pData = $p->toArray();
@@ -60,6 +86,7 @@ class ProjectController extends Controller
     public function store(Request $request)
     {
         $this->assertPermission('manage-projects');
+        $this->ensureUserIdColumnExists();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -101,6 +128,7 @@ class ProjectController extends Controller
 
         $res = DB::transaction(function () use ($request, $validated, $statuses, $customFields, $template) {
             $project = Project::create([
+                'user_id' => $request->user()->id,
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
                 'statuses' => $statuses,
@@ -210,13 +238,18 @@ class ProjectController extends Controller
             return response()->json($pData, 201);
         });
 
-        broadcast(new DataChanged($request->user()->id, 'projects'))->toOthers();
+        try {
+            broadcast(new DataChanged($request->user()->id, 'projects', $res->getData()->id ?? null))->toOthers();
+        } catch (\Throwable $e) {
+            Log::warning('Broadcasting failed in ProjectController@store: ' . $e->getMessage());
+        }
 
         return $res;
     }
 
     public function show($id)
     {
+        $this->ensureUserIdColumnExists();
         $this->authorizedProject($id);
 
         $project = Project::with(['customFields', 'users'])->where('is_deleted', false)->findOrFail($id);
@@ -227,6 +260,7 @@ class ProjectController extends Controller
 
     public function update(Request $request, $id)
     {
+        $this->ensureUserIdColumnExists();
         $project = $this->authorizedProject($id);
         $this->assertPermission('manage-projects');
         
@@ -248,26 +282,36 @@ class ProjectController extends Controller
         $pData = $project->load('users')->toArray();
         $pData['member_ids'] = $project->users->pluck('id')->all();
 
-        broadcast(new DataChanged($request->user()->id, 'projects'))->toOthers();
+        try {
+            broadcast(new DataChanged($request->user()->id, 'projects', (int)$id))->toOthers();
+        } catch (\Throwable $e) {
+            Log::warning('Broadcasting failed in ProjectController@update: ' . $e->getMessage());
+        }
 
         return response()->json($pData);
     }
 
     public function destroy($id)
     {
+        $this->ensureUserIdColumnExists();
         $project = $this->authorizedProject($id);
         $this->assertPermission('manage-projects');
 
         $project->update(['is_deleted' => true]);
         $project->delete(); // SoftDeletes call
 
-        broadcast(new DataChanged(request()->user()->id, 'projects'))->toOthers();
+        try {
+            broadcast(new DataChanged(request()->user()->id, 'projects', (int)$id))->toOthers();
+        } catch (\Throwable $e) {
+            Log::warning('Broadcasting failed in ProjectController@destroy: ' . $e->getMessage());
+        }
 
         return response()->json(['message' => 'تم نقل المشروع لسلة المهملات']);
     }
 
     public function restore($id)
     {
+        $this->ensureUserIdColumnExists();
         $project = Project::onlyTrashed()->findOrFail($id);
         $this->assertProjectAccess($project);
         $this->assertPermission('manage-projects');
@@ -275,13 +319,18 @@ class ProjectController extends Controller
         $project->restore();
         $project->update(['is_deleted' => false]);
 
-        broadcast(new DataChanged(request()->user()->id, 'projects'))->toOthers();
+        try {
+            broadcast(new DataChanged(request()->user()->id, 'projects', (int)$id))->toOthers();
+        } catch (\Throwable $e) {
+            Log::warning('Broadcasting failed in ProjectController@restore: ' . $e->getMessage());
+        }
 
         return response()->json($project);
     }
 
     public function addStatus(Request $request, $id)
     {
+        $this->ensureUserIdColumnExists();
         $project = $this->authorizedProject($id);
         $this->assertPermission('manage-projects');
 
@@ -295,13 +344,18 @@ class ProjectController extends Controller
             $project->update(['statuses' => $statuses]);
         }
 
-        broadcast(new DataChanged($request->user()->id, 'projects'))->toOthers();
+        try {
+            broadcast(new DataChanged($request->user()->id, 'projects', (int)$id))->toOthers();
+        } catch (\Throwable $e) {
+            Log::warning('Broadcasting failed in ProjectController@addStatus: ' . $e->getMessage());
+        }
 
         return response()->json($project);
     }
 
     public function deleteStatus(Request $request, $id)
     {
+        $this->ensureUserIdColumnExists();
         $project = $this->authorizedProject($id);
         $this->assertPermission('manage-projects');
 
@@ -330,7 +384,11 @@ class ProjectController extends Controller
         $newStatuses = array_values(array_filter($statuses, fn($s) => $s !== $validated['status']));
         $project->update(['statuses' => $newStatuses]);
 
-        broadcast(new DataChanged($request->user()->id, 'projects'))->toOthers();
+        try {
+            broadcast(new DataChanged($request->user()->id, 'projects', (int)$id))->toOthers();
+        } catch (\Throwable $e) {
+            Log::warning('Broadcasting failed in ProjectController@deleteStatus: ' . $e->getMessage());
+        }
 
         return response()->json($project);
     }

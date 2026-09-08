@@ -11,7 +11,7 @@ class Project extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['name', 'description', 'statuses', 'is_deleted', 'category_id'];
+    protected $fillable = ['user_id', 'name', 'description', 'statuses', 'is_deleted', 'category_id'];
 
     protected $casts = [
         'statuses' => 'array',
@@ -23,6 +23,9 @@ class Project extends Model
         static::creating(function ($project) {
             if (empty($project->statuses)) {
                 $project->statuses = ['بانتظار البدء', 'قيد العمل', 'تحت المراجعة', 'مكتمل'];
+            }
+            if (empty($project->user_id) && auth()->check()) {
+                $project->user_id = auth()->id();
             }
         });
     }
@@ -40,6 +43,11 @@ class Project extends Model
     public function users(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
         return $this->belongsToMany(User::class);
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     public function category(): BelongsTo

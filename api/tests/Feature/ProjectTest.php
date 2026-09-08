@@ -158,6 +158,63 @@ class ProjectTest extends TestCase
         $this->assertEquals($project1->id, $response->json('0.id'));
     }
 
+    public function test_admin_only_sees_own_created_or_assigned_projects()
+    {
+        $adminRole = \App\Models\Role::firstOrCreate(['name' => 'مدير'], ['description' => 'مدير النظام']);
+        
+        $admin1 = \App\Models\User::create([
+            'name' => 'Admin One',
+            'email' => 'admin1@mymind.com',
+            'password' => bcrypt('password123'),
+            'role_id' => $adminRole->id,
+        ]);
+
+        $admin2 = \App\Models\User::create([
+            'name' => 'Admin Two',
+            'email' => 'admin2@mymind.com',
+            'password' => bcrypt('password123'),
+            'role_id' => $adminRole->id,
+        ]);
+
+        // Admin 1 creates Project 1
+        \Laravel\Sanctum\Sanctum::actingAs($admin1);
+        $res1 = $this->postJson('/api/projects', [
+            'name' => 'مشروع الأدمن الأول',
+            'status_source' => 'global'
+        ]);
+        $res1->assertStatus(201);
+        $project1Id = $res1->json('id');
+
+        // Admin 2 creates Project 2
+        \Laravel\Sanctum\Sanctum::actingAs($admin2);
+        $res2 = $this->postJson('/api/projects', [
+            'name' => 'مشروع الأدمن الثاني',
+            'status_source' => 'global'
+        ]);
+        $res2->assertStatus(201);
+        $project2Id = $res2->json('id');
+
+        // When Admin 1 lists projects, they should ONLY see Project 1
+        \Laravel\Sanctum\Sanctum::actingAs($admin1);
+        $list1 = $this->getJson('/api/projects');
+        $list1->assertStatus(200);
+        $list1->assertJsonCount(1);
+        $this->assertEquals($project1Id, $list1->json('0.id'));
+
+        // Admin 1 cannot access Project 2 directly
+        $this->getJson("/api/projects/{$project2Id}")->assertStatus(403);
+
+        // When Admin 2 lists projects, they should ONLY see Project 2
+        \Laravel\Sanctum\Sanctum::actingAs($admin2);
+        $list2 = $this->getJson('/api/projects');
+        $list2->assertStatus(200);
+        $list2->assertJsonCount(1);
+        $this->assertEquals($project2Id, $list2->json('0.id'));
+
+        // Admin 2 cannot access Project 1 directly
+        $this->getJson("/api/projects/{$project1Id}")->assertStatus(403);
+    }
+
     private function createProjectHelper()
     {
         $data = [

@@ -42,7 +42,25 @@ class DataChanged implements ShouldBroadcastNow
             return [new PrivateChannel('user.' . $this->userId)];
         }
 
-        // Get all active user IDs in the application so every connected user receives the real-time update
+        // For project-scoped events, only broadcast to the project creator and assigned members
+        if ($this->projectId) {
+            try {
+                $project = \App\Models\Project::with('users')->find($this->projectId);
+                if ($project) {
+                    $targetUserIds = $project->users->pluck('id')->all();
+                    if ($project->user_id && !in_array($project->user_id, $targetUserIds)) {
+                        $targetUserIds[] = $project->user_id;
+                    }
+                    if (!empty($targetUserIds)) {
+                        return array_map(fn($id) => new PrivateChannel('user.' . $id), array_unique($targetUserIds));
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Fallback to notifying at least the initiating user
+            }
+        }
+
+        // Get all active user IDs in the application for general system updates
         $allUserIds = \App\Models\User::pluck('id')->toArray();
         if (empty($allUserIds)) {
             $allUserIds = [$this->userId];

@@ -35,19 +35,17 @@ abstract class Controller
     }
 
     /**
-     * Abort unless the current user is a member of the project (admins bypass).
+     * Abort unless the current user is the creator or an assigned member of the project.
      */
     protected function assertProjectAccess(Project $project): void
     {
         $user = $this->currentUser();
 
-        if ($user->isAdmin()) {
+        if ($project->user_id === $user->id || $project->users()->whereKey($user->id)->exists()) {
             return;
         }
 
-        if (! $project->users()->whereKey($user->id)->exists()) {
-            abort(403, 'غير مصرح لك بالوصول إلى هذا المشروع.');
-        }
+        abort(403, 'غير مصرح لك بالوصول إلى هذا المشروع.');
     }
 
     /**
