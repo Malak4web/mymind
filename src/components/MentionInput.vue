@@ -30,6 +30,10 @@ const props = defineProps({
   autofocus: {
     type: Boolean,
     default: false
+  },
+  multilineEnter: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -205,6 +209,83 @@ const handleKeydown = (e) => {
   emit('keydown', e)
 
   if (!isMenuOpen.value || filteredSuggestions.value.length === 0) {
+    if (props.multilineEnter) {
+      if (e.key === 'Enter') {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault()
+          emit('submit')
+          return
+        }
+
+        // List continuation on Enter without Shift
+        if (!e.shiftKey) {
+          const el = inputRef.value
+          if (el) {
+            const cursor = el.selectionStart
+            const val = props.modelValue || ''
+            const textBefore = val.slice(0, cursor)
+            const currentLineStart = textBefore.lastIndexOf('\n') + 1
+            const currentLine = textBefore.slice(currentLineStart)
+
+            // Check bullet list: - , * , • , +
+            const bulletMatch = currentLine.match(/^(\s*)([-*•+])\s*(.*)$/)
+            // Check numbered list: 1. , 2.
+            const numMatch = currentLine.match(/^(\s*)(\d+)\.\s*(.*)$/)
+
+            if (bulletMatch) {
+              const [, indent, bullet, content] = bulletMatch
+              e.preventDefault()
+              if (!content.trim()) {
+                // Empty bullet line -> clear bullet (exit list mode)
+                const newVal = val.slice(0, currentLineStart) + val.slice(cursor)
+                emit('update:modelValue', newVal)
+                emit('change', newVal)
+                nextTick(() => {
+                  el.setSelectionRange(currentLineStart, currentLineStart)
+                })
+              } else {
+                // Auto-continue bullet list
+                const insertion = '\n' + indent + bullet + ' '
+                const newVal = val.slice(0, cursor) + insertion + val.slice(cursor)
+                emit('update:modelValue', newVal)
+                emit('change', newVal)
+                nextTick(() => {
+                  const newPos = cursor + insertion.length
+                  el.setSelectionRange(newPos, newPos)
+                })
+              }
+              return
+            } else if (numMatch) {
+              const [, indent, numStr, content] = numMatch
+              e.preventDefault()
+              if (!content.trim()) {
+                // Empty numbered line -> clear number (exit list mode)
+                const newVal = val.slice(0, currentLineStart) + val.slice(cursor)
+                emit('update:modelValue', newVal)
+                emit('change', newVal)
+                nextTick(() => {
+                  el.setSelectionRange(currentLineStart, currentLineStart)
+                })
+              } else {
+                // Auto-continue numbered list
+                const nextNum = parseInt(numStr, 10) + 1
+                const insertion = '\n' + indent + nextNum + '. '
+                const newVal = val.slice(0, cursor) + insertion + val.slice(cursor)
+                emit('update:modelValue', newVal)
+                emit('change', newVal)
+                nextTick(() => {
+                  const newPos = cursor + insertion.length
+                  el.setSelectionRange(newPos, newPos)
+                })
+              }
+              return
+            }
+          }
+        }
+      }
+      return
+    }
+
     if (e.key === 'Enter' && (!props.isTextarea || !e.shiftKey)) {
       e.preventDefault()
       emit('submit')
@@ -255,6 +336,55 @@ const selectItem = (item) => {
     lastCursorPos.value = newCursor
   })
 }
+
+// Helpers for parent components
+const focus = () => inputRef.value?.focus()
+
+const getSelection = () => {
+  const el = inputRef.value
+  if (!el) return { start: 0, end: 0, text: '' }
+  const start = el.selectionStart || 0
+  const end = el.selectionEnd || 0
+  const val = props.modelValue || ''
+  return {
+    start,
+    end,
+    text: val.slice(start, end)
+  }
+}
+
+const replaceSelection = (replacement, selectNewText = false) => {
+  const el = inputRef.value
+  if (!el) return
+  const start = el.selectionStart || 0
+  const end = el.selectionEnd || 0
+  const val = props.modelValue || ''
+  const newVal = val.slice(0, start) + replacement + val.slice(end)
+  emit('update:modelValue', newVal)
+  emit('change', newVal)
+  nextTick(() => {
+    el.focus()
+    if (selectNewText) {
+      el.setSelectionRange(start, start + replacement.length)
+    } else {
+      const pos = start + replacement.length
+      el.setSelectionRange(pos, pos)
+      lastCursorPos.value = pos
+    }
+  })
+}
+
+const insertAtCursor = (text) => {
+  replaceSelection(text, false)
+}
+
+defineExpose({
+  inputRef,
+  focus,
+  getSelection,
+  replaceSelection,
+  insertAtCursor
+})
 </script>
 
 <template>
