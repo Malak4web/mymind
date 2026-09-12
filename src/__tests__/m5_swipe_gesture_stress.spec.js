@@ -5,7 +5,14 @@ import { store } from '../store'
 
 describe('Milestone 5 Mobile Swipe & Touch Ergonomics Challenge', () => {
   beforeEach(() => {
-    store.init()
+    localStorage.clear()
+    vi.restoreAllMocks()
+    store.token = null
+    store.isAuthenticated = false
+    store.init = vi.fn().mockResolvedValue()
+    store.loadHabits = vi.fn().mockResolvedValue()
+    store.loadDailyTasks = vi.fn().mockResolvedValue()
+    store.loadDailyNotes = vi.fn().mockResolvedValue()
     store.habits = [
       {
         id: 1,
@@ -91,6 +98,20 @@ describe('Milestone 5 Mobile Swipe & Touch Ergonomics Challenge', () => {
   })
 
   describe('2. Exclusion Guard: .overflow-x-auto', () => {
+    beforeEach(() => {
+      store.habits = [
+        {
+          id: 1,
+          title: 'شرب 8 أكواب ماء',
+          category: 'صحة ورشاقة',
+          icon: '🥛',
+          color: 'from-blue-500 to-cyan-500',
+          frequency: [0, 1, 2, 3, 4, 5, 6],
+          logs: {}
+        }
+      ]
+    })
+
     it('does NOT change tabs when touch gesture is inside .overflow-x-auto strip', async () => {
       const wrapper = mount(DailyRoutines)
       
