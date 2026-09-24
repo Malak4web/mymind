@@ -29,6 +29,41 @@ const resetToToday = () => {
   selectedDate.value = new Date()
 }
 
+const onCustomDateChange = (event) => {
+  const val = event.target?.value
+  if (!val) return
+  const parts = val.split('-')
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10)
+    const m = parseInt(parts[1], 10) - 1
+    const d = parseInt(parts[2], 10)
+    selectedDate.value = new Date(y, m, d)
+  }
+}
+
+const selectNoteDate = (dateKey) => {
+  if (!dateKey) return
+  const parts = dateKey.split('-')
+  if (parts.length === 3) {
+    selectedDate.value = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+    notesViewMode.value = 'selected'
+  }
+}
+
+const formatNoteDate = (dateKey) => {
+  if (!dateKey) return ''
+  try {
+    const parts = dateKey.split('-')
+    if (parts.length === 3) {
+      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+      return d.toLocaleDateString('ar-EG', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
+    }
+    return dateKey
+  } catch (e) {
+    return dateKey
+  }
+}
+
 // Arabic Date Formatting
 const formattedDateDisplay = computed(() => {
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
@@ -686,6 +721,52 @@ const noteError = ref('')
 // disappeared on refresh.
 const savedDailyNotes = computed(() => store.notesForDate(selectedDateKey.value))
 
+const notesViewMode = ref('selected') // 'selected' | 'all'
+const notesSearchQuery = ref('')
+
+const allDailyNotes = computed(() => {
+  return [...(store.dailyNotes || [])].sort((a, b) => {
+    if (a.dateKey !== b.dateKey) {
+      return (b.dateKey || '').localeCompare(a.dateKey || '')
+    }
+    return (b.id || 0) - (a.id || 0)
+  })
+})
+
+const displayedDailyNotes = computed(() => {
+  let list = []
+  if (notesViewMode.value === 'all') {
+    list = allDailyNotes.value
+  } else {
+    list = savedDailyNotes.value
+  }
+
+  if (notesSearchQuery.value.trim()) {
+    const q = notesSearchQuery.value.trim().toLowerCase()
+    list = list.filter(n => (n.content || '').toLowerCase().includes(q))
+  }
+  return list
+})
+
+const handleCopyDailyNote = async (text) => {
+  if (!text) return
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+    store.toastSuccess('تم نسخ الملاحظة إلى الحافظة 📋')
+  } catch (err) {
+    console.error('Failed to copy', err)
+  }
+}
+
 const noteTime = (createdAt) => {
   if (!createdAt) return ''
   try {
@@ -887,6 +968,19 @@ const handleDeleteDailyNote = (noteId) => {
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
+
+          <label 
+            class="p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 transition cursor-pointer min-h-[44px] min-w-[44px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center shrink-0 relative" 
+            title="اختيار تاريخ مخصص من التقويم"
+          >
+            <span class="text-sm">📅</span>
+            <input 
+              type="date" 
+              :value="selectedDateKey" 
+              @change="onCustomDateChange" 
+              class="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            />
+          </label>
 
           <button 
             v-if="!isToday" 
@@ -1153,6 +1247,81 @@ const handleDeleteDailyNote = (noteId) => {
           </div>
         </div>
 
+        <!-- Date Navigator & Stepper for Journal -->
+        <div class="mb-4 pt-1 pb-4 border-b border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <!-- Date Selector Stepper -->
+          <div class="flex items-center gap-1 sm:gap-2 bg-slate-100/80 dark:bg-slate-800/60 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-slate-200/80 dark:border-slate-700/50 w-full sm:w-auto justify-between shadow-inner">
+            <button 
+              type="button"
+              @click="changeDate(-1)" 
+              class="p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 transition cursor-pointer min-h-[44px] min-w-[44px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center shrink-0" 
+              title="اليوم السابق" aria-label="اليوم السابق"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transform rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+
+            <div class="text-center px-2 min-w-0 flex-1">
+              <span class="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white block truncate">{{ formattedDateDisplay }}</span>
+              <span v-if="isToday" class="text-[10px] font-bold text-violet-600 dark:text-violet-400 block -mt-0.5">اليوم الحاضر 🎯</span>
+            </div>
+
+            <button 
+              type="button"
+              @click="changeDate(1)" 
+              class="p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 transition cursor-pointer min-h-[44px] min-w-[44px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center shrink-0" 
+              title="اليوم التالي" aria-label="اليوم التالي"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+
+            <!-- Custom Date Picker via Native Input -->
+            <label 
+              class="p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 transition cursor-pointer min-h-[44px] min-w-[44px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center shrink-0 relative" 
+              title="اختيار تاريخ مخصص من التقويم"
+            >
+              <span class="text-sm">📅</span>
+              <input 
+                type="date" 
+                :value="selectedDateKey" 
+                @change="onCustomDateChange" 
+                class="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              />
+            </label>
+
+            <button 
+              v-if="!isToday" 
+              type="button"
+              @click="resetToToday" 
+              class="mr-1 px-2.5 py-1 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold bg-violet-600 text-white hover:bg-violet-500 transition cursor-pointer min-h-[44px] flex items-center shrink-0 shadow-sm"
+            >
+              العودة
+            </button>
+          </div>
+
+          <!-- Weekdays Mini Pills -->
+          <div class="grid grid-cols-7 gap-1 w-full sm:w-auto">
+            <button
+              v-for="day in currentWeekDays"
+              :key="day.dateKey"
+              type="button"
+              @click="selectedDate = day.dateObj"
+              :class="[
+                'py-1 sm:py-1.5 px-2 rounded-xl text-xs font-extrabold transition cursor-pointer flex flex-col items-center min-h-[44px] min-w-[36px]',
+                day.isSelected
+                  ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md'
+                  : 'bg-slate-100/90 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              ]"
+            >
+              <span class="text-[10px] opacity-75">{{ day.dayName }}</span>
+              <span>{{ day.dayNumber }}</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Quick Task Entry Form -->
         <form @submit.prevent="handleCreateDailyTask" class="space-y-3 sm:space-y-4">
           <div class="flex flex-col md:flex-row gap-2.5 sm:gap-3">
@@ -1248,30 +1417,90 @@ const handleDeleteDailyNote = (noteId) => {
 
       <!-- Daily Notes Inline Journal Editor (R2 Mobile Ergonomics & Daily Notes) -->
       <div class="relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border border-white/40 dark:border-slate-800/60 shadow-xl rounded-2xl sm:rounded-3xl p-3 sm:p-5 md:p-6 overflow-hidden">
-        <div class="flex items-center justify-between mb-2.5 sm:mb-3">
-          <h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-white flex items-center gap-1.5 sm:gap-2">
-            <span>📖</span>
-            <span>ملاحظات اليوميات الخفيفة</span>
-          </h3>
-          <span class="text-xs font-bold text-violet-600 dark:text-violet-400">
-            {{ savedDailyNotes.length }} ملاحظات
-          </span>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
+          <div class="flex items-center gap-2">
+            <h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-white flex items-center gap-1.5 sm:gap-2">
+              <span>📖</span>
+              <span>ملاحظات اليوميات</span>
+            </h3>
+            <span class="text-xs font-bold text-violet-600 dark:text-violet-400">
+              ({{ displayedDailyNotes.length }})
+            </span>
+          </div>
+
+          <!-- Notes View Mode Toggle -->
+          <div class="flex items-center gap-1 bg-slate-100/90 dark:bg-slate-800/90 p-1 rounded-xl self-start sm:self-auto">
+            <button
+              type="button"
+              @click="notesViewMode = 'selected'"
+              :class="[
+                'px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer min-h-[36px] flex items-center gap-1',
+                notesViewMode === 'selected'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              ]"
+            >
+              <span>اليوم المحدد</span>
+              <span class="text-[10px] px-1 py-0.2 rounded-full" :class="notesViewMode === 'selected' ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'">
+                {{ savedDailyNotes.length }}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              @click="notesViewMode = 'all'"
+              :class="[
+                'px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer min-h-[36px] flex items-center gap-1',
+                notesViewMode === 'all'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              ]"
+            >
+              <span>كل الملاحظات (الأرشيف)</span>
+              <span class="text-[10px] px-1 py-0.2 rounded-full" :class="notesViewMode === 'all' ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'">
+                {{ allDailyNotes.length }}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Search Bar for Notes (Available in All mode or if > 2 notes) -->
+        <div v-if="allDailyNotes.length > 2 || notesViewMode === 'all'" class="mb-3">
+          <div class="relative">
+            <input
+              v-model="notesSearchQuery"
+              type="text"
+              placeholder="🔍 ابحث في الملاحظات بالكلمات الدلالية..."
+              class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500 transition min-h-[40px]"
+            />
+            <button
+              v-if="notesSearchQuery"
+              type="button"
+              @click="notesSearchQuery = ''"
+              class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-1"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         <form @submit.prevent="handleSaveDailyNote" class="space-y-2.5 sm:space-y-3">
           <div class="relative">
             <textarea
               v-model="dailyNoteInput"
-              placeholder="اكتب ملاحظة أو خاطر سريع لسجل يومك اليوم..."
+              :placeholder="`اكتب ملاحظة أو خاطر سريع لسجل يوم (${formattedDateDisplay})...`"
               class="w-full px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl sm:rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500 transition min-h-[70px] sm:min-h-[80px] resize-none"
               required
             ></textarea>
           </div>
           
-          <div class="flex items-center justify-end">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <span class="text-[11px] text-slate-400 font-medium">
+              تاريخ الملاحظة: <strong class="text-violet-600 dark:text-violet-400 font-bold">{{ formattedDateDisplay }}</strong>
+            </span>
             <button
               type="submit"
-              class="glass-fab-mobile px-4 py-2 sm:px-6 sm:py-2.5 rounded-xl text-white font-black text-xs cursor-pointer flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[44px] min-w-[44px] sm:min-w-[44px]"
+              class="glass-fab-mobile px-4 py-2 sm:px-6 sm:py-2.5 rounded-xl text-white font-black text-xs cursor-pointer flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px]"
             >
               <span>💬 حفظ الملاحظة</span>
             </button>
@@ -1279,24 +1508,60 @@ const handleDeleteDailyNote = (noteId) => {
         </form>
 
         <!-- Saved Notes List -->
-        <div v-if="savedDailyNotes.length > 0" class="mt-3 space-y-2 pt-3 border-t border-slate-200/60 dark:border-slate-800">
+        <div v-if="displayedDailyNotes.length > 0" class="mt-3 space-y-2 pt-3 border-t border-slate-200/60 dark:border-slate-800">
           <div
-            v-for="note in savedDailyNotes"
+            v-for="note in displayedDailyNotes"
             :key="note.id"
-            class="p-2.5 sm:p-3 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700 flex items-start justify-between gap-2 text-xs"
+            class="p-2.5 sm:p-3 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700 flex items-start justify-between gap-2 text-xs hover:border-violet-300 dark:hover:border-violet-700 transition"
           >
             <div class="flex-1 min-w-0">
-              <p class="font-semibold text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-tight">{{ note.content }}</p>
-              <span class="text-[10px] text-slate-400 font-bold block mt-1">⏰ {{ noteTime(note.createdAt) }}</span>
+              <p class="font-semibold text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">{{ note.content }}</p>
+              <div class="flex flex-wrap items-center gap-2 mt-2">
+                <button
+                  type="button"
+                  @click="selectNoteDate(note.dateKey)"
+                  class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 hover:underline cursor-pointer flex items-center gap-1"
+                  title="الانتقال لهذا التاريخ في التقويم"
+                >
+                  <span>📅</span>
+                  <span>{{ formatNoteDate(note.dateKey) }}</span>
+                </button>
+                <span class="text-[10px] text-slate-400 font-medium">⏰ {{ noteTime(note.createdAt) }}</span>
+              </div>
             </div>
-            <button
-              @click="handleDeleteDailyNote(note.id)"
-              class="p-1 rounded-lg text-slate-400 hover:text-rose-500 min-h-[44px] min-w-[44px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center shrink-0 cursor-pointer"
-              title="حذف الملاحظة" aria-label="حذف الملاحظة"
-            >
-              🗑️
-            </button>
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                @click="handleCopyDailyNote(note.content)"
+                class="p-1 rounded-lg text-slate-400 hover:text-violet-600 dark:hover:text-violet-300 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer transition"
+                title="نسخ نص الملاحظة" aria-label="نسخ نص الملاحظة"
+              >
+                📋
+              </button>
+              <button
+                type="button"
+                @click="handleDeleteDailyNote(note.id)"
+                class="p-1 rounded-lg text-slate-400 hover:text-rose-500 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0 cursor-pointer transition"
+                title="حذف الملاحظة" aria-label="حذف الملاحظة"
+              >
+                🗑️
+              </button>
+            </div>
           </div>
+        </div>
+
+        <!-- Empty State with One-Click Archive Access -->
+        <div v-else-if="notesViewMode === 'selected' && allDailyNotes.length > 0" class="mt-4 p-4 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 text-center">
+          <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold mb-2">
+            لا توجد ملاحظات مسجلة لتاريخ {{ formattedDateDisplay }}
+          </p>
+          <button
+            type="button"
+            @click="notesViewMode = 'all'"
+            class="px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300 text-xs font-bold hover:bg-violet-100 dark:hover:bg-violet-800/40 transition cursor-pointer"
+          >
+            📚 استعراض جميع الملاحظات السابقة ({{ allDailyNotes.length }})
+          </button>
         </div>
       </div>
 
