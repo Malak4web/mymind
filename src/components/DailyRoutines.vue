@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { store } from '../store'
 import MobileBottomSheet from './MobileBottomSheet.vue'
 import IdeasBoard from './IdeasBoard.vue'
+import ChallengesBoard from './ChallengesBoard.vue'
 
 // Date helpers
 const formatDateKey = (dateObj) => {
@@ -823,14 +824,14 @@ const handleDeleteDailyNote = (noteId) => {
       <div class="relative flex items-center justify-between gap-1.5 py-1 px-1.5 bg-slate-100/90 dark:bg-slate-800/90 rounded-xl">
         <!-- Active Sliding Pill Indicator -->
         <div
-          class="absolute top-1 bottom-1 w-[calc(33.333%-4px)] rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 shadow-md shadow-violet-600/30 transition-all duration-300 ease-out"
-          :class="activeTab === 'habits' ? 'right-1' : (activeTab === 'journal' ? 'right-[calc(33.333%+1px)]' : 'right-[calc(66.666%+2px)]')"
+          class="absolute top-1 bottom-1 w-[calc(25%-4px)] rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 shadow-md shadow-violet-600/30 transition-all duration-300 ease-out"
+          :class="activeTab === 'habits' ? 'right-1' : (activeTab === 'journal' ? 'right-[calc(25%+1px)]' : (activeTab === 'ideas' ? 'right-[calc(50%+2px)]' : 'right-[calc(75%+2px)]'))"
         ></div>
 
         <button
           @click="activeTab = 'habits'"
           :class="[
-            'relative z-10 flex-1 px-2 sm:px-3 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-1 sm:gap-1.5 min-h-[44px] sm:min-h-[44px] min-w-[44px] sm:min-w-[44px] cursor-pointer',
+            'relative z-10 flex-1 px-1.5 sm:px-3 py-1.5 rounded-xl font-extrabold text-[11px] sm:text-sm transition-all duration-200 flex items-center justify-center gap-1 sm:gap-1.5 min-h-[44px] min-w-[44px] cursor-pointer',
             activeTab === 'habits'
               ? 'text-white'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -848,7 +849,7 @@ const handleDeleteDailyNote = (noteId) => {
         <button
           @click="activeTab = 'journal'"
           :class="[
-            'relative z-10 flex-1 px-2 sm:px-3 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-1 sm:gap-1.5 min-h-[44px] sm:min-h-[44px] min-w-[44px] sm:min-w-[44px] cursor-pointer',
+            'relative z-10 flex-1 px-1.5 sm:px-3 py-1.5 rounded-xl font-extrabold text-[11px] sm:text-sm transition-all duration-200 flex items-center justify-center gap-1 sm:gap-1.5 min-h-[44px] min-w-[44px] cursor-pointer',
             activeTab === 'journal'
               ? 'text-white'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -866,7 +867,7 @@ const handleDeleteDailyNote = (noteId) => {
         <button
           @click="activeTab = 'ideas'"
           :class="[
-            'relative z-10 flex-1 px-2 sm:px-3 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-1 sm:gap-1.5 min-h-[44px] sm:min-h-[44px] min-w-[44px] sm:min-w-[44px] cursor-pointer',
+            'relative z-10 flex-1 px-1.5 sm:px-3 py-1.5 rounded-xl font-extrabold text-[11px] sm:text-sm transition-all duration-200 flex items-center justify-center gap-1 sm:gap-1.5 min-h-[44px] min-w-[44px] cursor-pointer',
             activeTab === 'ideas'
               ? 'text-white'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -878,6 +879,24 @@ const handleDeleteDailyNote = (noteId) => {
             activeTab === 'ideas' ? 'bg-white/20 text-white' : 'bg-amber-500/15 text-amber-600 dark:text-amber-300'
           ]">
             {{ store.ideas ? store.ideas.length : 0 }}
+          </span>
+        </button>
+
+        <button
+          @click="activeTab = 'challenges'"
+          :class="[
+            'relative z-10 flex-1 px-1.5 sm:px-3 py-1.5 rounded-xl font-extrabold text-[11px] sm:text-sm transition-all duration-200 flex items-center justify-center gap-1 sm:gap-1.5 min-h-[44px] min-w-[44px] cursor-pointer',
+            activeTab === 'challenges'
+              ? 'text-white'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          ]"
+        >
+          <span>🎯 التحديات</span>
+          <span :class="[
+            'px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold transition-colors',
+            activeTab === 'challenges' ? 'bg-white/20 text-white' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
+          ]">
+            {{ store.challenges ? store.challenges.length : 0 }}
           </span>
         </button>
       </div>
@@ -1776,6 +1795,12 @@ const handleDeleteDailyNote = (noteId) => {
       <IdeasBoard />
     </div>
     <!-- End Ideas Tab View -->
+
+    <!-- Challenges Tab View (التحديات) -->
+    <div v-if="activeTab === 'challenges'">
+      <ChallengesBoard />
+    </div>
+    <!-- End Challenges Tab View -->
 
     <!-- Micro Floating Action Button (Micro-FAB) -->
     <button

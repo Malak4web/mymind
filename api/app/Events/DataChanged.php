@@ -37,8 +37,8 @@ class DataChanged implements ShouldBroadcastNow
      */
     public function broadcastOn(): array
     {
-        // For user-private resources (categories, habits, daily tasks, daily notes, ideas, notifications), only broadcast to the specific user's private channel
-        if (in_array($this->type, ['project_categories', 'daily_tasks', 'daily_notes', 'habits', 'ideas', 'notifications'])) {
+        // For user-private resources (categories, habits, daily tasks, daily notes, ideas, notifications, challenges), only broadcast to the specific user's private channel
+        if (in_array($this->type, ['project_categories', 'daily_tasks', 'daily_notes', 'habits', 'ideas', 'notifications', 'challenges'])) {
             return [new PrivateChannel('user.' . $this->userId)];
         }
 

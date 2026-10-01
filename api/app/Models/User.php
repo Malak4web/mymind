@@ -69,6 +69,16 @@ class User extends Authenticatable
         return $this->hasMany(Idea::class);
     }
 
+    public function challenges(): HasMany
+    {
+        return $this->hasMany(Challenge::class);
+    }
+
+    public function partnerChallenges(): HasMany
+    {
+        return $this->hasMany(Challenge::class, 'partner_id');
+    }
+
     public function isAdmin(): bool
     {
         return $this->role !== null && $this->role->name === self::ADMIN_ROLE;

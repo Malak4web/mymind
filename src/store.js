@@ -55,6 +55,9 @@ export const store = reactive({
   // Dynamic Categories for Ideas Board
   ideaCategories: ['عام', 'إبداع', 'مشاريع', 'محتوى', 'شخصي', 'تسويق', 'تطوير'],
 
+  // Challenges State (التحديات - خاص بكل مستخدم وشريكه)
+  challenges: [],
+
 
 
 
@@ -144,6 +147,8 @@ export const store = reactive({
           if (cachedDailyTasks) this.dailyTasks = JSON.parse(cachedDailyTasks)
           const cachedIdeas = localStorage.getItem(this.getIdeasStorageKey())
           if (cachedIdeas) this.ideas = JSON.parse(cachedIdeas)
+          const cachedChallenges = localStorage.getItem(this.getChallengesStorageKey())
+          if (cachedChallenges) this.challenges = JSON.parse(cachedChallenges)
         } catch (e) {}
 
         this.loadDailyTaskCategories()
@@ -160,6 +165,7 @@ export const store = reactive({
         await this.loadDailyNotes()
         await this.loadHabits()
         await this.loadIdeas()
+        await this.loadChallenges()
         this.startRealtimeSync()
         this._startReminderEngine()
       } else {
@@ -185,6 +191,7 @@ export const store = reactive({
     this.projectFiles = []
     this.notes = []
     this.ideas = []
+    this.challenges = []
     this.habits = []
     this.dailyTasks = []
     this.activeDocumentFolderId = null
@@ -1851,6 +1858,9 @@ export const store = reactive({
       case 'ideas':
         this.loadIdeas(true)
         break
+      case 'challenges':
+        this.loadChallenges(true)
+        break
       default:
         console.log(`[Pusher] نوع غير معروف: ${type}`)
     }
@@ -2753,6 +2763,293 @@ export const store = reactive({
     this.ideaCategories = this.ideaCategories.filter(c => c !== name)
     this.saveIdeaCategories()
     return true
+  },
+
+  // Challenges Management Methods (قسم التحديات)
+  _challengesWritesPending: 0,
+  _challengesSyncing: false,
+
+  getChallengesStorageKey() {
+    const userId = this.currentUser?.id || 'guest'
+    return `mymind_challenges_user_${userId}`
+  },
+
+  saveChallenges() {
+    try {
+      localStorage.setItem(this.getChallengesStorageKey(), JSON.stringify(this.challenges))
+    } catch (e) {
+      console.error('فشل حفظ التحديات محلياً', e)
+    }
+  },
+
+  async loadChallenges(isSilent = false) {
+    if (this._challengesWritesPending > 0) return
+    if (this._challengesSyncing) return
+    this._challengesSyncing = true
+
+    try {
+      const res = await fetch(`${this.apiBase}/challenges`, {
+        headers: this.getAuthHeaders()
+      })
+      if (!res.ok) {
+        this._challengesSyncing = false
+        return
+      }
+
+      const rawChallenges = await res.json()
+      if (!Array.isArray(rawChallenges)) { this._challengesSyncing = false; return }
+
+      if (this._challengesWritesPending > 0) { this._challengesSyncing = false; return }
+
+      const serverChallenges = rawChallenges.map(item => ({
+        id: item.id,
+        user_id: item.user_id,
+        partner_id: item.partner_id,
+        user: item.user || null,
+        partner: item.partner || null,
+        title: item.title,
+        description: item.description || '',
+        category: item.category || 'عام',
+        icon: item.icon || '🎯',
+        color: item.color || 'from-violet-600 to-indigo-600',
+        start_date: item.start_date ? String(item.start_date).slice(0, 10) : new Date().toISOString().slice(0, 10),
+        end_date: item.end_date ? String(item.end_date).slice(0, 10) : new Date().toISOString().slice(0, 10),
+        total_days: Number(item.total_days) || 7,
+        reward_title: item.reward_title || '',
+        reward_icon: item.reward_icon || '🏆',
+        reward_description: item.reward_description || '',
+        conditions: Array.isArray(item.conditions) ? item.conditions : [],
+        days_progress: (item.days_progress && typeof item.days_progress === 'object') ? item.days_progress : {},
+        status: item.status || 'active',
+        cheers: Array.isArray(item.cheers) ? item.cheers : [],
+        created_at: item.created_at || new Date().toISOString()
+      }))
+
+      this.challenges = serverChallenges
+      this.saveChallenges()
+    } catch (e) {
+      if (!isSilent) console.error('فشل تحميل التحديات من السيرفر', e)
+    } finally {
+      this._challengesSyncing = false
+    }
+  },
+
+  async addChallenge(challengeData) {
+    const tempId = Date.now()
+    const newChallenge = {
+      id: tempId,
+      user_id: this.currentUser?.id,
+      partner_id: challengeData.partner_id || null,
+      user: this.currentUser ? { id: this.currentUser.id, name: this.currentUser.name, email: this.currentUser.email } : null,
+      partner: challengeData.partner || null,
+      title: challengeData.title || '',
+      description: challengeData.description || '',
+      category: challengeData.category || 'عام',
+      icon: challengeData.icon || '🎯',
+      color: challengeData.color || 'from-violet-600 to-indigo-600',
+      start_date: challengeData.start_date || new Date().toISOString().slice(0, 10),
+      end_date: challengeData.end_date || new Date().toISOString().slice(0, 10),
+      total_days: Number(challengeData.total_days) || 7,
+      reward_title: challengeData.reward_title || '',
+      reward_icon: challengeData.reward_icon || '🏆',
+      reward_description: challengeData.reward_description || '',
+      conditions: Array.isArray(challengeData.conditions) ? challengeData.conditions : [],
+      days_progress: challengeData.days_progress || {},
+      status: 'active',
+      cheers: [],
+      created_at: new Date().toISOString()
+    }
+
+    this.challenges = [newChallenge, ...this.challenges]
+    this.saveChallenges()
+    this._challengesWritesPending++
+
+    try {
+      const res = await fetch(`${this.apiBase}/challenges`, {
+        method: 'POST',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          title: newChallenge.title,
+          description: newChallenge.description,
+          category: newChallenge.category,
+          icon: newChallenge.icon,
+          color: newChallenge.color,
+          start_date: newChallenge.start_date,
+          end_date: newChallenge.end_date,
+          total_days: newChallenge.total_days,
+          reward_title: newChallenge.reward_title,
+          reward_icon: newChallenge.reward_icon,
+          reward_description: newChallenge.reward_description,
+          conditions: newChallenge.conditions,
+          partner_id: newChallenge.partner_id,
+          days_progress: newChallenge.days_progress,
+          status: newChallenge.status
+        })
+      })
+
+      if (res.ok) {
+        const created = await res.json()
+        const idx = this.challenges.findIndex(c => c.id === tempId)
+        if (idx !== -1) {
+          this.challenges[idx] = { ...this.challenges[idx], ...created, id: created.id }
+          this.challenges = [...this.challenges]
+          this.saveChallenges()
+        }
+        return created
+      } else {
+        console.error('فشل حفظ التحدي بالسيرفر')
+        return newChallenge
+      }
+    } catch (e) {
+      console.error('خطأ أثناء حفظ التحدي', e)
+      return newChallenge
+    } finally {
+      this._challengesWritesPending = Math.max(0, this._challengesWritesPending - 1)
+    }
+  },
+
+  async updateChallenge(id, updates) {
+    const idx = this.challenges.findIndex(c => String(c.id) === String(id))
+    if (idx === -1) return null
+
+    const current = this.challenges[idx]
+    const updated = { ...current, ...updates }
+
+    // Check completion if days_progress or total_days changed
+    if (updated.days_progress) {
+      let completedDays = 0
+      const totalDays = Number(updated.total_days) || 1
+      for (const key in updated.days_progress) {
+        if (updated.days_progress[key]?.completed) {
+          completedDays++
+        }
+      }
+      if (completedDays >= totalDays && totalDays > 0) {
+        updated.status = 'completed'
+      } else if (updated.status === 'completed' && completedDays < totalDays) {
+        updated.status = 'active'
+      }
+    }
+
+    this.challenges[idx] = updated
+    this.challenges = [...this.challenges]
+    this.saveChallenges()
+    this._challengesWritesPending++
+
+    try {
+      const res = await fetch(`${this.apiBase}/challenges/${id}`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(updates)
+      })
+
+      if (res.ok) {
+        const serverData = await res.json()
+        const freshIdx = this.challenges.findIndex(c => String(c.id) === String(id))
+        if (freshIdx !== -1) {
+          this.challenges[freshIdx] = { ...this.challenges[freshIdx], ...serverData }
+          this.challenges = [...this.challenges]
+          this.saveChallenges()
+        }
+        return serverData
+      }
+    } catch (e) {
+      console.error('خطأ تحديث التحدي في السيرفر', e)
+    } finally {
+      this._challengesWritesPending = Math.max(0, this._challengesWritesPending - 1)
+    }
+    return updated
+  },
+
+  async deleteChallenge(id) {
+    this.challenges = this.challenges.filter(c => String(c.id) !== String(id))
+    this.saveChallenges()
+    this._challengesWritesPending++
+
+    try {
+      await fetch(`${this.apiBase}/challenges/${id}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      })
+    } catch (e) {
+      console.error('فشل حذف التحدي من السيرفر', e)
+    } finally {
+      this._challengesWritesPending = Math.max(0, this._challengesWritesPending - 1)
+    }
+  },
+
+  async toggleChallengeCondition(challengeId, dayNumber, conditionIndex) {
+    const challenge = this.challenges.find(c => String(c.id) === String(challengeId))
+    if (!challenge) return
+
+    const daysProgress = { ...(challenge.days_progress || {}) }
+    const dayKey = String(dayNumber)
+    const currentDay = daysProgress[dayKey] ? { ...daysProgress[dayKey] } : { completed: false, items: {} }
+    const items = { ...(currentDay.items || {}) }
+
+    items[conditionIndex] = !items[conditionIndex]
+
+    const conditions = challenge.conditions || []
+    const allDone = conditions.length > 0 && conditions.every((_, idx) => Boolean(items[idx]))
+    currentDay.items = items
+    currentDay.completed = allDone
+    if (allDone) {
+      currentDay.completed_at = new Date().toISOString()
+    } else {
+      delete currentDay.completed_at
+    }
+
+    daysProgress[dayKey] = currentDay
+    return await this.updateChallenge(challengeId, { days_progress: daysProgress })
+  },
+
+  async addChallengeCheer(challengeId, { message, reaction }) {
+    const idx = this.challenges.findIndex(c => String(c.id) === String(challengeId))
+    if (idx === -1) return null
+
+    const current = this.challenges[idx]
+    const tempCheer = {
+      id: Date.now(),
+      challenge_id: challengeId,
+      user_id: this.currentUser?.id,
+      user: this.currentUser ? { id: this.currentUser.id, name: this.currentUser.name, email: this.currentUser.email } : null,
+      message: message || null,
+      reaction: reaction || null,
+      created_at: new Date().toISOString()
+    }
+
+    current.cheers = [...(current.cheers || []), tempCheer]
+    this.challenges = [...this.challenges]
+    this.saveChallenges()
+
+    try {
+      const res = await fetch(`${this.apiBase}/challenges/${challengeId}/cheer`, {
+        method: 'POST',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ message, reaction })
+      })
+
+      if (res.ok) {
+        const savedCheer = await res.json()
+        const freshIdx = this.challenges.findIndex(c => String(c.id) === String(challengeId))
+        if (freshIdx !== -1) {
+          const cheers = [...(this.challenges[freshIdx].cheers || [])]
+          const cheerIdx = cheers.findIndex(ch => ch.id === tempCheer.id)
+          if (cheerIdx !== -1) {
+            cheers[cheerIdx] = savedCheer
+          } else {
+            cheers.push(savedCheer)
+          }
+          this.challenges[freshIdx].cheers = cheers
+          this.challenges = [...this.challenges]
+          this.saveChallenges()
+        }
+        return savedCheer
+      }
+    } catch (e) {
+      console.error('فشل إرسال التشجيع للسيرفر', e)
+    }
+    return tempCheer
   }
 })
 

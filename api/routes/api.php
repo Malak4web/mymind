@@ -230,6 +230,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/ideas/reorder', [IdeaController::class, 'reorder']);
     Route::post('/ideas/upload-image', [IdeaController::class, 'uploadImage']);
     Route::get('/ideas/{id}', [IdeaController::class, 'show']);
-    Route::put('/ideas/{id}', [IdeaController::class, 'update']);
-    Route::delete('/ideas/{id}', [IdeaController::class, 'destroy']);
+    // Challenges routes (التحديات)
+    Route::get('/challenges', [\App\Http\Controllers\ChallengeController::class, 'index']);
+    Route::post('/challenges', [\App\Http\Controllers\ChallengeController::class, 'store']);
+    Route::get('/challenges/{id}', [\App\Http\Controllers\ChallengeController::class, 'show']);
+    Route::put('/challenges/{id}', [\App\Http\Controllers\ChallengeController::class, 'update']);
+    Route::delete('/challenges/{id}', [\App\Http\Controllers\ChallengeController::class, 'destroy']);
+    Route::post('/challenges/{id}/cheer', [\App\Http\Controllers\ChallengeController::class, 'addCheer']);
 });
