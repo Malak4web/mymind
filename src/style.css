@@ -393,20 +393,27 @@ h1, h2, h3, h4, h5, h6 {
 
 
 /* ── Stacking order ───────────────────────────────────────────────────
-   Nine ad-hoc z values were in use, with three escape hatches
-   (z-[9999] / z-[10000] / z-[99999]) climbing over a flat z-50 layer that
-   held modals, dropdowns, a sticky banner and floating bars all at once. */
+   Coordinated stacking levels:
+   - Base UI and raised elements: 0 - 20
+   - Sticky top headers and bottom navigation: 30
+   - FABs and floating action bars: 40
+   - Backdrops and overlays: 100
+   - Bottom sheets and drawers: 110
+   - Centred modals and popups: 120
+   - Menus, mention autocomplete inside modals: 130
+   - Toasts and alerts: 140
+*/
 :root {
   --z-base:    0;
   --z-raised: 10;
   --z-sticky: 20;
-  --z-nav:    30;   /* bottom navigation */
+  --z-nav:    30;   /* bottom navigation & top headers */
   --z-float:  40;   /* FABs, bulk-action bars */
-  --z-overlay:50;   /* backdrops */
-  --z-sheet:  60;   /* bottom sheets, drawers */
-  --z-modal:  70;   /* centred modals */
-  --z-popover:80;   /* mention autocomplete, menus inside modals */
-  --z-toast:  90;
+  --z-overlay:100;  /* backdrops */
+  --z-sheet:  110;  /* bottom sheets, drawers */
+  --z-modal:  120;  /* centred modals */
+  --z-popover:130;  /* mention autocomplete, menus inside modals */
+  --z-toast:  140;
 }
 
 .z-nav     { z-index: var(--z-nav); }
@@ -416,6 +423,19 @@ h1, h2, h3, h4, h5, h6 {
 .z-modal   { z-index: var(--z-modal); }
 .z-popover { z-index: var(--z-popover); }
 .z-toast   { z-index: var(--z-toast); }
+
+/* Guarantee all popups, dialogs, and bottom sheets strictly float above navigation and headers */
+.mobile-bottom-sheet,
+[role="dialog"],
+.modal-layer {
+  z-index: var(--z-sheet) !important;
+}
+
+.mobile-bottom-sheet > div:not(.fixed),
+[role="dialog"] > div:not(.fixed) {
+  z-index: var(--z-modal) !important;
+}
+
 
 /* ── Safe areas ───────────────────────────────────────────────────────
    `viewport-fit=cover` is set, which draws under the notch and the home

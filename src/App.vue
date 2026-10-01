@@ -226,7 +226,7 @@ watch(() => store.projects.length, (newLen) => {
     <!-- Impersonation Active Banner -->
     <div 
       v-if="store.isImpersonating()" 
-      class="bg-amber-500 text-slate-950 px-4 py-2 flex items-center justify-between shadow-md text-xs sm:text-sm sticky top-0 z-50 font-bold border-b border-amber-600"
+      class="bg-amber-500 text-slate-950 px-4 py-2 flex items-center justify-between shadow-md text-xs sm:text-sm sticky top-0 z-30 font-bold border-b border-amber-600"
     >
       <div class="flex items-center gap-2">
         <span class="text-base">🔑</span>
@@ -525,7 +525,7 @@ watch(() => store.projects.length, (newLen) => {
     </header>
 
     <!-- Main Workspace Area -->
-    <main class="max-w-full w-full px-4 md:px-8 py-6 pb-28 md:pb-8 transition-all duration-500 relative z-10">
+    <main class="max-w-full w-full px-4 md:px-8 py-6 pb-28 md:pb-8 transition-all duration-500 relative">
       <!-- Floating Exit Focus Mode Panel at the top -->
       <div v-if="store.isFocusMode" class="flex justify-center mb-8 animate-fade-in">
         <button 
@@ -639,9 +639,9 @@ watch(() => store.projects.length, (newLen) => {
 
     <!-- Quick Search Modal (Ctrl+K) -->
     <Transition name="fade">
-      <div v-if="isQuickSearchOpen" class="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4" dir="rtl">
-        <div @click="isQuickSearchOpen = false" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
-        <div class="relative z-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden p-4 space-y-4">
+      <div v-if="isQuickSearchOpen" class="fixed inset-0 z-[100] flex items-start justify-center pt-20 p-4" dir="rtl">
+        <div @click="isQuickSearchOpen = false" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm z-[100]"></div>
+        <div class="relative z-[101] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden p-4 space-y-4">
           <div class="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -701,14 +701,14 @@ watch(() => store.projects.length, (newLen) => {
 
     <!-- Slide-out / Bottom Sheet Notifications Drawer -->
     <Transition name="sheet">
-      <div v-if="store.isNotificationDrawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-stretch justify-center sm:justify-start" dir="rtl">
+      <div v-if="store.isNotificationDrawerOpen" class="fixed inset-0 z-[100] flex items-end sm:items-stretch justify-center sm:justify-start" dir="rtl">
         <div 
           @click="store.isNotificationDrawerOpen = false" 
-          class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 transition-opacity duration-300 cursor-pointer"
+          class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] transition-opacity duration-300 cursor-pointer"
         ></div>
         
         <div 
-          class="relative z-50 bg-white dark:bg-slate-900 border-t sm:border-t-0 sm:border-r border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-none w-full sm:max-w-sm max-h-[85vh] sm:max-h-none sm:h-full shadow-2xl p-5 sm:p-6 overflow-y-auto scrollbar-hide text-right transform transition-all duration-300"
+          class="relative z-[101] bg-white dark:bg-slate-900 border-t sm:border-t-0 sm:border-r border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-none w-full sm:max-w-sm max-h-[85vh] sm:max-h-none sm:h-full shadow-2xl p-5 sm:p-6 overflow-y-auto scrollbar-hide text-right transform transition-all duration-300"
         >
           <!-- Drag handle. The dismiss gesture lives HERE, not on the
                scrollable panel: bound to the panel, any scroll past 50px
@@ -752,13 +752,13 @@ watch(() => store.projects.length, (newLen) => {
 
     <!-- Mobile Projects Bottom Sheet Drawer -->
     <Transition name="sheet">
-      <div v-if="showMobileProjectsSheet" class="md:hidden fixed inset-0 z-50 flex items-end justify-center" dir="rtl">
+      <div v-if="showMobileProjectsSheet" class="md:hidden fixed inset-0 z-[100] flex items-end justify-center" dir="rtl">
         <div 
           @click="showMobileProjectsSheet = false" 
-          class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 transition-opacity"
+          class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] transition-opacity"
         ></div>
         <div 
-          class="relative z-50 w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-3xl p-5 shadow-2xl max-h-[85vh] overflow-y-auto"
+          class="relative z-[101] w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-3xl p-5 shadow-2xl max-h-[85vh] overflow-y-auto"
         >
           <!-- Drag handle. The dismiss gesture lives HERE, not on the
                scrollable panel: bound to the panel, any scroll past 50px
@@ -783,13 +783,13 @@ watch(() => store.projects.length, (newLen) => {
 
     <!-- Mobile More / Quick Settings Bottom Sheet Drawer -->
     <Transition name="sheet">
-      <div v-if="showMobileMoreSheet" class="md:hidden fixed inset-0 z-50 flex items-end justify-center" dir="rtl">
+      <div v-if="showMobileMoreSheet" class="md:hidden fixed inset-0 z-[100] flex items-end justify-center" dir="rtl">
         <div 
           @click="showMobileMoreSheet = false" 
-          class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 transition-opacity"
+          class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] transition-opacity"
         ></div>
         <div 
-          class="relative z-50 w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-3xl p-5 shadow-2xl max-h-[85vh] overflow-y-auto"
+          class="relative z-[101] w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-3xl p-5 shadow-2xl max-h-[85vh] overflow-y-auto"
         >
           <!-- Drag handle. The dismiss gesture lives HERE, not on the
                scrollable panel: bound to the panel, any scroll past 50px

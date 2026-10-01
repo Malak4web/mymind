@@ -804,7 +804,7 @@ const handleDeleteDailyNote = (noteId) => {
   <div class="w-full max-w-6xl mx-auto px-1 sm:px-3 py-1 relative overflow-x-hidden" @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd">
     
     <!-- Animated Confetti Overlay -->
-    <div v-if="showConfetti" class="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+    <div v-if="showConfetti" class="fixed inset-0 pointer-events-none z-[120] overflow-hidden">
       <div v-for="n in 30" :key="n" 
            class="absolute animate-fall rounded-full opacity-80"
            :style="{

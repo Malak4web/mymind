@@ -968,7 +968,7 @@ const handleDeleteCategory = (cat) => {
     <div
       v-if="lightboxImage"
       @click="lightboxImage = null"
-      class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
+      class="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
     >
       <div class="relative max-w-4xl max-h-[90vh] flex flex-col items-center" @click.stop>
         <img

@@ -897,13 +897,13 @@ const handleTouchEnd = (closeFn) => {
     <!--  MEMBER MANAGEMENT MODAL                   -->
     <!-- ═══════════════════════════════════════════ -->
     <Transition name="sheet">
-      <div v-if="showMemberModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
+      <div v-if="showMemberModal" class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" dir="rtl">
         <!-- Backdrop -->
-        <div @click="showMemberModal = false" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
+        <div @click="showMemberModal = false" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity z-[100]"></div>
 
         <!-- Modal Content -->
         <div 
-          class="relative z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/30 dark:border-slate-700/60 shadow-2xl rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-md max-h-[85vh] overflow-y-auto w-full space-y-5 text-right transform transition-all duration-300"
+          class="relative z-[101] bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/30 dark:border-slate-700/60 shadow-2xl rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-md max-h-[85vh] overflow-y-auto w-full space-y-5 text-right transform transition-all duration-300"
         >
           <!-- Drag handle. The dismiss gesture lives HERE, not on the
                scrollable panel: bound to the panel, any scroll past 50px

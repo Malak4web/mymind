@@ -100,7 +100,7 @@ onUnmounted(() => {
     <div 
       v-if="isOpen" 
       :class="[
-        'fixed inset-0 z-50 flex mobile-bottom-sheet',
+        'fixed inset-0 z-[100] flex mobile-bottom-sheet',
         drawerMode 
           ? 'items-end sm:items-stretch justify-center sm:justify-end' 
           : 'items-end sm:items-center justify-center p-0 sm:p-4'
@@ -111,13 +111,13 @@ onUnmounted(() => {
       <!-- Backdrop Overlay -->
       <div 
         @click="emit('close')" 
-        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300 cursor-pointer z-40"
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300 cursor-pointer z-[100]"
       ></div>
 
       <!-- Sheet Container Box -->
       <div 
         :class="[
-          'relative z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-t border-slate-200/80 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden text-right transform transition-all duration-300 w-full',
+          'relative z-[101] bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-t border-slate-200/80 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden text-right transform transition-all duration-300 w-full',
           drawerMode 
             ? 'sm:border-t-0 sm:border-l sm:rounded-none max-h-[88vh] sm:max-h-none sm:h-full rounded-t-3xl' 
             : 'sm:border sm:rounded-3xl max-h-[85vh] sm:max-h-[90vh] rounded-t-3xl',

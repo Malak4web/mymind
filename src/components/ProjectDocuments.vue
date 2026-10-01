@@ -536,16 +536,16 @@ const handleTouchEnd = (closeFn) => {
 
     <!-- Create Folder Modal Popup (Bottom Sheet on Mobile) -->
     <Transition name="sheet">
-      <div v-if="showNewFolderModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
+      <div v-if="showNewFolderModal" class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" dir="rtl">
         <!-- Backdrop -->
-        <div @click="showNewFolderModal = false; newFolderName = ''" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
+        <div @click="showNewFolderModal = false; newFolderName = ''" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity z-[100]"></div>
 
         <!-- Modal Content -->
         <div 
           @touchstart="handleTouchStart"
           @touchmove="handleTouchMove"
           @touchend="handleTouchEnd(() => { showNewFolderModal = false; newFolderName = '' })"
-          class="relative z-10 bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-sm max-h-[85vh] overflow-y-auto w-full shadow-2xl space-y-4 text-right transform transition-all duration-300"
+          class="relative z-[101] bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-sm max-h-[85vh] overflow-y-auto w-full shadow-2xl space-y-4 text-right transform transition-all duration-300"
         >
           <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto my-2.5 shrink-0 sm:hidden cursor-grab"></div>
           <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-1 justify-start">
@@ -586,16 +586,16 @@ const handleTouchEnd = (closeFn) => {
 
     <!-- Note Editor Modal Popup (Bottom Sheet on Mobile) -->
     <Transition name="sheet">
-      <div v-if="showNoteModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" dir="rtl">
+      <div v-if="showNoteModal" class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" dir="rtl">
         <!-- Backdrop -->
-        <div @click="showNoteModal = false" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
+        <div @click="showNoteModal = false" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity z-[100]"></div>
 
         <!-- Modal Content -->
         <div 
           @touchstart="handleTouchStart"
           @touchmove="handleTouchMove"
           @touchend="handleTouchEnd(() => showNoteModal = false)"
-          class="relative z-10 bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-lg max-h-[90vh] overflow-y-auto w-full shadow-2xl space-y-4 text-right transform transition-all duration-300"
+          class="relative z-[101] bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-lg max-h-[90vh] overflow-y-auto w-full shadow-2xl space-y-4 text-right transform transition-all duration-300"
         >
           <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto my-2.5 shrink-0 sm:hidden cursor-grab"></div>
           

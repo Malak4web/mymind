@@ -59,13 +59,21 @@ const conditionSuggestions = [
 
 // Available color gradients
 const colorOptions = [
-  { id: 'from-violet-600 to-indigo-600', name: 'بنفسجي ملكي', class: 'bg-gradient-to-r from-violet-600 to-indigo-600' },
-  { id: 'from-emerald-600 to-teal-600', name: 'أخضر إنجاز', class: 'bg-gradient-to-r from-emerald-600 to-teal-600' },
-  { id: 'from-amber-500 to-orange-600', name: 'برتقالي حماسي', class: 'bg-gradient-to-r from-amber-500 to-orange-600' },
-  { id: 'from-rose-500 to-pink-600', name: 'وردي طاقة', class: 'bg-gradient-to-r from-rose-500 to-pink-600' },
-  { id: 'from-blue-600 to-cyan-600', name: 'أزرق تركيز', class: 'bg-gradient-to-r from-blue-600 to-cyan-600' },
-  { id: 'from-purple-600 to-pink-600', name: 'أرجواني إبداع', class: 'bg-gradient-to-r from-purple-600 to-pink-600' }
+  { id: 'bg-gradient-to-r from-violet-600 to-indigo-600', name: 'بنفسجي ملكي', class: 'bg-gradient-to-r from-violet-600 to-indigo-600' },
+  { id: 'bg-gradient-to-r from-emerald-600 to-teal-600', name: 'أخضر إنجاز', class: 'bg-gradient-to-r from-emerald-600 to-teal-600' },
+  { id: 'bg-gradient-to-r from-amber-500 to-orange-600', name: 'برتقالي حماسي', class: 'bg-gradient-to-r from-amber-500 to-orange-600' },
+  { id: 'bg-gradient-to-r from-rose-500 to-pink-600', name: 'وردي طاقة', class: 'bg-gradient-to-r from-rose-500 to-pink-600' },
+  { id: 'bg-gradient-to-r from-blue-600 to-cyan-600', name: 'أزرق تركيز', class: 'bg-gradient-to-r from-blue-600 to-cyan-600' },
+  { id: 'bg-gradient-to-r from-purple-600 to-pink-600', name: 'أرجواني إبداع', class: 'bg-gradient-to-r from-purple-600 to-pink-600' }
 ]
+
+// Safe gradient class resolver supporting both legacy 'from-...' and full 'bg-gradient-to-r ...'
+const getGradientClass = (color) => {
+  if (!color) return 'bg-gradient-to-r from-violet-600 to-indigo-600'
+  const c = String(color).trim()
+  if (c.startsWith('bg-')) return c
+  return `bg-gradient-to-r ${c}`
+}
 
 // Emoji icons
 const iconOptions = ['🎯', '🏃', '📚', '💪', '🚀', '💧', '🧠', '⚡', '⭐', '🔥', '🥗', '🧘', '💻', '🏆', '⏱️', '🌅']
@@ -79,7 +87,7 @@ const form = ref({
   description: '',
   category: 'عام',
   icon: '🎯',
-  color: 'from-violet-600 to-indigo-600',
+  color: 'bg-gradient-to-r from-violet-600 to-indigo-600',
   start_date: new Date().toISOString().slice(0, 10),
   end_date: new Date(Date.now() + 6 * 86400000).toISOString().slice(0, 10),
   total_days: 7,
@@ -160,7 +168,7 @@ const openCreateModal = () => {
     description: '',
     category: 'عام',
     icon: '🎯',
-    color: 'from-violet-600 to-indigo-600',
+    color: 'bg-gradient-to-r from-violet-600 to-indigo-600',
     start_date: today,
     end_date: endDate,
     total_days: 7,
@@ -183,7 +191,7 @@ const openEditModal = (challenge, event) => {
     description: challenge.description || '',
     category: challenge.category || 'عام',
     icon: challenge.icon || '🎯',
-    color: challenge.color || 'from-violet-600 to-indigo-600',
+    color: getGradientClass(challenge.color),
     start_date: challenge.start_date || new Date().toISOString().slice(0, 10),
     end_date: challenge.end_date || new Date().toISOString().slice(0, 10),
     total_days: Number(challenge.total_days) || 7,
@@ -492,7 +500,7 @@ const isOwner = (challenge) => {
   <div class="space-y-4 sm:space-y-6">
 
     <!-- Confetti Particles Canvas -->
-    <div v-if="showConfetti" class="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+    <div v-if="showConfetti" class="fixed inset-0 pointer-events-none z-[120] overflow-hidden">
       <div v-for="n in 35" :key="n" 
            class="absolute animate-fall rounded-full opacity-80"
            :style="{
@@ -637,7 +645,7 @@ const isOwner = (challenge) => {
         <!-- Top decorative ambient glow -->
         <div 
           class="absolute -top-12 -right-12 w-28 h-28 rounded-full opacity-15 blur-2xl pointer-events-none transition-all group-hover:opacity-30"
-          :class="challenge.color.includes('emerald') ? 'bg-emerald-500' : (challenge.color.includes('amber') ? 'bg-amber-500' : 'bg-violet-500')"
+          :class="challenge.color && challenge.color.includes('emerald') ? 'bg-emerald-500' : (challenge.color && challenge.color.includes('amber') ? 'bg-amber-500' : 'bg-violet-500')"
         ></div>
 
         <!-- Card Header -->
@@ -645,8 +653,8 @@ const isOwner = (challenge) => {
           <div class="flex items-start justify-between gap-3 mb-3">
             <div class="flex items-center gap-3">
               <div 
-                class="w-12 h-12 rounded-2xl text-2xl flex items-center justify-center shadow-md text-white shrink-0 group-hover:scale-105 transition-transform"
-                :class="challenge.color || 'bg-gradient-to-r from-violet-600 to-indigo-600'"
+                class="w-12 h-12 rounded-2xl text-2xl flex items-center justify-center shadow-md text-white shrink-0 group-hover:scale-105 transition-transform bg-violet-600"
+                :class="getGradientClass(challenge.color)"
               >
                 {{ challenge.icon || '🎯' }}
               </div>
@@ -737,8 +745,8 @@ const isOwner = (challenge) => {
             
             <div class="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden p-0.5">
               <div
-                class="h-full rounded-full transition-all duration-500 ease-out"
-                :class="challenge.color || 'bg-gradient-to-r from-violet-600 to-indigo-600'"
+                class="h-full rounded-full transition-all duration-500 ease-out bg-violet-600"
+                :class="getGradientClass(challenge.color)"
                 :style="{ width: `${getChallengeStats(challenge).percentage}%` }"
               ></div>
             </div>
@@ -884,7 +892,7 @@ const isOwner = (challenge) => {
                 :class="[
                   'w-7 h-7 rounded-full transition-transform cursor-pointer',
                   col.class,
-                  form.color === col.id ? 'ring-2 ring-offset-2 ring-violet-500 scale-115' : 'hover:scale-105'
+                  getGradientClass(form.color) === col.class ? 'ring-2 ring-offset-2 ring-violet-500 scale-115' : 'hover:scale-105'
                 ]"
                 :title="col.name"
               ></button>
@@ -1129,31 +1137,35 @@ const isOwner = (challenge) => {
         
         <!-- Hero Header Card with Banner Gradient -->
         <div 
-          class="relative p-4 sm:p-6 rounded-3xl text-white overflow-hidden shadow-lg"
-          :class="activeChallenge.color || 'bg-gradient-to-r from-violet-600 to-indigo-600'"
+          class="relative p-5 sm:p-6 rounded-3xl text-white overflow-hidden shadow-xl bg-violet-600"
+          :class="getGradientClass(activeChallenge.color)"
         >
+          <!-- Decorative subtle ambient glow overlay -->
+          <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+          <div class="absolute -left-10 -top-10 w-48 h-48 bg-black/10 rounded-full blur-2xl pointer-events-none"></div>
+
           <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div class="flex items-center gap-3.5">
-              <span class="text-4xl sm:text-5xl shrink-0 p-2.5 rounded-2xl bg-white/20 backdrop-blur-md shadow-inner">
+              <span class="text-4xl sm:text-5xl shrink-0 p-3 rounded-2xl bg-black/25 backdrop-blur-md shadow-inner border border-white/20">
                 {{ activeChallenge.icon || '🎯' }}
               </span>
               <div>
-                <div class="flex items-center gap-2 flex-wrap mb-1">
-                  <span class="px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[11px] font-extrabold">
+                <div class="flex items-center gap-2 flex-wrap mb-1.5">
+                  <span class="px-2.5 py-0.5 rounded-full bg-black/30 backdrop-blur-md text-[11px] font-extrabold border border-white/20 text-white shadow-sm">
                     {{ activeChallenge.category || 'عام' }}
                   </span>
                   <span 
                     v-if="activeChallenge.status === 'completed'"
-                    class="px-2.5 py-0.5 rounded-full bg-emerald-400 text-emerald-950 text-[11px] font-black"
+                    class="px-2.5 py-0.5 rounded-full bg-emerald-400 text-emerald-950 text-[11px] font-black shadow-sm"
                   >
                     🏆 مكتمل 100%
                   </span>
-                  <span v-else class="px-2.5 py-0.5 rounded-full bg-white/20 text-[11px] font-bold">
+                  <span v-else class="px-2.5 py-0.5 rounded-full bg-black/30 backdrop-blur-md text-[11px] font-bold border border-white/20 text-white shadow-sm">
                     اليوم {{ currentDayData?.dayNumber || 1 }} من {{ activeChallenge.total_days }}
                   </span>
                 </div>
-                <h2 class="text-xl sm:text-2xl font-black">{{ activeChallenge.title }}</h2>
-                <p v-if="activeChallenge.description" class="text-xs sm:text-sm text-white/80 mt-1 max-w-xl line-clamp-2">
+                <h2 class="text-xl sm:text-2xl font-black text-white drop-shadow-sm">{{ activeChallenge.title }}</h2>
+                <p v-if="activeChallenge.description" class="text-xs sm:text-sm text-white/90 mt-1 max-w-xl line-clamp-2 drop-shadow-sm">
                   {{ activeChallenge.description }}
                 </p>
               </div>
@@ -1161,13 +1173,13 @@ const isOwner = (challenge) => {
 
             <!-- Header Quick Stats -->
             <div class="flex items-center gap-3 shrink-0">
-              <div class="px-3.5 py-2 rounded-2xl bg-white/15 backdrop-blur-md text-center">
+              <div class="px-4 py-2.5 rounded-2xl bg-black/25 backdrop-blur-md text-center border border-white/20 shadow-sm">
                 <span class="text-[10px] text-white/80 block font-bold">الالتزام</span>
-                <span class="text-lg sm:text-xl font-black">{{ getChallengeStats(activeChallenge).percentage }}%</span>
+                <span class="text-lg sm:text-xl font-black text-white">{{ getChallengeStats(activeChallenge).percentage }}%</span>
               </div>
-              <div class="px-3.5 py-2 rounded-2xl bg-white/15 backdrop-blur-md text-center">
+              <div class="px-4 py-2.5 rounded-2xl bg-black/25 backdrop-blur-md text-center border border-white/20 shadow-sm">
                 <span class="text-[10px] text-white/80 block font-bold">السلسلة 🔥</span>
-                <span class="text-lg sm:text-xl font-black">{{ getChallengeStats(activeChallenge).streak }} يوم</span>
+                <span class="text-lg sm:text-xl font-black text-white">{{ getChallengeStats(activeChallenge).streak }} يوم</span>
               </div>
             </div>
           </div>
@@ -1470,7 +1482,7 @@ const isOwner = (challenge) => {
     <!-- 3. Celebration Victory Modal on 100% Completion -->
     <div 
       v-if="isCelebrationModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in"
+      class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in"
     >
       <div class="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full border border-amber-500/40 shadow-2xl text-center space-y-4">
         <div class="w-20 h-20 mx-auto rounded-3xl bg-amber-500/20 text-amber-500 flex items-center justify-center text-5xl animate-bounce shadow-lg">
