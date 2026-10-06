@@ -8,7 +8,76 @@ const permissions = ref([])
 const loadingUsers = ref(false)
 
 // Active Tab State
-const activeTab = ref('users') // 'users' | 'proj-templates' | 'task-templates'
+const activeTab = ref('users') // 'users' | 'proj-templates' | 'task-templates' | 'social-settings'
+
+// Social Media Settings states (Strictly User Scoped)
+const activeSocialPlatform = ref('facebook') // 'facebook' | 'instagram' | 'youtube' | 'linkedin'
+const socialSettingsForms = ref({
+  facebook: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', webhook_verify_token: '', is_active: true },
+  instagram: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', webhook_verify_token: '', is_active: true },
+  youtube: { api_key: '', app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', is_active: true },
+  linkedin: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', is_active: true },
+})
+const showSecrets = ref({
+  facebook: false,
+  instagram: false,
+  youtube: false,
+  linkedin: false,
+})
+const socialSaving = ref(false)
+const socialSuccessMsg = ref('')
+const socialErrorMsg = ref('')
+
+const syncSocialSettingsFromStore = () => {
+  if (store.socialSettings) {
+    for (const p of ['facebook', 'instagram', 'youtube', 'linkedin']) {
+      if (store.socialSettings[p]) {
+        socialSettingsForms.value[p] = {
+          app_id: store.socialSettings[p].app_id || '',
+          app_secret: store.socialSettings[p].app_secret || '',
+          api_key: store.socialSettings[p].api_key || '',
+          access_token: store.socialSettings[p].access_token || '',
+          page_or_channel_id: store.socialSettings[p].page_or_channel_id || '',
+          webhook_verify_token: store.socialSettings[p].webhook_verify_token || '',
+          is_active: store.socialSettings[p].is_active !== false,
+        }
+      }
+    }
+  }
+}
+
+watch(() => store.socialSettings, () => {
+  syncSocialSettingsFromStore()
+}, { deep: true, immediate: true })
+
+const getPlatformName = (platform) => {
+  switch (platform) {
+    case 'facebook': return 'فيسبوك (Facebook)'
+    case 'instagram': return 'انستجرام (Instagram)'
+    case 'youtube': return 'يوتيوب (YouTube)'
+    case 'linkedin': return 'لينكد إن (LinkedIn)'
+    default: return platform
+  }
+}
+
+const savePlatformSettings = async (platform) => {
+  socialSaving.value = true
+  socialSuccessMsg.value = ''
+  socialErrorMsg.value = ''
+  try {
+    const res = await store.saveSocialSettings(platform, socialSettingsForms.value[platform])
+    if (res) {
+      socialSuccessMsg.value = `تم حفظ إعدادات ${getPlatformName(platform)} بنجاح!`
+      setTimeout(() => { socialSuccessMsg.value = '' }, 4000)
+    } else {
+      socialErrorMsg.value = 'تعذر حفظ الإعدادات، يرجى المحاولة لاحقاً'
+    }
+  } catch (e) {
+    socialErrorMsg.value = 'حدث خطأ أثناء حفظ الإعدادات'
+  } finally {
+    socialSaving.value = false
+  }
+}
 
 // User Management states
 const isEditing = ref(false)
@@ -140,6 +209,7 @@ const updateHashFromTab = (tab) => {
   if (tab === 'users') hash = '#settings-users'
   if (tab === 'proj-templates') hash = '#settings-proj-templates'
   if (tab === 'task-templates') hash = '#settings-task-templates'
+  if (tab === 'social-settings') hash = '#settings-social'
   if (window.location.hash !== hash) {
     window.location.hash = hash
   }
@@ -157,6 +227,7 @@ const handleHashChange = () => {
     if (sub === 'users' || sub === 'db') activeTab.value = 'users'
     else if (sub === 'proj-templates') activeTab.value = 'proj-templates'
     else if (sub === 'task-templates') activeTab.value = 'task-templates'
+    else if (sub === 'social' || sub === 'social-settings') activeTab.value = 'social-settings'
   }
 }
 
@@ -483,6 +554,21 @@ const handleSaveTaskTemplate = async () => {
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
         <span>قوالب المهام</span>
+      </button>
+
+      <button 
+        @click="activeTab = 'social-settings'"
+        :class="[
+          'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition duration-200 cursor-pointer text-right justify-start',
+          activeTab === 'social-settings' 
+            ? 'bg-gradient-to-l from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/20' 
+            : 'text-slate-700 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-950/30'
+        ]"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        </svg>
+        <span>إعدادات السوشيال ميديا</span>
       </button>
     </div>
 
@@ -1108,6 +1194,426 @@ const handleSaveTaskTemplate = async () => {
             </div>
 
           </div>
+        </div>
+
+      </div>
+
+      <!-- Tab 4: Social Media Settings (Strictly User-Scoped) -->
+      <div v-if="activeTab === 'social-settings'" class="space-y-6 animate-fade-in">
+        
+        <!-- Header Section -->
+        <div class="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between flex-row-reverse">
+          <div class="text-right">
+            <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100">إعدادات السوشيال ميديا وربط الـ API</h3>
+            <p class="text-xs text-slate-400 font-semibold mt-1">تهيئة مفاتيح الربط وتطبيقات المطورين لمنصات التواصل الاجتماعي</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              خاص بحسابك فقط
+            </span>
+          </div>
+        </div>
+
+        <!-- Privacy & Security Notice -->
+        <div class="bg-gradient-to-r from-violet-500/10 via-indigo-500/10 to-transparent p-4 rounded-2xl border border-violet-500/20 flex items-start gap-3 flex-row-reverse">
+          <div class="w-8 h-8 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0 shadow-sm text-sm">
+            🔒
+          </div>
+          <div class="text-right flex-1">
+            <h4 class="text-xs font-black text-slate-800 dark:text-slate-200">عزل كامل وأمان للبيانات</h4>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+              جميع مفاتيح الـ API ورموز الوصول (Access Tokens) المدخلة هنا مرتبطة مباشرة بحسابك الشخصي فقط، ولا يمكن لأي مستخدم أو عضو آخر في النظام الاطلاع عليها أو استخدامها.
+            </p>
+          </div>
+        </div>
+
+        <!-- Success & Error Banners -->
+        <div v-if="socialSuccessMsg" class="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2 flex-row-reverse">
+          <span>✓</span>
+          <span>{{ socialSuccessMsg }}</span>
+        </div>
+        <div v-if="socialErrorMsg" class="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2 flex-row-reverse">
+          <span>⚠️</span>
+          <span>{{ socialErrorMsg }}</span>
+        </div>
+
+        <!-- Platform Tabs Bar -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <!-- Facebook Tab -->
+          <button
+            type="button"
+            @click="activeSocialPlatform = 'facebook'"
+            :class="[
+              'p-3 rounded-2xl border transition-all duration-200 flex items-center gap-2.5 cursor-pointer text-right flex-row-reverse',
+              activeSocialPlatform === 'facebook'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20'
+                : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            ]"
+          >
+            <div class="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center font-bold text-sm shrink-0">
+              f
+            </div>
+            <div class="truncate">
+              <span class="block text-xs font-black">فيسبوك</span>
+              <span class="text-[10px] opacity-75 block">Facebook Pages</span>
+            </div>
+          </button>
+
+          <!-- Instagram Tab -->
+          <button
+            type="button"
+            @click="activeSocialPlatform = 'instagram'"
+            :class="[
+              'p-3 rounded-2xl border transition-all duration-200 flex items-center gap-2.5 cursor-pointer text-right flex-row-reverse',
+              activeSocialPlatform === 'instagram'
+                ? 'bg-gradient-to-r from-pink-600 via-rose-500 to-amber-500 text-white border-rose-500 shadow-md shadow-rose-500/20'
+                : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            ]"
+          >
+            <div class="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center font-bold text-sm shrink-0">
+              📸
+            </div>
+            <div class="truncate">
+              <span class="block text-xs font-black">انستجرام</span>
+              <span class="text-[10px] opacity-75 block">Instagram Business</span>
+            </div>
+          </button>
+
+          <!-- YouTube Tab -->
+          <button
+            type="button"
+            @click="activeSocialPlatform = 'youtube'"
+            :class="[
+              'p-3 rounded-2xl border transition-all duration-200 flex items-center gap-2.5 cursor-pointer text-right flex-row-reverse',
+              activeSocialPlatform === 'youtube'
+                ? 'bg-red-600 text-white border-red-600 shadow-md shadow-red-500/20'
+                : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            ]"
+          >
+            <div class="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center font-bold text-sm shrink-0">
+              ▶
+            </div>
+            <div class="truncate">
+              <span class="block text-xs font-black">يوتيوب</span>
+              <span class="text-[10px] opacity-75 block">YouTube Channels</span>
+            </div>
+          </button>
+
+          <!-- LinkedIn Tab -->
+          <button
+            type="button"
+            @click="activeSocialPlatform = 'linkedin'"
+            :class="[
+              'p-3 rounded-2xl border transition-all duration-200 flex items-center gap-2.5 cursor-pointer text-right flex-row-reverse',
+              activeSocialPlatform === 'linkedin'
+                ? 'bg-sky-700 text-white border-sky-700 shadow-md shadow-sky-600/20'
+                : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            ]"
+          >
+            <div class="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center font-bold text-sm shrink-0">
+              in
+            </div>
+            <div class="truncate">
+              <span class="block text-xs font-black">لينكد إن</span>
+              <span class="text-[10px] opacity-75 block">LinkedIn Pages</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- Platform Specific Settings Form Container -->
+        <div class="bg-slate-50/70 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 space-y-5">
+          
+          <!-- Platform Title Bar & Active Switch -->
+          <div class="flex items-center justify-between flex-row-reverse pb-4 border-b border-slate-200/80 dark:border-slate-800">
+            <div class="text-right">
+              <h4 class="text-sm font-black text-slate-900 dark:text-slate-100">
+                إعدادات {{ getPlatformName(activeSocialPlatform) }}
+              </h4>
+              <p class="text-[11px] text-slate-400 mt-0.5">
+                أدخل مفاتيح وتصاريح الربط الخاصة بتطبيق المنصة للنشر والجدولة التلقائية
+              </p>
+            </div>
+
+            <label class="flex items-center gap-2.5 cursor-pointer flex-row-reverse select-none">
+              <span class="text-xs font-bold text-slate-600 dark:text-slate-300">تفعيل المنصة</span>
+              <input
+                type="checkbox"
+                v-model="socialSettingsForms[activeSocialPlatform].is_active"
+                class="sr-only peer"
+              />
+              <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-800 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-violet-600"></div>
+            </label>
+          </div>
+
+          <!-- Form Fields Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            <!-- Facebook Specific Fields -->
+            <template v-if="activeSocialPlatform === 'facebook'">
+              <div class="space-y-1.5 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Facebook App ID (معرّف التطبيق)</label>
+                <input
+                  v-model="socialSettingsForms.facebook.app_id"
+                  type="text"
+                  placeholder="مثال: 123456789012345"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                  dir="ltr"
+                />
+              </div>
+
+              <div class="space-y-1.5 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Facebook App Secret (المفتاح السري)</label>
+                <div class="relative">
+                  <input
+                    v-model="socialSettingsForms.facebook.app_secret"
+                    :type="showSecrets.facebook ? 'text' : 'password'"
+                    placeholder="المفتاح السري للتطبيق"
+                    class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition pl-10"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    @click="showSecrets.facebook = !showSecrets.facebook"
+                    class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs px-1 cursor-pointer"
+                  >
+                    {{ showSecrets.facebook ? 'إخفاء' : 'عرض' }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="space-y-1.5 text-right md:col-span-2">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Page Access Token (رمز وصول الصفحة الدائم)</label>
+                <textarea
+                  v-model="socialSettingsForms.facebook.access_token"
+                  rows="2"
+                  placeholder="EAA..."
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition resize-none font-mono"
+                  dir="ltr"
+                ></textarea>
+              </div>
+
+              <div class="space-y-1.5 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Facebook Page ID (معرّف الصفحة الافتراضية)</label>
+                <input
+                  v-model="socialSettingsForms.facebook.page_or_channel_id"
+                  type="text"
+                  placeholder="مثال: 10987654321"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                  dir="ltr"
+                />
+              </div>
+
+              <div class="space-y-1.5 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Webhook Verify Token (رمز التحقق للويب هوك)</label>
+                <input
+                  v-model="socialSettingsForms.facebook.webhook_verify_token"
+                  type="text"
+                  placeholder="رمز التحقق السري"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                  dir="ltr"
+                />
+              </div>
+            </template>
+
+            <!-- Instagram Specific Fields -->
+            <template v-if="activeSocialPlatform === 'instagram'">
+              <div class="space-y-1.5 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Meta App ID (معرّف التطبيق)</label>
+                <input
+                  v-model="socialSettingsForms.instagram.app_id"
+                  type="text"
+                  placeholder="مثال: 987654321098"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition"
+                  dir="ltr"
+                />
+              </div>
+
+              <div class="space-y-1.5 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Meta App Secret (المفتاح السري)</label>
+                <div class="relative">
+                  <input
+                    v-model="socialSettingsForms.instagram.app_secret"
+                    :type="showSecrets.instagram ? 'text' : 'password'"
+                    placeholder="المفتاح السري لتطبيق إنستجرام"
+                    class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition pl-10"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    @click="showSecrets.instagram = !showSecrets.instagram"
+                    class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs px-1 cursor-pointer"
+                  >
+                    {{ showSecrets.instagram ? 'إخفاء' : 'عرض' }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="space-y-1.5 text-right md:col-span-2">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Instagram Graph API Token (رمز الوصول)</label>
+                <textarea
+                  v-model="socialSettingsForms.instagram.access_token"
+                  rows="2"
+                  placeholder="IGAA..."
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition resize-none font-mono"
+                  dir="ltr"
+                ></textarea>
+              </div>
+
+              <div class="space-y-1.5 text-right md:col-span-2">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Instagram Business Account ID (معرّف حساب الأعمال)</label>
+                <input
+                  v-model="socialSettingsForms.instagram.page_or_channel_id"
+                  type="text"
+                  placeholder="مثال: 17841400000000"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition"
+                  dir="ltr"
+                />
+              </div>
+            </template>
+
+            <!-- YouTube Specific Fields -->
+            <template v-if="activeSocialPlatform === 'youtube'">
+              <div class="space-y-1.5 text-right md:col-span-2">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Google API Key (مفتاح API الخاص بجوجل)</label>
+                <input
+                  v-model="socialSettingsForms.youtube.api_key"
+                  type="text"
+                  placeholder="AIzaSy..."
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition"
+                  dir="ltr"
+                />
+              </div>
+
+              <div class="space-y-1.5 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">OAuth Client ID (معرّف العميل)</label>
+                <input
+                  v-model="socialSettingsForms.youtube.app_id"
+                  type="text"
+                  placeholder="مثال: ...apps.googleusercontent.com"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition"
+                  dir="ltr"
+                />
+              </div>
+
+              <div class="space-y-1.5 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">OAuth Client Secret (السر الخاص بالعميل)</label>
+                <div class="relative">
+                  <input
+                    v-model="socialSettingsForms.youtube.app_secret"
+                    :type="showSecrets.youtube ? 'text' : 'password'"
+                    placeholder="Client Secret"
+                    class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition pl-10"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    @click="showSecrets.youtube = !showSecrets.youtube"
+                    class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs px-1 cursor-pointer"
+                  >
+                    {{ showSecrets.youtube ? 'إخفاء' : 'عرض' }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="space-y-1.5 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">YouTube Channel ID (معرّف القناة)</label>
+                <input
+                  v-model="socialSettingsForms.youtube.page_or_channel_id"
+                  type="text"
+                  placeholder="مثال: UCxxxxxxxxxxxxxxxxxxxx"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition"
+                  dir="ltr"
+                />
+              </div>
+
+              <div class="space-y-1.5 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">OAuth Refresh / Access Token</label>
+                <input
+                  v-model="socialSettingsForms.youtube.access_token"
+                  type="text"
+                  placeholder="رمز الوصول أو التحديث"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition"
+                  dir="ltr"
+                />
+              </div>
+            </template>
+
+            <!-- LinkedIn Specific Fields -->
+            <template v-if="activeSocialPlatform === 'linkedin'">
+              <div class="space-y-1.5 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">LinkedIn Client ID (معرّف العميل)</label>
+                <input
+                  v-model="socialSettingsForms.linkedin.app_id"
+                  type="text"
+                  placeholder="مثال: 78abcdef123456"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-600/20 focus:border-sky-600 transition"
+                  dir="ltr"
+                />
+              </div>
+
+              <div class="space-y-1.5 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">LinkedIn Client Secret (السر الخاص بالعميل)</label>
+                <div class="relative">
+                  <input
+                    v-model="socialSettingsForms.linkedin.app_secret"
+                    :type="showSecrets.linkedin ? 'text' : 'password'"
+                    placeholder="Client Secret"
+                    class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-600/20 focus:border-sky-600 transition pl-10"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    @click="showSecrets.linkedin = !showSecrets.linkedin"
+                    class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs px-1 cursor-pointer"
+                  >
+                    {{ showSecrets.linkedin ? 'إخفاء' : 'عرض' }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="space-y-1.5 text-right md:col-span-2">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">LinkedIn Access Token (رمز الوصول OAuth 2.0)</label>
+                <textarea
+                  v-model="socialSettingsForms.linkedin.access_token"
+                  rows="2"
+                  placeholder="AQ..."
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-600/20 focus:border-sky-600 transition resize-none font-mono"
+                  dir="ltr"
+                ></textarea>
+              </div>
+
+              <div class="space-y-1.5 text-right md:col-span-2">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Organization / Company Page ID (معرّف صفحة المنظمة)</label>
+                <input
+                  v-model="socialSettingsForms.linkedin.page_or_channel_id"
+                  type="text"
+                  placeholder="مثال: urn:li:organization:12345678 أو الرقم التعريفي"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-600/20 focus:border-sky-600 transition"
+                  dir="ltr"
+                />
+              </div>
+            </template>
+
+          </div>
+
+          <!-- Bottom Action Buttons & Quick Help -->
+          <div class="pt-4 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between flex-row-reverse flex-wrap gap-3">
+            <button
+              type="button"
+              @click="savePlatformSettings(activeSocialPlatform)"
+              :disabled="socialSaving"
+              class="px-6 py-2.5 rounded-2xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-extrabold text-xs shadow-md shadow-violet-500/20 hover:opacity-95 active:scale-95 transition cursor-pointer flex items-center gap-2"
+            >
+              <span v-if="socialSaving" class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              <span>{{ socialSaving ? 'جاري الحفظ...' : 'حفظ إعدادات المنصة' }}</span>
+            </button>
+
+            <div class="text-[11px] text-slate-400">
+              💡 يمكنك الحصول على بيانات الربط من لوحة تحكم المطورين الخاصة بكل منصة.
+            </div>
+          </div>
+
         </div>
 
       </div>

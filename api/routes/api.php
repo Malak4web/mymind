@@ -19,6 +19,7 @@ use App\Http\Controllers\DailyTaskController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DailyNoteController;
 use App\Http\Controllers\IdeaController;
+use App\Http\Controllers\SocialMediaController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Broadcast;
@@ -237,4 +238,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/challenges/{id}', [\App\Http\Controllers\ChallengeController::class, 'update']);
     Route::delete('/challenges/{id}', [\App\Http\Controllers\ChallengeController::class, 'destroy']);
     Route::post('/challenges/{id}/cheer', [\App\Http\Controllers\ChallengeController::class, 'addCheer']);
+
+    // Social Media Management routes (إدارة السوشيال ميديا)
+    Route::get('/social/summary', [SocialMediaController::class, 'getSummary']);
+    Route::get('/social/accounts', [SocialMediaController::class, 'getAccounts']);
+    Route::post('/social/accounts', [SocialMediaController::class, 'storeAccount']);
+    Route::delete('/social/accounts/{id}', [SocialMediaController::class, 'deleteAccount']);
+
+    Route::get('/social/posts', [SocialMediaController::class, 'getPosts']);
+    Route::post('/social/posts', [SocialMediaController::class, 'storePost']);
+    Route::put('/social/posts/{id}', [SocialMediaController::class, 'updatePost']);
+    Route::delete('/social/posts/{id}', [SocialMediaController::class, 'deletePost']);
+    Route::post('/social/posts/{id}/publish', [SocialMediaController::class, 'publishNow']);
+
+    Route::get('/social/settings', [SocialMediaController::class, 'getSettings']);
+    Route::post('/social/settings', [SocialMediaController::class, 'saveSettings']);
 });

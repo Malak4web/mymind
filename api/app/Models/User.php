@@ -79,6 +79,21 @@ class User extends Authenticatable
         return $this->hasMany(Challenge::class, 'partner_id');
     }
 
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
+    }
+
+    public function socialPosts(): HasMany
+    {
+        return $this->hasMany(SocialPost::class);
+    }
+
+    public function socialSettings(): HasMany
+    {
+        return $this->hasMany(SocialSetting::class);
+    }
+
     public function isAdmin(): bool
     {
         return $this->role !== null && $this->role->name === self::ADMIN_ROLE;

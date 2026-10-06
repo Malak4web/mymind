@@ -58,9 +58,22 @@ export const store = reactive({
   // Challenges State (التحديات - خاص بكل مستخدم وشريكه)
   challenges: [],
 
-
-
-
+  // Social Media Management State (إدارة السوشيال ميديا - خاص بكل مستخدم)
+  socialAccounts: [],
+  socialPosts: [],
+  socialSettings: {
+    facebook: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', webhook_verify_token: '', is_active: false },
+    instagram: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', webhook_verify_token: '', is_active: false },
+    youtube: { api_key: '', app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', is_active: false },
+    linkedin: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', is_active: false },
+  },
+  socialSummary: {
+    total_accounts: 0,
+    total_posts: 0,
+    published_posts: 0,
+    scheduled_posts: 0,
+    draft_posts: 0,
+  },
   // Navigation and UI States
   activeProjectId: null,
   activeCategoryId: null,
@@ -149,6 +162,12 @@ export const store = reactive({
           if (cachedIdeas) this.ideas = JSON.parse(cachedIdeas)
           const cachedChallenges = localStorage.getItem(this.getChallengesStorageKey())
           if (cachedChallenges) this.challenges = JSON.parse(cachedChallenges)
+          const cachedSocialAccounts = localStorage.getItem(this.getSocialAccountsStorageKey())
+          if (cachedSocialAccounts) this.socialAccounts = JSON.parse(cachedSocialAccounts)
+          const cachedSocialPosts = localStorage.getItem(this.getSocialPostsStorageKey())
+          if (cachedSocialPosts) this.socialPosts = JSON.parse(cachedSocialPosts)
+          const cachedSocialSettings = localStorage.getItem(this.getSocialSettingsStorageKey())
+          if (cachedSocialSettings) this.socialSettings = JSON.parse(cachedSocialSettings)
         } catch (e) {}
 
         this.loadDailyTaskCategories()
@@ -166,6 +185,9 @@ export const store = reactive({
         await this.loadHabits()
         await this.loadIdeas()
         await this.loadChallenges()
+        await this.loadSocialAccounts()
+        await this.loadSocialPosts()
+        await this.loadSocialSettings()
         this.startRealtimeSync()
         this._startReminderEngine()
       } else {
@@ -194,6 +216,21 @@ export const store = reactive({
     this.challenges = []
     this.habits = []
     this.dailyTasks = []
+    this.socialAccounts = []
+    this.socialPosts = []
+    this.socialSettings = {
+      facebook: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', webhook_verify_token: '', is_active: false },
+      instagram: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', webhook_verify_token: '', is_active: false },
+      youtube: { api_key: '', app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', is_active: false },
+      linkedin: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', is_active: false },
+    }
+    this.socialSummary = {
+      total_accounts: 0,
+      total_posts: 0,
+      published_posts: 0,
+      scheduled_posts: 0,
+      draft_posts: 0,
+    }
     this.activeDocumentFolderId = null
     this.notifications = []
     this.trashedProjects = []
@@ -2231,6 +2268,12 @@ export const store = reactive({
       case 'challenges':
         this.loadChallenges(true)
         break
+      case 'social_accounts':
+        this.loadSocialAccounts(true)
+        break
+      case 'social_posts':
+        this.loadSocialPosts(true)
+        break
       default:
         console.log(`[Pusher] نوع غير معروف: ${type}`)
     }
@@ -3420,6 +3463,336 @@ export const store = reactive({
       console.error('فشل إرسال التشجيع للسيرفر', e)
     }
     return tempCheer
+  },
+
+  // ==========================================
+  // Social Media Management (إدارة السوشيال ميديا)
+  // ==========================================
+  _socialAccountsPending: 0,
+  _socialPostsPending: 0,
+
+  getSocialAccountsStorageKey() {
+    const userId = this.currentUser?.id || 'guest'
+    return `mymind_social_accounts_user_${userId}`
+  },
+
+  getSocialPostsStorageKey() {
+    const userId = this.currentUser?.id || 'guest'
+    return `mymind_social_posts_user_${userId}`
+  },
+
+  getSocialSettingsStorageKey() {
+    const userId = this.currentUser?.id || 'guest'
+    return `mymind_social_settings_user_${userId}`
+  },
+
+  saveSocialAccountsLocal() {
+    try {
+      localStorage.setItem(this.getSocialAccountsStorageKey(), JSON.stringify(this.socialAccounts))
+    } catch (e) {
+      console.error('فشل حفظ الحسابات محلياً', e)
+    }
+  },
+
+  saveSocialPostsLocal() {
+    try {
+      localStorage.setItem(this.getSocialPostsStorageKey(), JSON.stringify(this.socialPosts))
+    } catch (e) {
+      console.error('فشل حفظ المنشورات محلياً', e)
+    }
+  },
+
+  saveSocialSettingsLocal() {
+    try {
+      localStorage.setItem(this.getSocialSettingsStorageKey(), JSON.stringify(this.socialSettings))
+    } catch (e) {
+      console.error('فشل حفظ الإعدادات محلياً', e)
+    }
+  },
+
+  async loadSocialAccounts(isSilent = false) {
+    if (!this.token) return
+    if (this._socialAccountsPending > 0) return
+    try {
+      const res = await fetch(`${this.apiBase}/social/accounts`, {
+        headers: this.getAuthHeaders()
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data)) {
+          this.socialAccounts = data
+          this.saveSocialAccountsLocal()
+        }
+      }
+    } catch (e) {
+      if (!isSilent) console.error('فشل تحميل حسابات السوشيال ميديا', e)
+    }
+  },
+
+  async connectSocialAccount(accountData) {
+    this._socialAccountsPending++
+    try {
+      const res = await fetch(`${this.apiBase}/social/accounts`, {
+        method: 'POST',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(accountData)
+      })
+      if (res.ok) {
+        const saved = await res.json()
+        const idx = this.socialAccounts.findIndex(a => a.id === saved.id || (a.platform === saved.platform && a.account_id === saved.account_id))
+        if (idx !== -1) {
+          this.socialAccounts[idx] = saved
+        } else {
+          this.socialAccounts.unshift(saved)
+        }
+        this.saveSocialAccountsLocal()
+        this.addNotification('ربط حساب', `تم ربط حساب ${saved.account_name} بنجاح.`)
+        return saved
+      }
+    } catch (e) {
+      console.error('فشل ربط الحساب', e)
+    } finally {
+      this._socialAccountsPending = Math.max(0, this._socialAccountsPending - 1)
+    }
+  },
+
+  async disconnectSocialAccount(id) {
+    const prev = [...this.socialAccounts]
+    this.socialAccounts = this.socialAccounts.filter(a => a.id !== id)
+    this.saveSocialAccountsLocal()
+    this._socialAccountsPending++
+
+    try {
+      const res = await fetch(`${this.apiBase}/social/accounts/${id}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      })
+      if (!res.ok) {
+        this.socialAccounts = prev
+        this.saveSocialAccountsLocal()
+      } else {
+        this.addNotification('فصل حساب', 'تم فصل الحساب بنجاح.')
+      }
+    } catch (e) {
+      this.socialAccounts = prev
+      this.saveSocialAccountsLocal()
+      console.error('فشل فصل الحساب', e)
+    } finally {
+      this._socialAccountsPending = Math.max(0, this._socialAccountsPending - 1)
+    }
+  },
+
+  async loadSocialPosts(isSilent = false, filters = {}) {
+    if (!this.token) return
+    if (this._socialPostsPending > 0) return
+    try {
+      const params = new URLSearchParams()
+      if (filters.status && filters.status !== 'all') params.append('status', filters.status)
+      if (filters.platform && filters.platform !== 'all') params.append('platform', filters.platform)
+      if (filters.search) params.append('search', filters.search)
+
+      const url = `${this.apiBase}/social/posts${params.toString() ? '?' + params.toString() : ''}`
+      const res = await fetch(url, { headers: this.getAuthHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data)) {
+          this.socialPosts = data
+          this.saveSocialPostsLocal()
+        }
+      }
+    } catch (e) {
+      if (!isSilent) console.error('فشل تحميل منشورات السوشيال ميديا', e)
+    }
+  },
+
+  async createSocialPost(postData) {
+    const tempId = Date.now()
+    const tempPost = {
+      id: tempId,
+      content: postData.content || '',
+      media_urls: postData.media_urls || [],
+      platforms: postData.platforms || [],
+      account_ids: postData.account_ids || [],
+      status: postData.status || 'draft',
+      scheduled_at: postData.scheduled_at || null,
+      published_at: postData.status === 'published' ? new Date().toISOString() : null,
+      platform_post_ids: {},
+      created_at: new Date().toISOString(),
+    }
+
+    this.socialPosts = [tempPost, ...this.socialPosts]
+    this.saveSocialPostsLocal()
+    this._socialPostsPending++
+
+    try {
+      const res = await fetch(`${this.apiBase}/social/posts`, {
+        method: 'POST',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(postData)
+      })
+      if (res.ok) {
+        const saved = await res.json()
+        const idx = this.socialPosts.findIndex(p => p.id === tempId)
+        if (idx !== -1) {
+          this.socialPosts[idx] = saved
+        }
+        this.saveSocialPostsLocal()
+        const actionText = saved.status === 'published' ? 'تم نشر المنشور' : (saved.status === 'scheduled' ? 'تمت جدولة المنشور' : 'تم حفظ المسودة')
+        this.addNotification('إدارة السوشيال ميديا', actionText)
+        return saved
+      }
+    } catch (e) {
+      console.error('فشل إنشاء المنشور', e)
+    } finally {
+      this._socialPostsPending = Math.max(0, this._socialPostsPending - 1)
+    }
+    return tempPost
+  },
+
+  async updateSocialPost(id, postData) {
+    const idx = this.socialPosts.findIndex(p => p.id === id)
+    if (idx !== -1) {
+      this.socialPosts[idx] = { ...this.socialPosts[idx], ...postData }
+      this.saveSocialPostsLocal()
+    }
+    this._socialPostsPending++
+
+    try {
+      const res = await fetch(`${this.apiBase}/social/posts/${id}`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(postData)
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        const freshIdx = this.socialPosts.findIndex(p => p.id === id)
+        if (freshIdx !== -1) {
+          this.socialPosts[freshIdx] = updated
+          this.saveSocialPostsLocal()
+        }
+        return updated
+      }
+    } catch (e) {
+      console.error('فشل تحديث المنشور', e)
+    } finally {
+      this._socialPostsPending = Math.max(0, this._socialPostsPending - 1)
+    }
+  },
+
+  async publishSocialPostNow(id) {
+    const idx = this.socialPosts.findIndex(p => p.id === id)
+    if (idx !== -1) {
+      this.socialPosts[idx].status = 'published'
+      this.socialPosts[idx].published_at = new Date().toISOString()
+      this.saveSocialPostsLocal()
+    }
+    this._socialPostsPending++
+
+    try {
+      const res = await fetch(`${this.apiBase}/social/posts/${id}/publish`, {
+        method: 'POST',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' })
+      })
+      if (res.ok) {
+        const resp = await res.json()
+        const freshIdx = this.socialPosts.findIndex(p => p.id === id)
+        if (freshIdx !== -1 && resp.post) {
+          this.socialPosts[freshIdx] = resp.post
+          this.saveSocialPostsLocal()
+        }
+        this.addNotification('نشر ناجح', 'تم نشر المنشور فوراً بنجاح!')
+        return resp.post
+      }
+    } catch (e) {
+      console.error('فشل نشر المنشور', e)
+    } finally {
+      this._socialPostsPending = Math.max(0, this._socialPostsPending - 1)
+    }
+  },
+
+  async deleteSocialPost(id) {
+    const prev = [...this.socialPosts]
+    this.socialPosts = this.socialPosts.filter(p => p.id !== id)
+    this.saveSocialPostsLocal()
+    this._socialPostsPending++
+
+    try {
+      const res = await fetch(`${this.apiBase}/social/posts/${id}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      })
+      if (!res.ok) {
+        this.socialPosts = prev
+        this.saveSocialPostsLocal()
+      } else {
+        this.addNotification('حذف منشور', 'تم حذف المنشور بنجاح.')
+      }
+    } catch (e) {
+      this.socialPosts = prev
+      this.saveSocialPostsLocal()
+      console.error('فشل حذف المنشور', e)
+    } finally {
+      this._socialPostsPending = Math.max(0, this._socialPostsPending - 1)
+    }
+  },
+
+  async loadSocialSettings(isSilent = false) {
+    if (!this.token) return
+    try {
+      const res = await fetch(`${this.apiBase}/social/settings`, {
+        headers: this.getAuthHeaders()
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data && typeof data === 'object') {
+          this.socialSettings = { ...this.socialSettings, ...data }
+          this.saveSocialSettingsLocal()
+        }
+      }
+    } catch (e) {
+      if (!isSilent) console.error('فشل تحميل إعدادات السوشيال ميديا', e)
+    }
+  },
+
+  async saveSocialSettings(platform, settingsData) {
+    try {
+      this.socialSettings[platform] = { ...this.socialSettings[platform], ...settingsData }
+      this.saveSocialSettingsLocal()
+
+      const res = await fetch(`${this.apiBase}/social/settings`, {
+        method: 'POST',
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          platform,
+          ...settingsData
+        })
+      })
+      if (res.ok) {
+        const resp = await res.json()
+        if (resp.setting) {
+          this.socialSettings[platform] = resp.setting
+          this.saveSocialSettingsLocal()
+        }
+        this.addNotification('إعدادات المنصة', `تم حفظ إعدادات ${platform} بنجاح.`)
+        return resp.setting
+      }
+    } catch (e) {
+      console.error('فشل حفظ إعدادات المنصة', e)
+    }
+  },
+
+  async loadSocialSummary() {
+    if (!this.token) return
+    try {
+      const res = await fetch(`${this.apiBase}/social/summary`, {
+        headers: this.getAuthHeaders()
+      })
+      if (res.ok) {
+        this.socialSummary = await res.json()
+      }
+    } catch (e) {
+      console.error('فشل تحميل ملخص السوشيال ميديا', e)
+    }
   }
 })
 

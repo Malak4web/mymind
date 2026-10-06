@@ -18,6 +18,7 @@ import MobileBottomNav from './components/MobileBottomNav.vue'
 import QuickInspector from './components/QuickInspector.vue'
 import ToastHost from './components/ToastHost.vue'
 import PublicUsers from './components/PublicUsers.vue'
+import SocialMediaBoard from './components/SocialMediaBoard.vue'
 
 const activeHabitId = ref(null)
 const isPublicUsersPage = ref(false)
@@ -53,7 +54,7 @@ const selectSearchResult = (item, type) => {
   if (type === 'project') {
     store.activeProjectId = item.id
   } else if (type === 'task') {
-    if (store.activeView === 'settings' || store.activeView === 'routines') {
+    if (store.activeView === 'settings' || store.activeView === 'routines' || store.activeView === 'social') {
       store.activeView = 'kanban'
     }
     if (item.projectId) store.activeProjectId = item.projectId
@@ -105,6 +106,8 @@ const setView = (view) => {
   if (view === 'routines') {
     activeHabitId.value = null
     window.location.hash = '#routines'
+  } else if (view === 'social') {
+    window.location.hash = '#social'
   } else if (view === 'settings') {
     window.location.hash = '#settings-users'
   } else if (store.activeProjectId) {
@@ -114,7 +117,7 @@ const setView = (view) => {
 
 // Sync changes of activeProjectId to hash
 watch(() => store.activeProjectId, (newId) => {
-  if (newId && store.activeView !== 'settings' && store.activeView !== 'routines') {
+  if (newId && store.activeView !== 'settings' && store.activeView !== 'routines' && store.activeView !== 'social') {
     window.location.hash = `#project-${newId}`
   }
 })
@@ -158,13 +161,15 @@ const handleHashChange = () => {
 
   if (hash === '#routines' || hash === '#habits') {
     store.activeView = 'routines'
+  } else if (hash === '#social' || hash === '#social-media') {
+    store.activeView = 'social'
   } else if (hash.startsWith('#project-')) {
     const projId = parseInt(hash.replace('#project-', ''))
     if (!isNaN(projId)) {
       if (store.activeProjectId !== projId) {
         store.activeProjectId = projId
       }
-      if (store.activeView === 'settings' || store.activeView === 'routines') {
+      if (store.activeView === 'settings' || store.activeView === 'routines' || store.activeView === 'social') {
         store.activeView = 'kanban'
       }
     }
@@ -269,6 +274,7 @@ watch(() => store.projects.length, (newLen) => {
             <span class="text-slate-300 dark:text-slate-700 shrink-0">></span>
             <span v-if="store.activeView === 'settings'" class="text-violet-600 dark:text-violet-400 whitespace-nowrap">الإعدادات</span>
             <span v-else-if="store.activeView === 'routines'" class="text-violet-600 dark:text-violet-400 whitespace-nowrap">يومياتي والعادات</span>
+            <span v-else-if="store.activeView === 'social'" class="text-violet-600 dark:text-violet-400 whitespace-nowrap">إدارة السوشيال ميديا</span>
             <template v-else-if="activeProject">
               <span class="hidden xl:inline shrink-0">المشروع</span>
               <span class="hidden xl:inline text-slate-300 dark:text-slate-700 shrink-0">></span>
@@ -370,6 +376,21 @@ watch(() => store.projects.length, (newLen) => {
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>يومياتي</span>
+            </button>
+            <button 
+              @click="setView('social')" 
+              :class="[
+                'px-2.5 lg:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1.5 min-h-[38px] btn-touch-active whitespace-nowrap',
+                store.activeView === 'social' 
+                  ? 'glass-tab-active text-violet-600 dark:text-violet-400 font-extrabold shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+              ]"
+              title="إدارة السوشيال ميديا"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              <span>السوشيال ميديا</span>
             </button>
             <button 
               @click="goToSettings" 
@@ -546,7 +567,7 @@ watch(() => store.projects.length, (newLen) => {
         
         <!-- Left Sidebar: Project Settings (1 or 3 cols on xl) -->
         <div 
-          v-if="!store.isFocusMode && store.activeView !== 'settings' && store.activeView !== 'routines'" 
+          v-if="!store.isFocusMode && store.activeView !== 'settings' && store.activeView !== 'routines' && store.activeView !== 'social'" 
           :class="[
             'hidden md:block transition-all duration-300',
             store.isSidebarCollapsed ? 'xl:col-span-1 md:col-span-2' : 'xl:col-span-3 md:col-span-4'
@@ -559,7 +580,7 @@ watch(() => store.projects.length, (newLen) => {
         <div :class="[
           store.isFocusMode 
             ? 'w-full space-y-8' 
-            : (store.activeView === 'settings' || store.activeView === 'routines') 
+            : (store.activeView === 'settings' || store.activeView === 'routines' || store.activeView === 'social') 
               ? 'md:col-span-12' 
               : (store.isSidebarCollapsed && !store.isInspectorOpen) 
                 ? 'xl:col-span-11 md:col-span-10' 
@@ -571,10 +592,10 @@ watch(() => store.projects.length, (newLen) => {
           'space-y-8 transition-all duration-500'
         ]">
           
-          <!-- Selected Tasks / Routines Component container -->
+          <!-- Selected Tasks / Routines / Social Component container -->
           <div :class="[
             'glass-card rounded-3xl transition-all duration-500',
-            store.activeView === 'routines' ? 'p-1 sm:p-4 border-0 shadow-none bg-transparent dark:bg-transparent backdrop-blur-none' : 'p-2 sm:p-6',
+            (store.activeView === 'routines' || store.activeView === 'social') ? 'p-1 sm:p-4 border-0 shadow-none bg-transparent dark:bg-transparent backdrop-blur-none' : 'p-2 sm:p-6',
             store.isFocusMode 
               ? 'shadow-2xl shadow-violet-500/[0.02] border-violet-500/20 dark:border-violet-900/35 ring-1 ring-violet-500/10' 
               : 'shadow-glass-md'
@@ -585,6 +606,9 @@ watch(() => store.projects.length, (newLen) => {
             <div v-else-if="store.activeView === 'routines'">
               <HabitDetail v-if="activeHabitId" :habitId="activeHabitId" />
               <DailyRoutines v-else />
+            </div>
+            <div v-else-if="store.activeView === 'social'">
+              <SocialMediaBoard />
             </div>
 
             <div v-else-if="!activeProject" class="text-center py-24 text-sm text-slate-500 italic font-medium">
@@ -597,8 +621,8 @@ watch(() => store.projects.length, (newLen) => {
             </div>
           </div>
 
-          <!-- Project Documents and Notes Block - Hidden in settings / routines view -->
-          <div class="space-y-3.5" v-if="activeProject && store.activeView !== 'settings' && store.activeView !== 'routines'">
+          <!-- Project Documents and Notes Block - Hidden in settings / routines / social view -->
+          <div class="space-y-3.5" v-if="activeProject && store.activeView !== 'settings' && store.activeView !== 'routines' && store.activeView !== 'social'">
             <ProjectDocuments :key="store.activeProjectId" />
           </div>
 
@@ -741,7 +765,7 @@ watch(() => store.projects.length, (newLen) => {
 
     <!-- Mobile Floating Action Button (+) for Quick Task Creation -->
     <button 
-      v-if="!store.isFocusMode && store.activeView !== 'settings' && store.activeView !== 'routines'"
+      v-if="!store.isFocusMode && store.activeView !== 'settings' && store.activeView !== 'routines' && store.activeView !== 'social'"
       @click="triggerQuickCreate"
       class="md:hidden fixed above-nav left-4 z-float w-13 h-13 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-xl shadow-violet-600/35 flex items-center justify-center text-2xl font-black active:scale-95 transition-all duration-300 border border-white/20 cursor-pointer"
       title="إضافة مهمة جديدة"
@@ -840,6 +864,17 @@ watch(() => store.projects.length, (newLen) => {
             >
               <span class="text-xs font-bold text-slate-800 dark:text-slate-200">الاحتفال بالإنجاز</span>
               <span class="text-xs font-bold">{{ store.celebrationsEnabled ? '🎉 مفعّل' : '🔇 صامت' }}</span>
+            </button>
+
+            <button 
+              @click="setView('social'); showMobileMoreSheet = false" 
+              class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-800 text-right flex items-center justify-between col-span-2 cursor-pointer"
+            >
+              <div class="flex items-center gap-2">
+                <span class="text-base">🚀</span>
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">إدارة السوشيال ميديا</span>
+              </div>
+              <span class="text-[11px] font-bold text-violet-600 dark:text-violet-400">جدولة ونشر</span>
             </button>
 
             <button 
