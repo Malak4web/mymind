@@ -353,9 +353,12 @@ const formatDate = (dateStr) => {
 
 onMounted(() => {
   if (store.token) {
-    store.loadSocialAccounts(true)
-    store.loadSocialPosts(true)
-    store.loadSocialSettings(true)
+    if (!store.socialAccounts || !store.socialAccounts.length) {
+      store.loadSocialAccounts(true)
+    }
+    if (!store.socialPosts || !store.socialPosts.length) {
+      store.loadSocialPosts(true)
+    }
   }
 })
 </script>

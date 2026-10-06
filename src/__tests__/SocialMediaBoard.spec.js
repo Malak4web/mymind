@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import SocialMediaBoard from '../components/SocialMediaBoard.vue'
 import Settings from '../components/Settings.vue'
@@ -8,6 +8,12 @@ describe('SocialMediaBoard.vue and Social Media Management Features', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.restoreAllMocks()
+
+    store.token = ''
+    store.isAuthenticated = false
+    store.loadSocialAccounts = vi.fn().mockResolvedValue()
+    store.loadSocialPosts = vi.fn().mockResolvedValue()
+    store.loadSocialSettings = vi.fn().mockResolvedValue()
 
     store.currentUser = { id: 42, name: 'سارة أحمد', role: { name: 'مدير' } }
 
@@ -76,6 +82,14 @@ describe('SocialMediaBoard.vue and Social Media Management Features', () => {
       youtube: { api_key: 'key_yt', app_id: '', app_secret: '', access_token: '', is_active: false },
       linkedin: { app_id: '', app_secret: '', access_token: '', is_active: false },
     }
+  })
+
+  afterEach(() => {
+    store.token = ''
+    store.isAuthenticated = false
+    store.socialAccounts = []
+    store.socialPosts = []
+    vi.restoreAllMocks()
   })
 
   it('renders social media board header, stats, and connected accounts', () => {
