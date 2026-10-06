@@ -7,6 +7,7 @@ import { store } from '../store.js'
 describe('SocialMediaBoard.vue and Social Media Management Features', () => {
   beforeEach(() => {
     localStorage.clear()
+    window.location.hash = ''
     vi.restoreAllMocks()
 
     store.token = ''
@@ -85,6 +86,7 @@ describe('SocialMediaBoard.vue and Social Media Management Features', () => {
   })
 
   afterEach(() => {
+    window.location.hash = ''
     store.token = ''
     store.isAuthenticated = false
     store.socialAccounts = []

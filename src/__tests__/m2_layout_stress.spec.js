@@ -7,6 +7,7 @@ import { store } from '../store.js'
 describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', () => {
   beforeEach(() => {
     localStorage.clear()
+    window.location.hash = ''
     vi.restoreAllMocks()
 
     global.fetch = vi.fn().mockResolvedValue({
@@ -49,6 +50,11 @@ describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', 
     store.folders = []
     store.projectFiles = []
     store.notes = []
+  })
+
+  afterEach(() => {
+    window.location.hash = ''
+    vi.restoreAllMocks()
   })
 
   describe('1. Layout Grid Math (App.vue xl:grid-cols-12 Matrix Verification)', () => {
@@ -97,7 +103,10 @@ describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', 
     })
 
     it('Verifies exact class bindings in App.vue for all 4 matrix combinations', async () => {
+      window.location.hash = ''
+
       // 1. Expanded Sidebar & Closed Inspector
+      store.activeView = 'kanban'
       store.isSidebarCollapsed = false
       store.isInspectorOpen = false
       let wrapper = mount(App, { shallow: true })
@@ -106,6 +115,7 @@ describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', 
       wrapper.unmount()
 
       // 2. Collapsed Sidebar & Closed Inspector
+      store.activeView = 'kanban'
       store.isSidebarCollapsed = true
       store.isInspectorOpen = false
       wrapper = mount(App, { shallow: true })
@@ -114,6 +124,7 @@ describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', 
       wrapper.unmount()
 
       // 3. Expanded Sidebar & Open Inspector
+      store.activeView = 'kanban'
       store.isSidebarCollapsed = false
       store.isInspectorOpen = true
       wrapper = mount(App, { shallow: true })
@@ -122,6 +133,7 @@ describe('Milestone 2 Stress Tests: Desktop Layout & Wide-screen Architecture', 
       wrapper.unmount()
 
       // 4. Collapsed Sidebar & Open Inspector
+      store.activeView = 'kanban'
       store.isSidebarCollapsed = true
       store.isInspectorOpen = true
       wrapper = mount(App, { shallow: true })
