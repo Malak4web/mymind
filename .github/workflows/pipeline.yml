@@ -184,14 +184,73 @@ jobs:
             php artisan event:cache || true
 
             # Configure server upload limits (256MB for video uploads)
-            echo "client_max_body_size 256M;" > /etc/nginx/conf.d/upload_limits.conf 2>/dev/null || true
-            for d in /etc/php/*/fpm/conf.d /etc/php/*/cli/conf.d; do
+            echo "--- Configuring PHP and Nginx upload limits ---"
+            for ini in /etc/php/*/*/php.ini /etc/php.ini /etc/php/*/php.ini /usr/local/etc/php/*.ini; do
+              if [ -f "$ini" ]; then
+                echo "Updating $ini"
+                sed -i 's/^[; ]*upload_max_filesize = .*/upload_max_filesize = 256M/' "$ini" 2>/dev/null || true
+                sed -i 's/^[; ]*post_max_size = .*/post_max_size = 256M/' "$ini" 2>/dev/null || true
+                sed -i 's/^[; ]*memory_limit = .*/memory_limit = 512M/' "$ini" 2>/dev/null || true
+                sed -i 's/^[; ]*max_execution_time = .*/max_execution_time = 300/' "$ini" 2>/dev/null || true
+                sed -i 's/^[; ]*max_input_time = .*/max_input_time = 300/' "$ini" 2>/dev/null || true
+              fi
+            done
+
+            for d in /etc/php/*/*/conf.d /etc/php.d; do
               if [ -d "$d" ]; then
                 printf "upload_max_filesize = 256M\npost_max_size = 256M\nmemory_limit = 512M\nmax_execution_time = 300\nmax_input_time = 300\n" > "$d/99-upload-limits.ini" 2>/dev/null || true
               fi
             done
-            nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
-            systemctl reload php*-fpm 2>/dev/null || service php*-fpm reload 2>/dev/null || true
+
+            for pool in /etc/php/*/*/pool.d/*.conf /etc/php-fpm.d/*.conf /etc/php-fpm.conf; do
+              if [ -f "$pool" ]; then
+                sed -i 's/^[; ]*php_admin_value\[upload_max_filesize\].*/php_admin_value[upload_max_filesize] = 256M/' "$pool" 2>/dev/null || true
+                sed -i 's/^[; ]*php_admin_value\[post_max_size\].*/php_admin_value[post_max_size] = 256M/' "$pool" 2>/dev/null || true
+                sed -i 's/^[; ]*php_value\[upload_max_filesize\].*/php_value[upload_max_filesize] = 256M/' "$pool" 2>/dev/null || true
+                sed -i 's/^[; ]*php_value\[post_max_size\].*/php_value[post_max_size] = 256M/' "$pool" 2>/dev/null || true
+              fi
+            done
+
+            if [ -f /etc/nginx/nginx.conf ]; then
+              if grep -q "client_max_body_size" /etc/nginx/nginx.conf; then
+                sed -i 's/client_max_body_size .*/client_max_body_size 256M;/' /etc/nginx/nginx.conf 2>/dev/null || true
+              else
+                sed -i '/http {/a \    client_max_body_size 256M;' /etc/nginx/nginx.conf 2>/dev/null || true
+              fi
+            fi
+            mkdir -p /etc/nginx/conf.d
+            echo "client_max_body_size 256M;" > /etc/nginx/conf.d/upload_limits.conf 2>/dev/null || true
+            for s in /etc/nginx/sites-available/* /etc/nginx/sites-enabled/*; do
+              if [ -f "$s" ]; then
+                sed -i 's/client_max_body_size .*/client_max_body_size 256M;/' "$s" 2>/dev/null || true
+              fi
+            done
+
+            nginx -t 2>/dev/null && systemctl restart nginx 2>/dev/null || systemctl reload nginx 2>/dev/null || true
+
+            # Restart all PHP-FPM services explicitly
+            echo "--- Restarting PHP-FPM services ---"
+            SERVICES=$(systemctl list-unit-files --no-legend 2>/dev/null | awk '{print $1}' | grep -E '^php[0-9.]*-fpm' || true)
+            for svc in $SERVICES; do
+              echo "Restarting unit: $svc"
+              systemctl restart "$svc" 2>/dev/null || true
+            done
+            ACTIVE_FPM=$(systemctl list-units --type=service --state=running --no-legend 2>/dev/null | awk '{print $1}' | grep -i fpm || true)
+            for svc in $ACTIVE_FPM; do
+              echo "Restarting active service: $svc"
+              systemctl restart "$svc" 2>/dev/null || true
+            done
+            for init in /etc/init.d/php*-fpm; do
+              if [ -x "$init" ]; then
+                echo "Running init script restart: $init"
+                "$init" restart 2>/dev/null || true
+              fi
+            done
+            systemctl restart php-fpm 2>/dev/null || true
+            pkill -USR2 -f 'php-fpm' 2>/dev/null || true
+
+            echo "--- PHP upload limits in CLI ---"
+            php -r "echo 'upload_max_filesize: ' . ini_get('upload_max_filesize') . PHP_EOL . 'post_max_size: ' . ini_get('post_max_size') . PHP_EOL;"
 
             # Baseline permissions: readable, not writable, never world-writable.
             # `+` batches the paths into few chmod calls. With `\;` this forks
