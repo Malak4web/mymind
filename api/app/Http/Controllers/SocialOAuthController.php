@@ -239,6 +239,25 @@ class SocialOAuthController extends Controller
             }
         }
 
+        $authUser = null;
+        if (!str_starts_with($accessToken, 'demo_token_')) {
+            if ($platform === 'facebook' || $platform === 'instagram') {
+                try {
+                    $uRes = Http::get('https://graph.facebook.com/v21.0/me', [
+                        'access_token' => $accessToken,
+                        'fields' => 'id,name,picture{url}',
+                    ]);
+                    if ($uRes->ok()) {
+                        $authUser = [
+                            'id' => $uRes->json('id'),
+                            'name' => $uRes->json('name'),
+                            'avatar' => $uRes->json('picture.data.url'),
+                        ];
+                    }
+                } catch (\Throwable $e) {}
+            }
+        }
+
         foreach ($pages as &$p) {
             $p['is_connected'] = in_array($p['account_id'], $connectedIds);
         }
@@ -246,6 +265,7 @@ class SocialOAuthController extends Controller
         return response()->json([
             'error' => null,
             'needs_login' => false,
+            'auth_user' => $authUser,
             'pages' => $pages,
         ]);
     }
@@ -269,8 +289,9 @@ class SocialOAuthController extends Controller
                     'client_id'     => $appId,
                     'redirect_uri'  => $callbackUrl,
                     'state'         => $state,
-                    'scope'         => 'pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata',
+                    'scope'         => 'public_profile,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata,business_management',
                     'response_type' => 'code',
+                    'auth_type'     => 'rerequest',
                 ]);
 
             case 'instagram':
@@ -278,8 +299,9 @@ class SocialOAuthController extends Controller
                     'client_id'     => $appId,
                     'redirect_uri'  => $callbackUrl,
                     'state'         => $state,
-                    'scope'         => 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement',
+                    'scope'         => 'public_profile,instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,business_management',
                     'response_type' => 'code',
+                    'auth_type'     => 'rerequest',
                 ]);
 
             case 'youtube':
@@ -382,13 +404,34 @@ class SocialOAuthController extends Controller
 
         $data = $response->json('data', []);
 
+        // Fallback: If personal accounts returned empty, check Meta Business accounts (owned or client pages)
+        if (empty($data)) {
+            try {
+                $bizRes = Http::get('https://graph.facebook.com/v21.0/me/businesses', [
+                    'access_token' => $accessToken,
+                    'fields'       => 'id,name,client_pages{id,name,username,picture{url},category,fan_count,access_token},owned_pages{id,name,username,picture{url},category,fan_count,access_token}',
+                ]);
+                if ($bizRes->ok()) {
+                    foreach ($bizRes->json('data', []) as $biz) {
+                        $clientPages = $biz['client_pages']['data'] ?? [];
+                        $ownedPages  = $biz['owned_pages']['data'] ?? [];
+                        foreach (array_merge($clientPages, $ownedPages) as $bp) {
+                            $data[] = $bp;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::info('Facebook businesses check: ' . $e->getMessage());
+            }
+        }
+
         return array_map(function ($page) {
             return [
                 'account_id'       => (string)$page['id'],
                 'account_name'     => $page['name'],
                 'account_username' => $page['username'] ?? '',
                 'avatar_url'       => $page['picture']['data']['url'] ?? '',
-                'category'         => $page['category'] ?? '',
+                'category'         => $page['category'] ?? 'صفحة فيسبوك',
                 'followers_count'  => $page['fan_count'] ?? 0,
                 'page_access_token' => $page['access_token'] ?? null,
             ];

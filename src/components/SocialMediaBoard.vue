@@ -114,6 +114,7 @@ const openComposer = () => {
 // Interactive Discovery & OAuth Connect States
 const selectedConnectPlatform = ref('facebook')
 const availablePages = ref([])
+const authUser = ref(null)
 const isLoadingPages = ref(false)
 const isPlatformAuthenticated = ref(false)
 const isLoggingIn = ref(false)
@@ -154,6 +155,7 @@ const fetchAvailablePages = async (platform) => {
 
     if (!status.is_authenticated) {
       availablePages.value = []
+      authUser.value = null
       isLoadingPages.value = false
       return
     }
@@ -162,18 +164,23 @@ const fetchAvailablePages = async (platform) => {
     if (res && res.needs_login) {
       isPlatformAuthenticated.value = false
       availablePages.value = []
+      authUser.value = null
     } else if (res && Array.isArray(res.pages)) {
       availablePages.value = res.pages
       isPlatformAuthenticated.value = true
+      authUser.value = res.auth_user || null
     } else if (Array.isArray(res)) {
       availablePages.value = res
       isPlatformAuthenticated.value = true
+      authUser.value = null
     } else {
       availablePages.value = []
+      authUser.value = null
     }
   } catch (e) {
     console.error('فشل جلب الصفحات', e)
     availablePages.value = []
+    authUser.value = null
     connectErrorMsg.value = 'تعذر الاتصال بالمنصة، يرجى المحاولة مجدداً'
   } finally {
     isLoadingPages.value = false
@@ -1407,10 +1414,11 @@ onUnmounted(() => {
               </div>
               <div class="text-right">
                 <span class="block text-xs font-black text-emerald-800 dark:text-emerald-200">
-                  أنت مسجل الدخول حالياً بحسابك في {{ getPlatformMeta(selectedConnectPlatform).name }}
+                  <span v-if="authUser && authUser.name">أنت مسجل الدخول بحساب: {{ authUser.name }}</span>
+                  <span v-else>أنت مسجل الدخول حالياً بحسابك في {{ getPlatformMeta(selectedConnectPlatform).name }}</span>
                 </span>
                 <span class="text-[11px] text-emerald-600 dark:text-emerald-400">
-                  تم التحقق من الحساب وجلب الصفحات والقنوات المتاحة
+                  تم التحقق من الحساب والاتصال بالـ API بنجاح
                 </span>
               </div>
             </div>
@@ -1555,12 +1563,40 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- Empty State -->
+            <!-- Empty State with Helpful Troubleshooting & Actions -->
             <div
               v-else
-              class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400"
+              class="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-right text-xs space-y-3"
             >
-              لم نتمكن من العثور على صفحات أو قنوات مدارة بحسابك في {{ getPlatformMeta(selectedConnectPlatform).name }}. يمكنك إدخال بيانات الصفحة يدوياً بالأسفل.
+              <div class="flex items-center gap-2 font-black text-amber-800 dark:text-amber-200 text-sm">
+                <span>⚠️</span>
+                <span>لم يتم العثور على صفحات أو قنوات مدارة بهذا الحساب</span>
+              </div>
+              <p class="text-amber-700 dark:text-amber-300 text-[11px] leading-relaxed">
+                فيسبوك أعاد (0) صفحة. يحدث هذا غالباً لأحد الأسباب التالية:
+              </p>
+              <ul class="list-disc list-inside text-[11px] text-amber-800 dark:text-amber-200 space-y-1">
+                <li>لم يتم وضع علامة صح (✓) على صفحاتك عندما طلبت شاشة فيسبوك تحديد الصفحات.</li>
+                <li>التطبيق في وضع التطوير (Development Mode) وحسابك الحالي ليس مضافاً كـ Admin أو Tester للتطبيق في Meta.</li>
+                <li>الصفحة تابعة لمحفظة أعمال (Meta Business Portfolio) أو حساب فيسبوك آخر.</li>
+              </ul>
+              <div class="pt-1 flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  @click="handleLoginPlatform(selectedConnectPlatform)"
+                  class="px-3.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs cursor-pointer transition flex items-center gap-1.5"
+                >
+                  <span>🔄</span>
+                  <span>إعادة تسجيل الدخول واختيار الصفحات</span>
+                </button>
+                <button
+                  type="button"
+                  @click="isManualEntryOpen = true"
+                  class="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs cursor-pointer hover:bg-slate-50 transition"
+                >
+                  ✏️ إدخال معرف الصفحة يدوياً (Page ID)
+                </button>
+              </div>
             </div>
           </div>
         </div>
