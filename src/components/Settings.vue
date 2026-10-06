@@ -13,10 +13,10 @@ const activeTab = ref('users') // 'users' | 'proj-templates' | 'task-templates' 
 // Social Media Settings states (Strictly User Scoped)
 const activeSocialPlatform = ref('facebook') // 'facebook' | 'instagram' | 'youtube' | 'linkedin'
 const socialSettingsForms = ref({
-  facebook: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', webhook_verify_token: '', is_active: true },
-  instagram: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', webhook_verify_token: '', is_active: true },
-  youtube: { api_key: '', app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', is_active: true },
-  linkedin: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', is_active: true },
+  facebook: { app_id: '', app_secret: '', is_active: true },
+  instagram: { app_id: '', app_secret: '', is_active: true },
+  youtube: { api_key: '', app_id: '', app_secret: '', is_active: true },
+  linkedin: { app_id: '', app_secret: '', is_active: true },
 })
 const showSecrets = ref({
   facebook: false,
@@ -36,9 +36,6 @@ const syncSocialSettingsFromStore = () => {
           app_id: store.socialSettings[p].app_id || '',
           app_secret: store.socialSettings[p].app_secret || '',
           api_key: store.socialSettings[p].api_key || '',
-          access_token: store.socialSettings[p].access_token || '',
-          page_or_channel_id: store.socialSettings[p].page_or_channel_id || '',
-          webhook_verify_token: store.socialSettings[p].webhook_verify_token || '',
           is_active: store.socialSettings[p].is_active !== false,
         }
       }
@@ -1223,9 +1220,29 @@ const handleSaveTaskTemplate = async () => {
           <div class="text-right flex-1">
             <h4 class="text-xs font-black text-slate-800 dark:text-slate-200">عزل كامل وأمان للبيانات</h4>
             <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-              جميع مفاتيح الـ API ورموز الوصول (Access Tokens) المدخلة هنا مرتبطة مباشرة بحسابك الشخصي فقط، ولا يمكن لأي مستخدم أو عضو آخر في النظام الاطلاع عليها أو استخدامها.
+              جميع مفاتيح الـ API ورموز الوصول المدخلة هنا مرتبطة مباشرة بحسابك الشخصي فقط، ولا يمكن لأي مستخدم أو عضو آخر في النظام الاطلاع عليها أو استخدامها.
             </p>
           </div>
+        </div>
+
+        <!-- Page Connection Banner -->
+        <div class="bg-gradient-to-l from-violet-500/10 via-indigo-500/10 to-transparent border border-violet-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-right">
+          <div class="space-y-1">
+            <h4 class="text-xs font-black text-violet-700 dark:text-violet-300 flex items-center gap-1.5 flex-row-reverse justify-end">
+              <span>🔗 ربط وتحديد الصفحات والقنوات يتم من لوحة السوشيال ميديا</span>
+            </h4>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+              لربط صفحات فيسبوك، حسابات أعمال إنستجرام، قنوات يوتيوب، أو صفحات لينكد إن، توجه إلى قسم <strong>إدارة السوشيال ميديا</strong> واضغط <strong>ربط حساب</strong> لتسجيل الدخول واختيار صفحاتك وربطها بنقرة واحدة.
+            </p>
+          </div>
+          <button
+            type="button"
+            @click="store.activeView = 'social'"
+            class="px-4 py-2.5 rounded-xl bg-gradient-to-l from-violet-600 to-indigo-600 hover:opacity-95 text-white text-xs font-bold shrink-0 transition shadow-sm cursor-pointer flex items-center gap-1.5"
+          >
+            <span>انتقل لربط الصفحات</span>
+            <span>←</span>
+          </button>
         </div>
 
         <!-- Success & Error Banners -->
@@ -1256,7 +1273,7 @@ const handleSaveTaskTemplate = async () => {
             </div>
             <div class="truncate">
               <span class="block text-xs font-black">فيسبوك</span>
-              <span class="text-[10px] opacity-75 block">Facebook Pages</span>
+              <span class="text-[10px] opacity-75 block">Facebook API</span>
             </div>
           </button>
 
@@ -1276,7 +1293,7 @@ const handleSaveTaskTemplate = async () => {
             </div>
             <div class="truncate">
               <span class="block text-xs font-black">انستجرام</span>
-              <span class="text-[10px] opacity-75 block">Instagram Business</span>
+              <span class="text-[10px] opacity-75 block">Meta Graph API</span>
             </div>
           </button>
 
@@ -1296,7 +1313,7 @@ const handleSaveTaskTemplate = async () => {
             </div>
             <div class="truncate">
               <span class="block text-xs font-black">يوتيوب</span>
-              <span class="text-[10px] opacity-75 block">YouTube Channels</span>
+              <span class="text-[10px] opacity-75 block">Google Cloud API</span>
             </div>
           </button>
 
@@ -1316,7 +1333,7 @@ const handleSaveTaskTemplate = async () => {
             </div>
             <div class="truncate">
               <span class="block text-xs font-black">لينكد إن</span>
-              <span class="text-[10px] opacity-75 block">LinkedIn Pages</span>
+              <span class="text-[10px] opacity-75 block">LinkedIn Developer</span>
             </div>
           </button>
         </div>
@@ -1328,10 +1345,10 @@ const handleSaveTaskTemplate = async () => {
           <div class="flex items-center justify-between flex-row-reverse pb-4 border-b border-slate-200/80 dark:border-slate-800">
             <div class="text-right">
               <h4 class="text-sm font-black text-slate-900 dark:text-slate-100">
-                إعدادات {{ getPlatformName(activeSocialPlatform) }}
+                إعدادات وتطبيق {{ getPlatformName(activeSocialPlatform) }}
               </h4>
               <p class="text-[11px] text-slate-400 mt-0.5">
-                أدخل مفاتيح وتصاريح الربط الخاصة بتطبيق المنصة للنشر والجدولة التلقائية
+                مفاتيح تطبيق المطور (App ID & Secret) لاستخدام تطبيقك الخاص للنشر والجدولة
               </p>
             </div>
 
@@ -1381,39 +1398,6 @@ const handleSaveTaskTemplate = async () => {
                   </button>
                 </div>
               </div>
-
-              <div class="space-y-1.5 text-right md:col-span-2">
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Page Access Token (رمز وصول الصفحة الدائم)</label>
-                <textarea
-                  v-model="socialSettingsForms.facebook.access_token"
-                  rows="2"
-                  placeholder="EAA..."
-                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition resize-none font-mono"
-                  dir="ltr"
-                ></textarea>
-              </div>
-
-              <div class="space-y-1.5 text-right">
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Facebook Page ID (معرّف الصفحة الافتراضية)</label>
-                <input
-                  v-model="socialSettingsForms.facebook.page_or_channel_id"
-                  type="text"
-                  placeholder="مثال: 10987654321"
-                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                  dir="ltr"
-                />
-              </div>
-
-              <div class="space-y-1.5 text-right">
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Webhook Verify Token (رمز التحقق للويب هوك)</label>
-                <input
-                  v-model="socialSettingsForms.facebook.webhook_verify_token"
-                  type="text"
-                  placeholder="رمز التحقق السري"
-                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                  dir="ltr"
-                />
-              </div>
             </template>
 
             <!-- Instagram Specific Fields -->
@@ -1447,28 +1431,6 @@ const handleSaveTaskTemplate = async () => {
                     {{ showSecrets.instagram ? 'إخفاء' : 'عرض' }}
                   </button>
                 </div>
-              </div>
-
-              <div class="space-y-1.5 text-right md:col-span-2">
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Instagram Graph API Token (رمز الوصول)</label>
-                <textarea
-                  v-model="socialSettingsForms.instagram.access_token"
-                  rows="2"
-                  placeholder="IGAA..."
-                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition resize-none font-mono"
-                  dir="ltr"
-                ></textarea>
-              </div>
-
-              <div class="space-y-1.5 text-right md:col-span-2">
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Instagram Business Account ID (معرّف حساب الأعمال)</label>
-                <input
-                  v-model="socialSettingsForms.instagram.page_or_channel_id"
-                  type="text"
-                  placeholder="مثال: 17841400000000"
-                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition"
-                  dir="ltr"
-                />
               </div>
             </template>
 
@@ -1515,28 +1477,6 @@ const handleSaveTaskTemplate = async () => {
                   </button>
                 </div>
               </div>
-
-              <div class="space-y-1.5 text-right">
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">YouTube Channel ID (معرّف القناة)</label>
-                <input
-                  v-model="socialSettingsForms.youtube.page_or_channel_id"
-                  type="text"
-                  placeholder="مثال: UCxxxxxxxxxxxxxxxxxxxx"
-                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition"
-                  dir="ltr"
-                />
-              </div>
-
-              <div class="space-y-1.5 text-right">
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">OAuth Refresh / Access Token</label>
-                <input
-                  v-model="socialSettingsForms.youtube.access_token"
-                  type="text"
-                  placeholder="رمز الوصول أو التحديث"
-                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition"
-                  dir="ltr"
-                />
-              </div>
             </template>
 
             <!-- LinkedIn Specific Fields -->
@@ -1571,28 +1511,6 @@ const handleSaveTaskTemplate = async () => {
                   </button>
                 </div>
               </div>
-
-              <div class="space-y-1.5 text-right md:col-span-2">
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">LinkedIn Access Token (رمز الوصول OAuth 2.0)</label>
-                <textarea
-                  v-model="socialSettingsForms.linkedin.access_token"
-                  rows="2"
-                  placeholder="AQ..."
-                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-600/20 focus:border-sky-600 transition resize-none font-mono"
-                  dir="ltr"
-                ></textarea>
-              </div>
-
-              <div class="space-y-1.5 text-right md:col-span-2">
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Organization / Company Page ID (معرّف صفحة المنظمة)</label>
-                <input
-                  v-model="socialSettingsForms.linkedin.page_or_channel_id"
-                  type="text"
-                  placeholder="مثال: urn:li:organization:12345678 أو الرقم التعريفي"
-                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-600/20 focus:border-sky-600 transition"
-                  dir="ltr"
-                />
-              </div>
             </template>
 
           </div>
@@ -1610,7 +1528,7 @@ const handleSaveTaskTemplate = async () => {
             </button>
 
             <div class="text-[11px] text-slate-400">
-              💡 يمكنك الحصول على بيانات الربط من لوحة تحكم المطورين الخاصة بكل منصة.
+              💡 يمكنك الحصول على بيانات الـ App ID و Secret من لوحة تحكم المطورين لكل منصة.
             </div>
           </div>
 

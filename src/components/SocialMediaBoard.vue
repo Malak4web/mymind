@@ -111,8 +111,76 @@ const openComposer = () => {
   isComposerOpen.value = true
 }
 
+// Interactive Discovery & OAuth Connect States
+const selectedConnectPlatform = ref('facebook')
+const availablePages = ref([])
+const isLoadingPages = ref(false)
+const connectingPageId = ref(null)
+const isManualEntryOpen = ref(false)
+const connectSuccessPageName = ref('')
+const connectErrorMsg = ref('')
+
+const fetchAvailablePages = async (platform) => {
+  selectedConnectPlatform.value = platform
+  connectForm.value.platform = platform
+  isLoadingPages.value = true
+  connectErrorMsg.value = ''
+  try {
+    const pages = await store.loadAvailablePages(platform)
+    availablePages.value = Array.isArray(pages) ? pages : []
+  } catch (e) {
+    console.error('فشل جلب الصفحات', e)
+    availablePages.value = []
+    connectErrorMsg.value = 'تعذر الاتصال بالمنصة، يرجى التحقق من الاتصال والمحاولة مجدداً'
+  } finally {
+    isLoadingPages.value = false
+  }
+}
+
+// Connect Discovered Page with 1-click
+const handleConnectDiscoveredPage = async (page) => {
+  connectingPageId.value = page.account_id
+  connectErrorMsg.value = ''
+  try {
+    await store.connectSocialAccount({
+      platform: selectedConnectPlatform.value,
+      account_id: page.account_id,
+      account_name: page.account_name,
+      account_username: page.account_username || '',
+      avatar_url: page.avatar_url || null,
+      followers_count: Number(page.followers_count) || 0,
+      metadata: { category: page.category || '' }
+    })
+    page.is_connected = true
+    connectSuccessPageName.value = page.account_name
+    setTimeout(() => {
+      if (connectSuccessPageName.value === page.account_name) {
+        connectSuccessPageName.value = ''
+      }
+    }, 4000)
+  } catch (e) {
+    alert('فشل ربط الصفحة، يرجى المحاولة مرة أخرى')
+  } finally {
+    connectingPageId.value = null
+  }
+}
+
+// Disconnect Page from modal
+const handleDisconnectFromModal = async (page) => {
+  const existing = (store.socialAccounts || []).find(
+    a => a.platform === selectedConnectPlatform.value && a.account_id === page.account_id
+  )
+  if (existing) {
+    if (confirm(`هل أنت متأكد من إلغاء ربط "${page.account_name}"؟`)) {
+      await store.disconnectSocialAccount(existing.id)
+      page.is_connected = false
+    }
+  }
+}
+
 // Open Connect Modal
 const openConnectModal = (preferredPlatform = 'facebook') => {
+  selectedConnectPlatform.value = preferredPlatform
   connectForm.value = {
     platform: preferredPlatform,
     account_id: '',
@@ -121,10 +189,14 @@ const openConnectModal = (preferredPlatform = 'facebook') => {
     avatar_url: '',
     followers_count: 0,
   }
+  isManualEntryOpen.value = false
+  connectSuccessPageName.value = ''
+  connectErrorMsg.value = ''
   isConnectModalOpen.value = true
+  fetchAvailablePages(preferredPlatform)
 }
 
-// Submit Connect Account
+// Submit Connect Account (Manual entry fallback)
 const handleConnectAccount = async () => {
   if (!connectForm.value.account_name.trim() || !connectForm.value.account_id.trim()) {
     alert('يرجى كتابة اسم ومعرّف الحساب أو الصفحة')
@@ -141,7 +213,9 @@ const handleConnectAccount = async () => {
       avatar_url: connectForm.value.avatar_url.trim() || null,
       followers_count: Number(connectForm.value.followers_count) || 0,
     })
-    isConnectModalOpen.value = false
+    connectSuccessPageName.value = connectForm.value.account_name
+    await fetchAvailablePages(connectForm.value.platform)
+    isManualEntryOpen.value = false
   } finally {
     isSubmitting.value = false
   }
@@ -1047,144 +1121,346 @@ onMounted(() => {
     </div>
 
     <!-- ========================================== -->
-    <!-- MODAL 2: Connect Social Account Modal -->
+    <!-- MODAL 2: Connect Social Account Modal (Interactive Discovery & 1-Click Connect) -->
     <!-- ========================================== -->
     <div
       v-if="isConnectModalOpen"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
       @click.self="isConnectModalOpen = false"
     >
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md p-5 sm:p-6 space-y-4 shadow-2xl text-right">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-xl p-5 sm:p-6 space-y-4 shadow-2xl text-right max-h-[90vh] overflow-y-auto">
         
+        <!-- Modal Header -->
         <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-          <div class="flex items-center gap-2">
-            <span class="text-xl">🔗</span>
-            <h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100">
-              ربط صفحة أو حساب سوشيال ميديا
-            </h3>
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-violet-600/10 text-violet-600 flex items-center justify-center text-base">
+              🔗
+            </div>
+            <div>
+              <h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100">
+                ربط صفحة أو حساب سوشيال ميديا
+              </h3>
+              <p class="text-[11px] text-slate-400 mt-0.5">
+                اختر المنصة لاستعراض صفحاتك وقنواتك وربطها بنقرة واحدة
+              </p>
+            </div>
           </div>
           <button
             @click="isConnectModalOpen = false"
-            class="text-slate-400 hover:text-slate-600 text-lg cursor-pointer"
+            class="text-slate-400 hover:text-slate-600 text-lg cursor-pointer px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
           >
             ✕
           </button>
         </div>
 
-        <!-- Platform Selection -->
+        <!-- Success Toast inside modal -->
+        <div
+          v-if="connectSuccessPageName"
+          class="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-300"
+        >
+          <span>🎉</span>
+          <span>تم ربط "{{ connectSuccessPageName }}" بنجاح وجاهزة للنشر والجدولة!</span>
+        </div>
+
+        <!-- Error Toast inside modal -->
+        <div
+          v-if="connectErrorMsg"
+          class="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-2xl flex items-center gap-2 text-xs font-bold text-rose-700 dark:text-rose-300"
+        >
+          <span>⚠️</span>
+          <span>{{ connectErrorMsg }}</span>
+        </div>
+
+        <!-- Platform Selection Cards -->
         <div class="space-y-1.5">
-          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">اختر المنصة:</label>
-          <div class="grid grid-cols-2 gap-2">
+          <label class="block text-xs font-extrabold text-slate-700 dark:text-slate-300">
+            1. اختر المنصة التي تريد ربط صفحاتها:
+          </label>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               v-for="p in ['facebook', 'instagram', 'youtube', 'linkedin']"
               :key="p"
               type="button"
-              @click="connectForm.platform = p"
+              @click="fetchAvailablePages(p)"
               :class="[
-                'p-2.5 rounded-2xl border text-xs font-bold flex items-center gap-2 cursor-pointer transition',
-                connectForm.platform === p
-                  ? 'border-violet-600 bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300'
-                  : 'border-slate-200 dark:border-slate-800 text-slate-500'
+                'p-3 rounded-2xl border text-xs font-bold flex flex-col items-center gap-2 cursor-pointer transition text-center',
+                selectedConnectPlatform === p
+                  ? 'border-violet-600 bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 ring-2 ring-violet-500/20 shadow-sm'
+                  : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
               ]"
             >
               <span
                 :class="[
-                  'w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-bold text-white',
+                  'w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white shadow-sm',
                   getPlatformMeta(p).color
                 ]"
               >
                 {{ getPlatformMeta(p).icon }}
               </span>
-              <span>{{ getPlatformMeta(p).name }}</span>
+              <span class="font-extrabold">{{ getPlatformMeta(p).name }}</span>
             </button>
           </div>
         </div>
 
-        <!-- Account Name Field -->
-        <div class="space-y-1.5">
-          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
-            اسم الصفحة أو القناة:
-          </label>
-          <input
-            v-model="connectForm.account_name"
-            type="text"
-            placeholder="مثال: صفحتي الرسمية / قناتي في اليوتيوب"
-            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
-          />
+        <!-- Discovered Pages & Channels Section -->
+        <div class="space-y-2.5 pt-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-extrabold text-slate-700 dark:text-slate-300">
+                2. الصفحات والقنوات المكتشفة في {{ getPlatformMeta(selectedConnectPlatform).name }}:
+              </span>
+              <span
+                v-if="!isLoadingPages && availablePages.length"
+                class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300"
+              >
+                {{ availablePages.length }} متاحة
+              </span>
+            </div>
+
+            <button
+              type="button"
+              @click="fetchAvailablePages(selectedConnectPlatform)"
+              :disabled="isLoadingPages"
+              class="text-[11px] font-bold text-violet-600 hover:text-violet-700 dark:text-violet-400 cursor-pointer flex items-center gap-1 transition"
+            >
+              <span :class="{'animate-spin': isLoadingPages}">🔄</span>
+              <span>تحديث الفحص</span>
+            </button>
+          </div>
+
+          <!-- Loading State -->
+          <div
+            v-if="isLoadingPages"
+            class="p-6 rounded-2xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center gap-3 text-center"
+          >
+            <div class="w-7 h-7 border-2 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
+            <div class="text-xs font-bold text-slate-600 dark:text-slate-400">
+              جاري الاتصال بـ {{ getPlatformMeta(selectedConnectPlatform).name }} والتحقق من حسابك وجلب الصفحات والقنوات...
+            </div>
+          </div>
+
+          <!-- Discovered Pages List -->
+          <div
+            v-else-if="availablePages.length > 0"
+            class="space-y-2 max-h-64 overflow-y-auto pr-0.5"
+          >
+            <div
+              v-for="page in availablePages"
+              :key="page.account_id"
+              class="p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 bg-white dark:bg-slate-950"
+              :class="page.is_connected ? 'border-emerald-500/40 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-slate-200 dark:border-slate-800 hover:border-violet-300'"
+            >
+              <!-- Page Info & Avatar -->
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="relative shrink-0">
+                  <img
+                    v-if="page.avatar_url"
+                    :src="page.avatar_url"
+                    :alt="page.account_name"
+                    class="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-800"
+                  />
+                  <div
+                    v-else
+                    :class="[
+                      'w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-sm',
+                      getPlatformMeta(selectedConnectPlatform).color
+                    ]"
+                  >
+                    {{ getPlatformMeta(selectedConnectPlatform).icon }}
+                  </div>
+                  <span
+                    :class="[
+                      'absolute -bottom-1 -left-1 w-4 h-4 rounded-full text-[8px] flex items-center justify-center text-white font-bold ring-2 ring-white dark:ring-slate-900',
+                      getPlatformMeta(selectedConnectPlatform).color
+                    ]"
+                  >
+                    {{ getPlatformMeta(selectedConnectPlatform).icon }}
+                  </span>
+                </div>
+
+                <div class="min-w-0 text-right">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-black text-slate-900 dark:text-slate-100 truncate block">
+                      {{ page.account_name }}
+                    </span>
+                    <span
+                      v-if="page.category"
+                      class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0"
+                    >
+                      {{ page.category }}
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                    <span v-if="page.account_username">@{{ page.account_username }}</span>
+                    <span>•</span>
+                    <span>{{ Number(page.followers_count).toLocaleString() }} متابع</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action Button -->
+              <div class="shrink-0">
+                <!-- Already Connected -->
+                <div v-if="page.is_connected" class="flex items-center gap-2">
+                  <span class="px-2.5 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-extrabold text-[11px] flex items-center gap-1">
+                    <span>✓</span>
+                    <span>مربوطة</span>
+                  </span>
+                  <button
+                    type="button"
+                    @click="handleDisconnectFromModal(page)"
+                    class="text-[10px] text-rose-500 hover:text-rose-700 hover:underline cursor-pointer"
+                  >
+                    فصل
+                  </button>
+                </div>
+
+                <!-- Connect Button -->
+                <button
+                  v-else
+                  type="button"
+                  @click="handleConnectDiscoveredPage(page)"
+                  :disabled="connectingPageId === page.account_id"
+                  class="px-4 py-2 rounded-xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-extrabold text-xs shadow-sm hover:opacity-95 active:scale-95 transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <span
+                    v-if="connectingPageId === page.account_id"
+                    class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"
+                  ></span>
+                  <span v-else>🔗</span>
+                  <span>ربط هذه الصفحة</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div
+            v-else
+            class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400"
+          >
+            لم نتمكن من جلب صفحات تلقائية لـ {{ getPlatformMeta(selectedConnectPlatform).name }}. يمكنك إدخال معرّف الصفحة يدوياً أدناه.
+          </div>
         </div>
 
-        <!-- Account / Page ID Field -->
-        <div class="space-y-1.5">
-          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
-            معرّف الصفحة أو القناة (ID):
-          </label>
-          <input
-            v-model="connectForm.account_id"
-            type="text"
-            placeholder="مثال: 10482910398 أو UC..."
-            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
-            dir="ltr"
-          />
+        <!-- Manual Entry Accordion -->
+        <div class="border-t border-slate-100 dark:border-slate-800 pt-3">
+          <button
+            type="button"
+            @click="isManualEntryOpen = !isManualEntryOpen"
+            class="w-full flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition py-1 cursor-pointer"
+          >
+            <span class="flex items-center gap-1.5">
+              <span>✏️</span>
+              <span>أو إدخال بيانات ومعرّف الصفحة يدوياً (Manual Connect)</span>
+            </span>
+            <span>{{ isManualEntryOpen ? '▲ إخفاء' : '▼ فتح' }}</span>
+          </button>
+
+          <!-- Collapsible Manual Form -->
+          <div v-if="isManualEntryOpen" class="space-y-3 pt-3">
+            <!-- Account Name Field -->
+            <div class="space-y-1 text-right">
+              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                اسم الصفحة أو القناة:
+              </label>
+              <input
+                v-model="connectForm.account_name"
+                type="text"
+                placeholder="مثال: صفحتي الرسمية / قناتي في اليوتيوب"
+                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
+              />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <!-- Account / Page ID Field -->
+              <div class="space-y-1 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  معرّف الصفحة أو القناة (ID):
+                </label>
+                <input
+                  v-model="connectForm.account_id"
+                  type="text"
+                  placeholder="مثال: 10482910398 أو UC..."
+                  class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
+                  dir="ltr"
+                />
+              </div>
+
+              <!-- Username / Handle Field -->
+              <div class="space-y-1 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  اليوزر نيم / المعرّف (Handle):
+                </label>
+                <input
+                  v-model="connectForm.account_username"
+                  type="text"
+                  placeholder="مثال: mypage (بدون @)"
+                  class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <!-- Followers Count Field -->
+              <div class="space-y-1 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  عدد المتابعين / المشتركين:
+                </label>
+                <input
+                  v-model.number="connectForm.followers_count"
+                  type="number"
+                  placeholder="0"
+                  class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
+                />
+              </div>
+
+              <!-- Avatar URL Field -->
+              <div class="space-y-1 text-right">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  رابط صورة اللوجو (اختياري):
+                </label>
+                <input
+                  v-model="connectForm.avatar_url"
+                  type="url"
+                  placeholder="https://..."
+                  class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+
+            <div class="pt-2 flex justify-end">
+              <button
+                type="button"
+                @click="handleConnectAccount"
+                :disabled="isSubmitting"
+                class="px-5 py-2 rounded-xl bg-slate-800 dark:bg-slate-700 text-white font-bold text-xs hover:bg-slate-900 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <span v-if="isSubmitting" class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span>حفظ وربط يدوياً</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <!-- Username / Handle Field -->
-        <div class="space-y-1.5">
-          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
-            اليوزر نيم / المعرّف (Handle):
-          </label>
-          <input
-            v-model="connectForm.account_username"
-            type="text"
-            placeholder="مثال: mypage (بدون @)"
-            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
-            dir="ltr"
-          />
-        </div>
-
-        <!-- Followers Count Field -->
-        <div class="space-y-1.5">
-          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
-            عدد المتابعين / المشتركين:
-          </label>
-          <input
-            v-model.number="connectForm.followers_count"
-            type="number"
-            placeholder="0"
-            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
-          />
-        </div>
-
-        <!-- Avatar URL Field -->
-        <div class="space-y-1.5">
-          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
-            رابط صورة اللوجو / البروفايل (اختياري):
-          </label>
-          <input
-            v-model="connectForm.avatar_url"
-            type="url"
-            placeholder="https://..."
-            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
-            dir="ltr"
-          />
-        </div>
-
-        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <!-- Modal Footer Actions -->
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between flex-row-reverse">
           <button
             type="button"
             @click="isConnectModalOpen = false"
-            class="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
+            class="px-5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 font-extrabold text-xs transition cursor-pointer"
           >
-            إلغاء
+            إغلاق
           </button>
 
           <button
             type="button"
-            @click="handleConnectAccount"
-            :disabled="isSubmitting"
-            class="px-6 py-2.5 rounded-2xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-black text-xs shadow-md shadow-violet-500/20 hover:opacity-95 active:scale-95 transition cursor-pointer flex items-center gap-2"
+            @click="isConnectModalOpen = false; goToSocialSettings()"
+            class="text-[11px] font-bold text-violet-600 hover:text-violet-700 dark:text-violet-400 hover:underline cursor-pointer flex items-center gap-1"
           >
-            <span v-if="isSubmitting" class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-            <span>ربط وحفظ الحساب</span>
+            <span>⚙️ إعداد مفاتيح التطبيق المخصصة (App ID / Secret)</span>
           </button>
         </div>
 

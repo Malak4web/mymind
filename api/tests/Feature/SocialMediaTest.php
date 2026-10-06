@@ -133,4 +133,37 @@ class SocialMediaTest extends TestCase
             ->assertJsonPath('facebook.app_id', '')
             ->assertJsonPath('facebook.app_secret', '');
     }
+
+    public function test_user_can_discover_and_connect_available_pages()
+    {
+        Sanctum::actingAs($this->userA);
+
+        // Fetch available Facebook pages
+        $res = $this->getJson('/api/social/available-pages?platform=facebook');
+        $res->assertStatus(200)
+            ->assertJsonStructure([
+                '*' => ['account_id', 'account_name', 'account_username', 'avatar_url', 'category', 'followers_count', 'is_connected']
+            ]);
+
+        $firstPage = $res->json(0);
+        $this->assertFalse($firstPage['is_connected']);
+
+        // Connect this discovered page with 1-click
+        $connectRes = $this->postJson('/api/social/accounts', [
+            'platform' => 'facebook',
+            'account_id' => $firstPage['account_id'],
+            'account_name' => $firstPage['account_name'],
+            'account_username' => $firstPage['account_username'],
+            'avatar_url' => $firstPage['avatar_url'],
+            'followers_count' => $firstPage['followers_count'],
+        ]);
+        $connectRes->assertStatus(201);
+
+        // Now re-fetch available pages -> is_connected should be true for that page
+        $resAfter = $this->getJson('/api/social/available-pages?platform=facebook');
+        $resAfter->assertStatus(200);
+        $updatedFirstPage = $resAfter->json(0);
+        $this->assertTrue($updatedFirstPage['is_connected']);
+    }
 }
+

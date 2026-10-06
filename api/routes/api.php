@@ -241,6 +241,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Social Media Management routes (إدارة السوشيال ميديا)
     Route::get('/social/summary', [SocialMediaController::class, 'getSummary']);
+    Route::get('/social/available-pages', [SocialMediaController::class, 'getAvailablePages']);
     Route::get('/social/accounts', [SocialMediaController::class, 'getAccounts']);
     Route::post('/social/accounts', [SocialMediaController::class, 'storeAccount']);
     Route::delete('/social/accounts/{id}', [SocialMediaController::class, 'deleteAccount']);

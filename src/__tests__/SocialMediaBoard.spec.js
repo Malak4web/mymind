@@ -179,4 +179,54 @@ describe('SocialMediaBoard.vue and Social Media Management Features', () => {
     expect(fbAppIdInput.exists()).toBe(true)
     expect(fbAppIdInput.element.value).toBe('12345')
   })
+
+  it('opens connect modal, discovers available pages, and connects with 1-click', async () => {
+    store.loadAvailablePages = vi.fn().mockResolvedValue([
+      {
+        account_id: 'fb_page_discovered_99',
+        account_name: 'صفحة متجري الذكي',
+        account_username: 'smart_store',
+        avatar_url: '',
+        category: 'تسوق وتجارة',
+        followers_count: 8900,
+        is_connected: false,
+      }
+    ])
+    store.connectSocialAccount = vi.fn().mockResolvedValue({
+      id: 99,
+      platform: 'facebook',
+      account_name: 'صفحة متجري الذكي',
+    })
+
+    const wrapper = mount(SocialMediaBoard)
+
+    // Click "ربط حساب"
+    const connectBtn = wrapper.findAll('button').find(b => b.text().includes('ربط حساب'))
+    expect(connectBtn).toBeDefined()
+    await connectBtn.trigger('click')
+
+    // Expect store.loadAvailablePages to have been called for facebook
+    expect(store.loadAvailablePages).toHaveBeenCalledWith('facebook')
+
+    // Wait for async discovery
+    await new Promise(r => setTimeout(r, 20))
+    await wrapper.vm.$nextTick()
+
+    // Assert page details rendered in modal
+    expect(wrapper.text()).toContain('صفحة متجري الذكي')
+    expect(wrapper.text()).toContain('8,900 متابع')
+    expect(wrapper.text()).toContain('تسوق وتجارة')
+
+    // Find and click "ربط هذه الصفحة"
+    const linkBtn = wrapper.findAll('button').find(b => b.text().includes('ربط هذه الصفحة'))
+    expect(linkBtn).toBeDefined()
+    await linkBtn.trigger('click')
+
+    expect(store.connectSocialAccount).toHaveBeenCalledWith(expect.objectContaining({
+      platform: 'facebook',
+      account_id: 'fb_page_discovered_99',
+      account_name: 'صفحة متجري الذكي',
+    }))
+  })
 })
+

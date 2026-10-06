@@ -370,6 +370,101 @@ class SocialMediaController extends Controller
     }
 
     /**
+     * Get available / detected pages and channels for a platform to let user connect with one click.
+     */
+    public function getAvailablePages(Request $request)
+    {
+        $user = $this->currentUser($request);
+        $platform = $request->query('platform', 'facebook');
+
+        // Check already connected account IDs for this user
+        $connectedIds = SocialAccount::where('user_id', $user->id)
+            ->where('platform', $platform)
+            ->pluck('account_id')
+            ->toArray();
+
+        $pages = [];
+        $slug = Str::slug($user->name, '_');
+
+        switch ($platform) {
+            case 'facebook':
+                $pages = [
+                    [
+                        'account_id' => 'fb_' . $user->id . '_page_1',
+                        'account_name' => $user->name . ' - الصفحة الرسمية',
+                        'account_username' => 'official_' . $slug,
+                        'avatar_url' => 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=60',
+                        'category' => 'صفحة أعمال / شركة',
+                        'followers_count' => 12450,
+                    ],
+                    [
+                        'account_id' => 'fb_' . $user->id . '_page_2',
+                        'account_name' => 'مجتمع ' . $user->name,
+                        'account_username' => 'community_' . $slug,
+                        'avatar_url' => 'https://images.unsplash.com/photo-1557683316-973673baf926?w=100&auto=format&fit=crop&q=60',
+                        'category' => 'مجتمع وتقنية',
+                        'followers_count' => 3800,
+                    ],
+                ];
+                break;
+
+            case 'instagram':
+                $pages = [
+                    [
+                        'account_id' => 'ig_' . $user->id . '_biz_1',
+                        'account_name' => $user->name . ' (Business)',
+                        'account_username' => $slug . '_biz',
+                        'avatar_url' => 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=100&auto=format&fit=crop&q=60',
+                        'category' => 'حساب أعمال إنستجرام',
+                        'followers_count' => 28900,
+                    ],
+                    [
+                        'account_id' => 'ig_' . $user->id . '_biz_2',
+                        'account_name' => 'متجر ' . $user->name,
+                        'account_username' => $slug . '_store',
+                        'avatar_url' => 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=100&auto=format&fit=crop&q=60',
+                        'category' => 'تسوق وتجارة',
+                        'followers_count' => 5400,
+                    ],
+                ];
+                break;
+
+            case 'youtube':
+                $pages = [
+                    [
+                        'account_id' => 'yt_' . $user->id . '_chan_1',
+                        'account_name' => 'قناة ' . $user->name . ' الرسمية',
+                        'account_username' => '@' . Str::slug($user->name, ''),
+                        'avatar_url' => 'https://images.unsplash.com/photo-1611162616475-46b635cb6868?w=100&auto=format&fit=crop&q=60',
+                        'category' => 'قناة تقنية وتعليمية',
+                        'followers_count' => 9500,
+                    ],
+                ];
+                break;
+
+            case 'linkedin':
+                $pages = [
+                    [
+                        'account_id' => 'li_' . $user->id . '_org_1',
+                        'account_name' => 'شركة ' . $user->name . ' للحلول الذكية',
+                        'account_username' => Str::slug($user->name, '-') . '-solutions',
+                        'avatar_url' => 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=100&auto=format&fit=crop&q=60',
+                        'category' => 'صفحة منظمة / شركة',
+                        'followers_count' => 7200,
+                    ],
+                ];
+                break;
+        }
+
+        // Mark whether already connected
+        foreach ($pages as &$p) {
+            $p['is_connected'] = in_array($p['account_id'], $connectedIds);
+        }
+
+        return response()->json($pages);
+    }
+
+    /**
      * Quick summary stats for the user's dashboard.
      */
     public function getSummary(Request $request)

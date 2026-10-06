@@ -3582,6 +3582,21 @@ export const store = reactive({
     }
   },
 
+  async loadAvailablePages(platform = 'facebook') {
+    if (!this.token) return []
+    try {
+      const res = await fetch(`${this.apiBase}/social/available-pages?platform=${platform}`, {
+        headers: this.getAuthHeaders()
+      })
+      if (res.ok) {
+        return await res.json()
+      }
+    } catch (e) {
+      console.error('فشل جلب الصفحات المتاحة', e)
+    }
+    return []
+  },
+
   async loadSocialPosts(isSilent = false, filters = {}) {
     if (!this.token) return
     if (this._socialPostsPending > 0) return
