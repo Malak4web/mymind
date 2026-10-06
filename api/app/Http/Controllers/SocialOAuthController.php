@@ -129,6 +129,18 @@ class SocialOAuthController extends Controller
         $hasToken    = !empty($setting->access_token ?? null);
         $hasAppCreds = !empty($setting->app_id ?? null) && !empty($setting->app_secret ?? null);
 
+        // If checking Instagram and no direct token, check Facebook token (shared Meta credentials)
+        if (!$hasToken && $platform === 'instagram') {
+            $fbSetting = SocialSetting::where('user_id', $user->id)
+                ->where('platform', 'facebook')
+                ->first();
+            if (!empty($fbSetting->access_token ?? null)) {
+                $hasToken = true;
+                $hasAppCreds = !empty($fbSetting->app_id ?? null) && !empty($fbSetting->app_secret ?? null);
+                $setting = $fbSetting;
+            }
+        }
+
         return response()->json([
             'platform' => $platform,
             'is_authenticated' => $hasToken,
@@ -204,6 +216,14 @@ class SocialOAuthController extends Controller
             ->first();
 
         $accessToken = $setting->access_token ?? null;
+
+        // If checking Instagram and no direct Instagram token exists, fall back to Facebook token
+        if (!$accessToken && $platform === 'instagram') {
+            $fbSetting = SocialSetting::where('user_id', $user->id)
+                ->where('platform', 'facebook')
+                ->first();
+            $accessToken = $fbSetting->access_token ?? null;
+        }
 
         // If user hasn't logged in on this platform yet:
         if (!$accessToken) {
