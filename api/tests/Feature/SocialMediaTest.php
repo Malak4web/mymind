@@ -259,26 +259,77 @@ class SocialMediaTest extends TestCase
     {
         Sanctum::actingAs($this->userA);
 
+        \Illuminate\Support\Facades\Http::fake([
+            'https://graph.facebook.com/v21.0/fb_page_sync_1/*' => \Illuminate\Support\Facades\Http::response([
+                'data' => [
+                    [
+                        'id' => 'fb_page_sync_1_post_1001',
+                        'message' => 'منشور فيسبوك حقيقي عبر Graph API',
+                        'created_time' => now()->subDay()->toIso8601String(),
+                        'permalink_url' => 'https://facebook.com/fb_page_sync_1/posts/1001',
+                        'shares' => ['count' => 15],
+                        'reactions' => ['summary' => ['total_count' => 120]],
+                        'comments' => ['summary' => ['total_count' => 30]],
+                    ]
+                ]
+            ], 200),
+        ]);
+
         SocialAccount::create([
             'user_id' => $this->userA->id,
             'platform' => 'facebook',
             'account_id' => 'fb_page_sync_1',
             'account_name' => 'صفحة المزامنة',
             'followers_count' => 8000,
+            'access_token' => 'real_page_access_token_123',
         ]);
 
         $res = $this->postJson('/api/social/sync-posts');
 
         $res->assertStatus(200)
-            ->assertJsonPath('synced_accounts', 1);
+            ->assertJsonPath('synced_accounts', 1)
+            ->assertJsonPath('synced_posts', 1);
 
         $postsRes = $this->getJson('/api/social/posts');
         $postsRes->assertStatus(200);
         $this->assertNotEmpty($postsRes->json());
 
         $firstPost = $postsRes->json('0');
-        $this->assertNotNull($firstPost['metrics']);
+        $this->assertEquals('منشور فيسبوك حقيقي عبر Graph API', $firstPost['content']);
+        $this->assertEquals(120, $firstPost['metrics']['likes']);
+        $this->assertEquals(30, $firstPost['metrics']['comments']);
+        $this->assertEquals(15, $firstPost['metrics']['shares']);
         $this->assertArrayHasKey('engagement_rate', $firstPost['metrics']);
+    }
+
+    public function test_no_fake_sample_posts_are_generated_when_platform_returns_no_posts()
+    {
+        Sanctum::actingAs($this->userA);
+
+        \Illuminate\Support\Facades\Http::fake([
+            'https://graph.facebook.com/v21.0/fb_page_empty_1/*' => \Illuminate\Support\Facades\Http::response([
+                'data' => []
+            ], 200),
+        ]);
+
+        SocialAccount::create([
+            'user_id' => $this->userA->id,
+            'platform' => 'facebook',
+            'account_id' => 'fb_page_empty_1',
+            'account_name' => 'صفحة فارغة بدون منشورات',
+            'followers_count' => 1,
+            'access_token' => 'real_page_access_token_empty',
+        ]);
+
+        $res = $this->postJson('/api/social/sync-posts');
+
+        $res->assertStatus(200)
+            ->assertJsonPath('synced_accounts', 1)
+            ->assertJsonPath('synced_posts', 0);
+
+        $postsRes = $this->getJson('/api/social/posts');
+        $postsRes->assertStatus(200);
+        $this->assertEmpty($postsRes->json());
     }
 }
 

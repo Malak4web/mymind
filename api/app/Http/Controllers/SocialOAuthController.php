@@ -432,7 +432,7 @@ class SocialOAuthController extends Controller
                 'account_username' => $page['username'] ?? '',
                 'avatar_url'       => $page['picture']['data']['url'] ?? '',
                 'category'         => $page['category'] ?? 'صفحة فيسبوك',
-                'followers_count'  => $page['fan_count'] ?? 0,
+                'followers_count'  => $page['followers_count'] ?? $page['fan_count'] ?? 0,
                 'page_access_token' => $page['access_token'] ?? null,
             ];
         }, $data);
@@ -442,7 +442,7 @@ class SocialOAuthController extends Controller
     {
         $response = Http::get('https://graph.facebook.com/v21.0/me/accounts', [
             'access_token' => $accessToken,
-            'fields'       => 'id,name,instagram_business_account{id,name,username,profile_picture_url,followers_count,biography}',
+            'fields'       => 'id,name,access_token,instagram_business_account{id,name,username,profile_picture_url,followers_count,biography}',
         ]);
 
         if (!$response->ok()) {
@@ -462,6 +462,7 @@ class SocialOAuthController extends Controller
                     'avatar_url'       => $ig['profile_picture_url'] ?? '',
                     'category'         => 'حساب أعمال إنستجرام',
                     'followers_count'  => $ig['followers_count'] ?? 0,
+                    'page_access_token' => $page['access_token'] ?? null,
                 ];
             }
         }

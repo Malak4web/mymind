@@ -127,6 +127,12 @@ const isManualEntryOpen = ref(false)
 const connectSuccessPageName = ref('')
 const connectErrorMsg = ref('')
 
+// Expand / collapse page posts in Analytics
+const expandedPagePosts = ref({})
+const togglePagePosts = (pageId) => {
+  expandedPagePosts.value[pageId] = !expandedPagePosts.value[pageId]
+}
+
 // OAuth popup message listener (receives message when OAuth completes)
 const handleOAuthWindowMessage = async (event) => {
   if (event.data && event.data.type === 'social_oauth_callback') {
@@ -261,6 +267,7 @@ const handleConnectDiscoveredPage = async (page) => {
       account_username: page.account_username || '',
       avatar_url: page.avatar_url || null,
       followers_count: Number(page.followers_count) || 0,
+      access_token: page.page_access_token || null,
       metadata: { category: page.category || '' }
     })
     page.is_connected = true
@@ -270,6 +277,8 @@ const handleConnectDiscoveredPage = async (page) => {
         connectSuccessPageName.value = ''
       }
     }, 4000)
+    await store.loadSocialAnalytics()
+    await store.loadSocialPosts(true)
   } catch (e) {
     alert('فشل ربط الصفحة، يرجى المحاولة مرة أخرى')
   } finally {
@@ -1432,9 +1441,30 @@ onUnmounted(() => {
               </div>
             </div>
 
+            <!-- No posts empty state for this page -->
+            <div
+              v-if="page.posts_count === 0"
+              class="pt-3 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-800/30 p-3.5 rounded-2xl border border-slate-200/60 dark:border-slate-700/50 text-center space-y-1.5"
+            >
+              <div class="text-xs font-bold text-slate-700 dark:text-slate-300">
+                لا توجد منشورات منشورة على هذه الصفحة حالياً
+              </div>
+              <p class="text-[11px] text-slate-400 max-w-sm mx-auto">
+                لم يتم العثور على منشورات في صفحة "{{ page.account_name }}" على فيسبوك/إنستجرام. عند نشر أي منشور جديد سيظهر هنا تلقائياً مع تحليلاته ونسبه الحقيقية.
+              </p>
+              <button
+                @click="handleSyncExternalPosts"
+                :disabled="isSyncingPosts"
+                class="mt-1 px-3 py-1 rounded-xl bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400 font-bold text-[11px] hover:bg-violet-100 transition inline-flex items-center gap-1 cursor-pointer"
+              >
+                <span>🔄</span>
+                <span>فحص ومزامنة المنشورات الآن</span>
+              </button>
+            </div>
+
             <!-- Top Post Spotlight for this Page -->
             <div
-              v-if="page.top_post"
+              v-else-if="page.top_post"
               class="pt-3 border-t border-slate-100 dark:border-slate-800/80 bg-violet-500/5 dark:bg-violet-950/20 p-3 rounded-2xl border border-violet-500/10 space-y-1.5"
             >
               <div class="flex items-center justify-between text-[11px]">
@@ -1469,6 +1499,68 @@ onUnmounted(() => {
                 >
                   مشاهدة المنشور الأصلي ↗
                 </a>
+              </div>
+            </div>
+
+            <!-- View All Posts of This Page Accordion -->
+            <div v-if="page.posts && page.posts.length > 0" class="pt-2 border-t border-slate-100 dark:border-slate-800/80">
+              <button
+                @click="togglePagePosts(page.id)"
+                class="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 transition cursor-pointer"
+              >
+                <span class="flex items-center gap-1.5">
+                  <span>📑</span>
+                  <span>عرض جميع منشورات الصفحة ({{ page.posts.length }})</span>
+                </span>
+                <span class="text-slate-400 text-xs transition-transform duration-200" :class="{'rotate-180': expandedPagePosts[page.id]}">
+                  ▼
+                </span>
+              </button>
+
+              <!-- Collapsible Posts List -->
+              <div v-if="expandedPagePosts[page.id]" class="mt-2 space-y-2 max-h-80 overflow-y-auto pr-1">
+                <div
+                  v-for="post in page.posts"
+                  :key="post.id"
+                  class="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2"
+                >
+                  <div class="flex items-start gap-2">
+                    <img
+                      v-if="post.media_urls && post.media_urls.length"
+                      :src="post.media_urls[0]"
+                      alt="post media"
+                      class="w-12 h-12 rounded-lg object-cover shrink-0 border border-slate-200 dark:border-slate-700"
+                    />
+                    <div class="flex-1 min-w-0">
+                      <p class="text-xs text-slate-800 dark:text-slate-200 line-clamp-2 leading-snug">
+                        {{ post.content }}
+                      </p>
+                      <span class="text-[10px] text-slate-400 block mt-1">
+                        {{ formatDate(post.published_at || post.created_at) }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100 dark:border-slate-700/60">
+                    <div class="flex items-center gap-2.5 text-slate-500 dark:text-slate-400 text-[10px]">
+                      <span>👍 {{ post.metrics?.likes || 0 }}</span>
+                      <span>💬 {{ post.metrics?.comments || 0 }}</span>
+                      <span>🔄 {{ post.metrics?.shares || 0 }}</span>
+                      <span v-if="post.metrics?.engagement_rate" class="text-emerald-600 dark:text-emerald-400 font-bold">
+                        {{ post.metrics.engagement_rate }}% تفاعل
+                      </span>
+                    </div>
+
+                    <a
+                      v-if="post.platform_post_ids && post.platform_post_ids[page.platform]?.url"
+                      :href="post.platform_post_ids[page.platform].url"
+                      target="_blank"
+                      class="text-[10px] text-violet-600 dark:text-violet-400 font-bold hover:underline"
+                    >
+                      عرض على {{ getPlatformMeta(page.platform).name }} ↗
+                    </a>
+                  </div>
+                </div>
               </div>
             </div>
 

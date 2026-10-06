@@ -3715,7 +3715,7 @@ export const store = reactive({
       if (res.ok) {
         const data = await res.json()
         this.socialAnalytics = data
-        if (Array.isArray(data.posts) && data.posts.length > 0) {
+        if (Array.isArray(data.posts)) {
           this.socialPosts = data.posts
           this.saveSocialPostsLocal()
         }
@@ -3735,8 +3735,12 @@ export const store = reactive({
         headers: this.getAuthHeaders()
       })
       if (res.ok) {
+        const result = await res.json()
         await this.loadSocialAnalytics()
         await this.loadSocialPosts(true)
+        if (result.message) {
+          this.addNotification('مزامنة المنشورات', result.message)
+        }
         return true
       }
     } catch (e) {
