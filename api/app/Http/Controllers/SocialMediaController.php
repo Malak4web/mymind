@@ -308,11 +308,26 @@ class SocialMediaController extends Controller
     {
         $user = $this->currentUser($request);
 
+        // Pre-check for PHP INI file size limit violations
+        if (!$request->hasFile('file')) {
+            $maxUpload = ini_get('upload_max_filesize') ?: '256M';
+            return response()->json([
+                'message' => "تعذر استلام الملف، قد يكون حجم الملف أكبر من الحد المسموح في السيرفر ({$maxUpload}). يرجى ضغط الفيديو أو اختيار ملف أصغر.",
+            ], 422);
+        }
+
+        $uploadedFile = $request->file('file');
+        if (!$uploadedFile->isValid()) {
+            return response()->json([
+                'message' => 'فشل رفع الملف: ' . $uploadedFile->getErrorMessage(),
+            ], 422);
+        }
+
         $request->validate([
             'file' => [
                 'required',
                 'file',
-                'max:102400', // 100 MB max
+                'max:262144', // 256 MB max
                 'extensions:' . implode(',', self::ALLOWED_MEDIA_EXTENSIONS),
             ],
         ]);
@@ -844,11 +859,27 @@ class SocialMediaController extends Controller
                     });
 
                     if ($videoUrl) {
-                        $res = Http::asForm()->post("https://graph.facebook.com/v21.0/{$pageId}/videos", [
-                            'access_token' => $token,
-                            'file_url' => $videoUrl,
-                            'description' => $content,
-                        ]);
+                        $videoFileName = basename(parse_url($videoUrl, PHP_URL_PATH));
+                        $localVideoPath = storage_path('app/public/social_media/' . $videoFileName);
+
+                        // If local video file exists on disk, attach it directly via multipart
+                        if (file_exists($localVideoPath)) {
+                            $res = Http::timeout(180)
+                                ->attach('source', file_get_contents($localVideoPath), $videoFileName)
+                                ->post("https://graph.facebook.com/v21.0/{$pageId}/videos", [
+                                    'access_token' => $token,
+                                    'description' => $content,
+                                ]);
+                        } else {
+                            $res = Http::timeout(180)
+                                ->asForm()
+                                ->post("https://graph.facebook.com/v21.0/{$pageId}/videos", [
+                                    'access_token' => $token,
+                                    'file_url' => $videoUrl,
+                                    'description' => $content,
+                                ]);
+                        }
+
                         if ($res->ok() && $res->json('id')) {
                             $vidId = $res->json('id');
                             $links['facebook'] = [
@@ -856,6 +887,8 @@ class SocialMediaController extends Controller
                                 'url' => "https://facebook.com/reel/{$vidId}",
                             ];
                             continue;
+                        } else {
+                            Log::warning("FB video publish error: " . $res->body());
                         }
                     }
 
@@ -864,11 +897,26 @@ class SocialMediaController extends Controller
                     });
 
                     if ($photoUrl) {
-                        $res = Http::asForm()->post("https://graph.facebook.com/v21.0/{$pageId}/photos", [
-                            'access_token' => $token,
-                            'url' => $photoUrl,
-                            'caption' => $content,
-                        ]);
+                        $photoFileName = basename(parse_url($photoUrl, PHP_URL_PATH));
+                        $localPhotoPath = storage_path('app/public/social_media/' . $photoFileName);
+
+                        if (file_exists($localPhotoPath)) {
+                            $res = Http::timeout(60)
+                                ->attach('source', file_get_contents($localPhotoPath), $photoFileName)
+                                ->post("https://graph.facebook.com/v21.0/{$pageId}/photos", [
+                                    'access_token' => $token,
+                                    'caption' => $content,
+                                ]);
+                        } else {
+                            $res = Http::timeout(60)
+                                ->asForm()
+                                ->post("https://graph.facebook.com/v21.0/{$pageId}/photos", [
+                                    'access_token' => $token,
+                                    'url' => $photoUrl,
+                                    'caption' => $content,
+                                ]);
+                        }
+
                         if ($res->ok()) {
                             $photoId = $res->json('id');
                             $postId = $res->json('post_id') ?? "{$pageId}_{$photoId}";
@@ -877,21 +925,25 @@ class SocialMediaController extends Controller
                                 'url' => "https://facebook.com/{$postId}",
                             ];
                             continue;
+                        } else {
+                            Log::warning("FB photo publish error: " . $res->body());
                         }
                     }
 
-                    // Feed post (text)
-                    $res = Http::asForm()->post("https://graph.facebook.com/v21.0/{$pageId}/feed", [
-                        'access_token' => $token,
-                        'message' => $content,
-                    ]);
-                    if ($res->ok() && $res->json('id')) {
-                        $postId = $res->json('id');
-                        $links['facebook'] = [
-                            'id' => (string)$postId,
-                            'url' => "https://facebook.com/{$postId}",
-                        ];
-                        continue;
+                    // Feed post (text) - ONLY IF no video or photo was requested!
+                    if (empty($videoUrl) && empty($photoUrl)) {
+                        $res = Http::asForm()->post("https://graph.facebook.com/v21.0/{$pageId}/feed", [
+                            'access_token' => $token,
+                            'message' => $content,
+                        ]);
+                        if ($res->ok() && $res->json('id')) {
+                            $postId = $res->json('id');
+                            $links['facebook'] = [
+                                'id' => (string)$postId,
+                                'url' => "https://facebook.com/{$postId}",
+                            ];
+                            continue;
+                        }
                     }
                 } catch (\Throwable $e) {
                     Log::warning("Real FB post failed: " . $e->getMessage());

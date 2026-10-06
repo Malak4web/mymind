@@ -3749,28 +3749,52 @@ export const store = reactive({
     return false
   },
 
-  async uploadSocialMedia(file) {
-    const formData = new FormData()
-    formData.append('file', file)
+  async uploadSocialMedia(file, onProgress = null) {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData()
+      formData.append('file', file)
 
-    const uploadHeaders = {}
-    if (this.token) {
-      uploadHeaders['Authorization'] = `Bearer ${this.token}`
-    }
-    uploadHeaders['Accept'] = 'application/json'
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `${this.apiBase}/social/upload-media`)
 
-    const res = await fetch(`${this.apiBase}/social/upload-media`, {
-      method: 'POST',
-      headers: uploadHeaders,
-      body: formData
+      if (this.token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${this.token}`)
+      }
+      xhr.setRequestHeader('Accept', 'application/json')
+
+      if (onProgress && xhr.upload) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100)
+            onProgress(percent)
+          }
+        }
+      }
+
+      xhr.onload = () => {
+        try {
+          const res = JSON.parse(xhr.responseText || '{}')
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(res)
+          } else {
+            const msg = res.message || (res.errors && Object.values(res.errors).flat().join(', ')) || `فشل رفع الملف (${xhr.status})`
+            reject(new Error(msg))
+          }
+        } catch (e) {
+          if (xhr.status === 413) {
+            reject(new Error('حجم الملف كبير جداً ويتجاوز الحد الأقصى المسموح في السيرفر'))
+          } else {
+            reject(new Error(`فشل رفع الملف (رمز الخطأ: ${xhr.status})`))
+          }
+        }
+      }
+
+      xhr.onerror = () => {
+        reject(new Error('حدث خطأ في الاتصال أثناء رفع الملف، يرجى التحقق من اتصال الإنترنت'))
+      }
+
+      xhr.send(formData)
     })
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.message || 'فشل رفع الملف')
-    }
-
-    return await res.json()
   },
 
   async createSocialPost(postData) {

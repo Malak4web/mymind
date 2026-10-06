@@ -60,6 +60,8 @@ const formatForDateTimeInput = (d) => {
 
 // Media handlers & Device Upload
 const isUploadingMedia = ref(false)
+const uploadProgress = ref(0)
+const uploadingFileName = ref('')
 const uploadError = ref('')
 const fileInputRef = ref(null)
 const editFileInputRef = ref(null)
@@ -88,15 +90,21 @@ const handleFileUpload = async (event) => {
 
   isUploadingMedia.value = true
   uploadError.value = ''
+  uploadProgress.value = 0
 
   try {
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
-      if (file.size > 100 * 1024 * 1024) {
-        uploadError.value = `الملف "${file.name}" أكبر من الحد الأقصى المسموح (100 ميجابايت)`
+      uploadingFileName.value = file.name
+      uploadProgress.value = 0
+
+      if (file.size > 250 * 1024 * 1024) {
+        uploadError.value = `الملف "${file.name}" أكبر من الحد الأقصى المسموح (250 ميجابايت)`
         continue
       }
-      const res = await store.uploadSocialMedia(file)
+      const res = await store.uploadSocialMedia(file, (p) => {
+        uploadProgress.value = p
+      })
       if (res && res.url) {
         if (!composerForm.value.media_urls.includes(res.url)) {
           composerForm.value.media_urls.push(res.url)
@@ -106,8 +114,11 @@ const handleFileUpload = async (event) => {
   } catch (e) {
     console.error('فشل رفع الملف', e)
     uploadError.value = e.message || 'حدث خطأ أثناء رفع الملف، يرجى المحاولة مرة أخرى'
+    alert(`تنبيه: ${uploadError.value}`)
   } finally {
     isUploadingMedia.value = false
+    uploadProgress.value = 0
+    uploadingFileName.value = ''
     if (fileInputRef.value) {
       fileInputRef.value.value = ''
     }
@@ -120,6 +131,7 @@ const handleEditFileUpload = async (event) => {
 
   isUploadingMedia.value = true
   uploadError.value = ''
+  uploadProgress.value = 0
 
   try {
     if (!Array.isArray(editingPost.value.media_urls)) {
@@ -127,19 +139,27 @@ const handleEditFileUpload = async (event) => {
     }
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
-      if (file.size > 100 * 1024 * 1024) {
-        uploadError.value = `الملف "${file.name}" أكبر من 100 ميجابايت`
+      uploadingFileName.value = file.name
+      uploadProgress.value = 0
+
+      if (file.size > 250 * 1024 * 1024) {
+        uploadError.value = `الملف "${file.name}" أكبر من 250 ميجابايت`
         continue
       }
-      const res = await store.uploadSocialMedia(file)
+      const res = await store.uploadSocialMedia(file, (p) => {
+        uploadProgress.value = p
+      })
       if (res && res.url) {
         editingPost.value.media_urls.push(res.url)
       }
     }
   } catch (e) {
     uploadError.value = e.message || 'حدث خطأ أثناء رفع الملف'
+    alert(`تنبيه: ${uploadError.value}`)
   } finally {
     isUploadingMedia.value = false
+    uploadProgress.value = 0
+    uploadingFileName.value = ''
     if (editFileInputRef.value) {
       editFileInputRef.value.value = ''
     }
@@ -449,6 +469,16 @@ const handleDisconnect = async (account) => {
 
 // Submit Create Post
 const handleSavePost = async () => {
+  if (isUploadingMedia.value) {
+    alert('يرجى الانتظار حتى يكتمل رفع ملف الفيديو / الصورة بالكامل أولاً.')
+    return
+  }
+
+  if (uploadError.value) {
+    const proceed = confirm(`تنبيه: حدث خطأ أثناء رفع الوسائط:\n(${uploadError.value})\n\nهل ترغب بنشر المنشور كنص فقط بدون وسائط؟\nاضغط "موافق" للنشر كنص، أو "إلغاء" لإعادة تجربة رفع الملف.`)
+    if (!proceed) return
+  }
+
   if (!composerForm.value.content.trim()) {
     alert('يرجى كتابة نص المنشور')
     return
@@ -1823,11 +1853,17 @@ onUnmounted(() => {
               <span v-else>📷 / 🎬</span>
             </div>
 
-            <div v-if="isUploadingMedia" class="space-y-1">
-              <p class="text-xs font-bold text-violet-600 dark:text-violet-400 animate-pulse">
-                جاري رفع ومعالجة الملف من جهازك إلى السيرفر...
+            <div v-if="isUploadingMedia" class="space-y-1.5 w-full max-w-xs mx-auto">
+              <p class="text-xs font-bold text-violet-600 dark:text-violet-400">
+                جاري رفع {{ uploadingFileName ? `"${uploadingFileName}"` : 'الملف' }} ({{ uploadProgress }}%)...
               </p>
-              <span class="text-[10px] text-slate-400">يرجى الانتظار لحظات</span>
+              <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                <div
+                  class="bg-gradient-to-r from-violet-600 to-indigo-600 h-full rounded-full transition-all duration-200"
+                  :style="{ width: `${uploadProgress}%` }"
+                ></div>
+              </div>
+              <span class="text-[10px] text-slate-400 block">يرجى عدم إغلاق النافذة حتى يكتمل الرفع</span>
             </div>
             <div v-else class="space-y-1">
               <p class="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -2018,11 +2054,14 @@ onUnmounted(() => {
           <button
             type="button"
             @click="handleSavePost"
-            :disabled="isSubmitting"
-            class="px-6 py-2.5 rounded-2xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-black text-xs shadow-md shadow-violet-500/20 hover:opacity-95 active:scale-95 transition cursor-pointer flex items-center gap-2"
+            :disabled="isSubmitting || isUploadingMedia"
+            class="px-6 py-2.5 rounded-2xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-black text-xs shadow-md shadow-violet-500/20 hover:opacity-95 active:scale-95 transition cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span v-if="isSubmitting" class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-            <span>
+            <span v-if="isSubmitting || isUploadingMedia" class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+            <span v-if="isUploadingMedia">
+              ⏳ جاري رفع الوسائط ({{ uploadProgress }}%)...
+            </span>
+            <span v-else>
               {{ composerForm.publishMode === 'now' ? '🚀 نشر المنشور الآن' : (composerForm.publishMode === 'schedule' ? '⏰ جدولة المنشور' : '💾 حفظ كمسودة') }}
             </span>
           </button>
