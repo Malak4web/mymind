@@ -1,6 +1,6 @@
 <script setup>
 import { store } from '../store'
-import { computed, ref, onUnmounted, onMounted } from 'vue'
+import { computed, ref, onUnmounted, onMounted, nextTick } from 'vue'
 import MentionInput from './MentionInput.vue'
 import MentionText from './MentionText.vue'
 
@@ -617,6 +617,52 @@ const moveSeparator = async (sep, direction) => {
 
 const setAsCompletedStatus = async (status) => {
   await store.setProjectCompletedStatus(store.activeProjectId, status)
+}
+
+const getColumnSeparators = (statusName) => {
+  return (activeProject.value?.separators || []).filter(s => s.status === statusName)
+}
+
+const highlightedSeparatorId = ref(null)
+
+const highlightSeparator = (sepId) => {
+  highlightedSeparatorId.value = sepId
+  setTimeout(() => {
+    if (highlightedSeparatorId.value === sepId) {
+      highlightedSeparatorId.value = null
+    }
+  }, 2200)
+}
+
+const scrollToColumnTop = (status) => {
+  const container = document.getElementById(`col-cards-list-${status}`)
+  if (container) {
+    container.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
+const scrollToSeparator = (sepId) => {
+  if (!sepId) return
+  nextTick(() => {
+    const el = document.getElementById(`sep-widget-${sepId}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+      highlightSeparator(sepId)
+    }
+  })
+}
+
+const onSeparatorJumpSelected = (status, event) => {
+  const value = event.target.value
+  if (!value) return
+  if (value === '__TOP__') {
+    scrollToColumnTop(status)
+  } else {
+    scrollToSeparator(value)
+  }
+  setTimeout(() => {
+    if (event.target) event.target.value = ''
+  }, 400)
 }
 
 const getColumnItems = (statusName) => {
@@ -1323,12 +1369,40 @@ const onKanbanMouseMove = (e) => {
           </div>
         </div>
 
+        <!-- Separators Quick Jump / Filter Dropdown -->
+        <div v-if="getColumnSeparators(status).length > 0" class="relative w-full mb-2.5">
+          <div class="flex items-center gap-1.5 bg-violet-50/80 dark:bg-violet-950/40 border border-violet-200/90 dark:border-violet-800/70 rounded-xl px-2.5 py-1.5 shadow-2xs hover:border-violet-400 dark:hover:border-violet-600 transition-colors">
+            <span class="text-xs select-none">🔖</span>
+            <select 
+              @change="onSeparatorJumpSelected(status, $event)"
+              class="w-full bg-transparent border-none text-[11px] font-black text-violet-800 dark:text-violet-200 focus:outline-none cursor-pointer truncate"
+              title="الانتقال السريع لعنوان فاصل داخل هذه الحالة"
+              aria-label="الانتقال إلى عنوان فاصل"
+            >
+              <option value="" disabled selected>الانتقال إلى عنوان ({{ getColumnSeparators(status).length }})...</option>
+              <option value="__TOP__" class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold">
+                ⬆️ أعلى الحالة
+              </option>
+              <option 
+                v-for="sep in getColumnSeparators(status)" 
+                :key="sep.id" 
+                :value="sep.id"
+                class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold"
+              >
+                🔖 {{ sep.title }}
+              </option>
+            </select>
+            <span class="text-[10px] text-violet-400 dark:text-violet-500 pointer-events-none shrink-0">▼</span>
+          </div>
+        </div>
+
         <!-- Cards & Separators List -->
-        <div class="space-y-3 flex-1 overflow-y-auto max-h-[560px] pr-0.5 scrollbar-hide">
+        <div :id="'col-cards-list-' + status" class="space-y-3 flex-1 overflow-y-auto max-h-[560px] pr-0.5 scrollbar-hide">
           <template v-for="item in getColumnItems(status)" :key="item.data.id">
             <!-- Section Separator Widget -->
             <div 
               v-if="item.isSeparator"
+              :id="'sep-widget-' + item.data.id"
               draggable="true"
               @dragstart="handleDragStart(item.data.id, true, status, $event)"
               @dragend="clearDragState"
@@ -1337,7 +1411,8 @@ const onKanbanMouseMove = (e) => {
               class="my-2.5 py-2 px-3 rounded-xl bg-violet-50/80 dark:bg-violet-950/40 border-r-4 border-r-violet-600 dark:border-r-violet-400 border border-violet-200/60 dark:border-violet-800/60 shadow-2xs select-none transition-all group/sep cursor-grab active:cursor-grabbing relative"
               :class="{
                 'opacity-40 scale-95 border-dashed border-violet-400': draggedItemId === item.data.id,
-                'ring-2 ring-violet-500': dropTargetItemId === item.data.id
+                'ring-2 ring-violet-500': dropTargetItemId === item.data.id,
+                'ring-4 ring-violet-500 bg-violet-100 dark:bg-violet-900/90 scale-[1.02] shadow-md': highlightedSeparatorId === item.data.id
               }"
               @click.stop
             >

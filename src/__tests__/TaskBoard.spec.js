@@ -319,4 +319,49 @@ describe('TaskBoard.vue Component Tests', () => {
     const items = wrapper.vm.getColumnItems('بانتظار البدء')
     expect(items.map(i => i.data.id)).toEqual([201, 202, 'sep-alpha', 203])
   })
+
+  it('renders quick jump dropdown for columns with separators and navigates smoothly', async () => {
+    store.currentUser = { role: { name: 'مدير' } }
+    const proj = store.projects[0]
+    proj.separators = [
+      { id: 'sep-nav-1', projectId: 1, status: 'بانتظار البدء', title: 'مرحلة التخطيط' },
+      { id: 'sep-nav-2', projectId: 1, status: 'بانتظار البدء', title: 'مرحلة التنفيذ' }
+    ]
+
+    const wrapper = mount(TaskBoard, { attachTo: document.body })
+    
+    // Find dropdown in 'بانتظار البدء' column
+    const select = wrapper.find('select[aria-label="الانتقال إلى عنوان فاصل"]')
+    expect(select.exists()).toBe(true)
+    expect(select.text()).toContain('مرحلة التخطيط')
+    expect(select.text()).toContain('مرحلة التنفيذ')
+    expect(select.text()).toContain('أعلى الحالة')
+
+    // Target separator widget
+    const targetSep = document.getElementById('sep-widget-sep-nav-1')
+    expect(targetSep).toBeTruthy()
+    targetSep.scrollIntoView = vi.fn()
+
+    // Select separator
+    await select.setValue('sep-nav-1')
+    await select.trigger('change')
+
+    await wrapper.vm.$nextTick()
+    expect(targetSep.scrollIntoView).toHaveBeenCalledWith(
+      expect.objectContaining({ behavior: 'smooth', block: 'center' })
+    )
+    expect(wrapper.vm.highlightedSeparatorId).toBe('sep-nav-1')
+
+    // Mock scrollTo on column container
+    const colContainer = document.getElementById('col-cards-list-بانتظار البدء')
+    expect(colContainer).toBeTruthy()
+    colContainer.scrollTo = vi.fn()
+
+    await select.setValue('__TOP__')
+    await select.trigger('change')
+    expect(colContainer.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' })
+
+    wrapper.unmount()
+  })
 })
+
