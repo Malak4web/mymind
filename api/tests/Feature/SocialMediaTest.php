@@ -334,5 +334,59 @@ class SocialMediaTest extends TestCase
         $postsRes->assertStatus(200);
         $this->assertEmpty($postsRes->json());
     }
+
+    public function test_user_can_upload_image_for_social_post()
+    {
+        Sanctum::actingAs($this->userA);
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        $file = \Illuminate\Http\UploadedFile::fake()->image('post_photo.jpg', 600, 600);
+
+        $res = $this->postJson('/api/social/upload-media', [
+            'file' => $file,
+        ]);
+
+        $res->assertStatus(201)
+            ->assertJsonPath('name', 'post_photo.jpg')
+            ->assertJsonPath('type', 'image')
+            ->assertJsonPath('is_video', false);
+
+        $this->assertNotNull($res->json('url'));
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($res->json('path'));
+    }
+
+    public function test_user_can_upload_video_for_social_post()
+    {
+        Sanctum::actingAs($this->userA);
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        $file = \Illuminate\Http\UploadedFile::fake()->create('reel_video.mp4', 5000, 'video/mp4');
+
+        $res = $this->postJson('/api/social/upload-media', [
+            'file' => $file,
+        ]);
+
+        $res->assertStatus(201)
+            ->assertJsonPath('name', 'reel_video.mp4')
+            ->assertJsonPath('type', 'video')
+            ->assertJsonPath('is_video', true);
+
+        $this->assertNotNull($res->json('url'));
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($res->json('path'));
+    }
+
+    public function test_disallowed_media_file_types_are_rejected()
+    {
+        Sanctum::actingAs($this->userA);
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        $file = \Illuminate\Http\UploadedFile::fake()->create('shell.php', 10, 'text/x-php');
+
+        $res = $this->postJson('/api/social/upload-media', [
+            'file' => $file,
+        ]);
+
+        $res->assertStatus(422);
+    }
 }
 

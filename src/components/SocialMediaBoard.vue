@@ -58,7 +58,94 @@ const formatForDateTimeInput = (d) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-// Media handlers
+// Media handlers & Device Upload
+const isUploadingMedia = ref(false)
+const uploadError = ref('')
+const fileInputRef = ref(null)
+const editFileInputRef = ref(null)
+const isDraggingFile = ref(false)
+
+const isVideoUrl = (url) => {
+  if (!url) return false
+  return /\.(mp4|mov|webm|mkv|avi)(\?.*)?$/i.test(url) || url.includes('/videos/') || url.includes('/reel/')
+}
+
+const triggerFileInput = () => {
+  if (fileInputRef.value) {
+    fileInputRef.value.click()
+  }
+}
+
+const triggerEditFileInput = () => {
+  if (editFileInputRef.value) {
+    editFileInputRef.value.click()
+  }
+}
+
+const handleFileUpload = async (event) => {
+  const files = event.target?.files || event.dataTransfer?.files
+  if (!files || !files.length) return
+
+  isUploadingMedia.value = true
+  uploadError.value = ''
+
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      if (file.size > 100 * 1024 * 1024) {
+        uploadError.value = `الملف "${file.name}" أكبر من الحد الأقصى المسموح (100 ميجابايت)`
+        continue
+      }
+      const res = await store.uploadSocialMedia(file)
+      if (res && res.url) {
+        if (!composerForm.value.media_urls.includes(res.url)) {
+          composerForm.value.media_urls.push(res.url)
+        }
+      }
+    }
+  } catch (e) {
+    console.error('فشل رفع الملف', e)
+    uploadError.value = e.message || 'حدث خطأ أثناء رفع الملف، يرجى المحاولة مرة أخرى'
+  } finally {
+    isUploadingMedia.value = false
+    if (fileInputRef.value) {
+      fileInputRef.value.value = ''
+    }
+  }
+}
+
+const handleEditFileUpload = async (event) => {
+  const files = event.target?.files || event.dataTransfer?.files
+  if (!files || !files.length || !editingPost.value) return
+
+  isUploadingMedia.value = true
+  uploadError.value = ''
+
+  try {
+    if (!Array.isArray(editingPost.value.media_urls)) {
+      editingPost.value.media_urls = []
+    }
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      if (file.size > 100 * 1024 * 1024) {
+        uploadError.value = `الملف "${file.name}" أكبر من 100 ميجابايت`
+        continue
+      }
+      const res = await store.uploadSocialMedia(file)
+      if (res && res.url) {
+        editingPost.value.media_urls.push(res.url)
+      }
+    }
+  } catch (e) {
+    uploadError.value = e.message || 'حدث خطأ أثناء رفع الملف'
+  } finally {
+    isUploadingMedia.value = false
+    if (editFileInputRef.value) {
+      editFileInputRef.value.value = ''
+    }
+  }
+}
+
 const addMediaUrl = () => {
   const url = tempMediaUrl.value.trim()
   if (!url) return
@@ -70,6 +157,12 @@ const addMediaUrl = () => {
 
 const removeMediaUrl = (idx) => {
   composerForm.value.media_urls.splice(idx, 1)
+}
+
+const removeEditMediaUrl = (idx) => {
+  if (editingPost.value && Array.isArray(editingPost.value.media_urls)) {
+    editingPost.value.media_urls.splice(idx, 1)
+  }
 }
 
 const togglePlatform = (p) => {
@@ -110,6 +203,7 @@ const openComposer = () => {
     scheduled_at: '',
   }
   tempMediaUrl.value = ''
+  uploadError.value = ''
   isComposerOpen.value = true
 }
 
@@ -401,6 +495,7 @@ const openEditModal = (post) => {
     status: post.status,
     scheduled_at: post.scheduled_at ? formatForDateTimeInput(new Date(post.scheduled_at)) : '',
   }
+  uploadError.value = ''
   isEditModalOpen.value = true
 }
 
@@ -994,14 +1089,29 @@ onUnmounted(() => {
               v-if="post.media_urls && post.media_urls.length"
               class="mt-3 grid grid-cols-2 gap-1.5 rounded-2xl overflow-hidden max-h-36"
             >
-              <img
-                v-for="(img, idx) in post.media_urls.slice(0, 2)"
-                :key="idx"
-                :src="img"
-                alt="Media"
-                class="w-full h-24 object-cover rounded-xl"
-                onerror="this.style.display='none'"
-              />
+              <template v-for="(media, idx) in post.media_urls.slice(0, 2)" :key="idx">
+                <div class="relative w-full h-24 rounded-xl overflow-hidden bg-slate-900">
+                  <video
+                    v-if="isVideoUrl(media)"
+                    :src="media"
+                    controls
+                    class="w-full h-full object-cover"
+                  ></video>
+                  <img
+                    v-else
+                    :src="media"
+                    alt="Media"
+                    class="w-full h-full object-cover"
+                    onerror="this.style.display='none'"
+                  />
+                  <div
+                    v-if="isVideoUrl(media)"
+                    class="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-bold text-white pointer-events-none"
+                  >
+                    🎬 فيديو
+                  </div>
+                </div>
+              </template>
             </div>
 
             <!-- Post Interaction & Analytics Metrics Bar -->
@@ -1674,46 +1784,134 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Media URLs Section -->
-        <div class="space-y-2">
-          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
-            روابط الصور / الفيديو (اختياري):
-          </label>
-          <div class="flex items-center gap-2">
-            <input
-              v-model="tempMediaUrl"
-              type="url"
-              placeholder="https://example.com/image.jpg"
-              class="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
-              dir="ltr"
-              @keydown.enter.prevent="addMediaUrl"
-            />
-            <button
-              type="button"
-              @click="addMediaUrl"
-              class="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded-xl text-xs font-bold cursor-pointer text-slate-700 dark:text-slate-300"
-            >
-              + إضافة
-            </button>
+        <!-- Media Upload & Attachment Section -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+              الوسائط المرفقة (صور أو فيديو):
+            </label>
+            <span class="text-[11px] text-slate-400">
+              يدعم JPG, PNG, WEBP, MP4, MOV (حتى 100 ميجابايت)
+            </span>
           </div>
 
-          <!-- Thumbnails Preview Grid -->
-          <div v-if="composerForm.media_urls.length" class="flex items-center gap-2 flex-wrap pt-1">
-            <div
-              v-for="(url, idx) in composerForm.media_urls"
-              :key="idx"
-              class="relative w-16 h-16 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden group"
-            >
-              <img :src="url" alt="Media preview" class="w-full h-full object-cover" />
-              <button
-                type="button"
-                @click="removeMediaUrl(idx)"
-                class="absolute inset-0 bg-slate-900/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold cursor-pointer"
-              >
-                ✕
-              </button>
+          <!-- Hidden File Input for Device Upload -->
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept="image/*,video/mp4,video/quicktime,video/webm"
+            multiple
+            @change="handleFileUpload"
+            class="hidden"
+          />
+
+          <!-- Drag & Drop / Click to Upload Box -->
+          <div
+            @dragover.prevent="isDraggingFile = true"
+            @dragleave.prevent="isDraggingFile = false"
+            @drop.prevent="onDrop"
+            @click="triggerFileInput"
+            :class="[
+              'border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 group',
+              isDraggingFile
+                ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/40 scale-[1.01]'
+                : 'border-slate-200 dark:border-slate-800 hover:border-violet-500/60 hover:bg-slate-50 dark:hover:bg-slate-850'
+            ]"
+          >
+            <div class="w-11 h-11 rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center text-xl group-hover:scale-110 transition shadow-sm">
+              <span v-if="isUploadingMedia">⏳</span>
+              <span v-else>📷 / 🎬</span>
+            </div>
+
+            <div v-if="isUploadingMedia" class="space-y-1">
+              <p class="text-xs font-bold text-violet-600 dark:text-violet-400 animate-pulse">
+                جاري رفع ومعالجة الملف من جهازك إلى السيرفر...
+              </p>
+              <span class="text-[10px] text-slate-400">يرجى الانتظار لحظات</span>
+            </div>
+            <div v-else class="space-y-1">
+              <p class="text-xs font-bold text-slate-800 dark:text-slate-200">
+                <span class="text-violet-600 dark:text-violet-400 underline font-black">اضغط لاختيار صورة أو فيديو من جهازك</span> أو اسحب الملف وأفلته هنا
+              </p>
+              <p class="text-[10px] text-slate-400">
+                يمكنك رفع صور عالية الدقة أو مقاطع فيديو كاملة وريلز وسيتم حفظها ونشرها مباشرة
+              </p>
             </div>
           </div>
+
+          <!-- Error Alert if upload fails -->
+          <div v-if="uploadError" class="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center justify-between">
+            <span>⚠️ {{ uploadError }}</span>
+            <button type="button" @click="uploadError = ''" class="text-rose-400 hover:text-rose-600 cursor-pointer">✕</button>
+          </div>
+
+          <!-- Previews of Attached Media -->
+          <div v-if="composerForm.media_urls.length" class="space-y-1.5">
+            <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">
+              الوسائط المرفقة للمنشور ({{ composerForm.media_urls.length }}):
+            </span>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              <div
+                v-for="(url, idx) in composerForm.media_urls"
+                :key="idx"
+                class="relative rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-900 group aspect-video"
+              >
+                <!-- Video Preview -->
+                <video
+                  v-if="isVideoUrl(url)"
+                  :src="url"
+                  controls
+                  class="w-full h-full object-cover"
+                ></video>
+                <!-- Image Preview -->
+                <img
+                  v-else
+                  :src="url"
+                  alt="Media preview"
+                  class="w-full h-full object-cover"
+                />
+
+                <!-- Media Type Badge -->
+                <div class="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-[10px] font-bold text-white pointer-events-none">
+                  {{ isVideoUrl(url) ? '🎬 فيديو' : '📷 صورة' }}
+                </div>
+
+                <!-- Delete Button -->
+                <button
+                  type="button"
+                  @click="removeMediaUrl(idx)"
+                  class="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-rose-600/90 text-white flex items-center justify-center text-xs font-bold hover:bg-rose-700 transition cursor-pointer shadow-md"
+                  title="حذف هذا الملف"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Optional URL link toggle -->
+          <details class="text-xs text-slate-500">
+            <summary class="cursor-pointer hover:text-violet-600 font-bold select-none py-1">
+              🔗 أو إضافة رابط صورة/فيديو مباشر من الإنترنت
+            </summary>
+            <div class="flex items-center gap-2 mt-2">
+              <input
+                v-model="tempMediaUrl"
+                type="url"
+                placeholder="https://example.com/video.mp4 أو رابط صورة"
+                class="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
+                dir="ltr"
+                @keydown.enter.prevent="addMediaUrl"
+              />
+              <button
+                type="button"
+                @click="addMediaUrl"
+                class="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded-xl text-xs font-bold cursor-pointer text-slate-700 dark:text-slate-300"
+              >
+                + إضافة
+              </button>
+            </div>
+          </details>
         </div>
 
         <!-- Publishing Mode Selector -->
@@ -2357,6 +2555,61 @@ onUnmounted(() => {
             type="datetime-local"
             class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
           />
+        </div>
+
+        <!-- Edit Post Media Section -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+              الوسائط المرفقة (صور أو فيديو):
+            </label>
+            <button
+              type="button"
+              @click="triggerEditFileInput"
+              class="px-2.5 py-1 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 text-xs font-bold transition cursor-pointer flex items-center gap-1"
+            >
+              <span>+ إضافة من الجهاز</span>
+            </button>
+          </div>
+
+          <input
+            ref="editFileInputRef"
+            type="file"
+            accept="image/*,video/mp4,video/quicktime,video/webm"
+            multiple
+            @change="handleEditFileUpload"
+            class="hidden"
+          />
+
+          <!-- Attached Media Preview -->
+          <div v-if="editingPost.media_urls && editingPost.media_urls.length" class="grid grid-cols-3 gap-2">
+            <div
+              v-for="(url, idx) in editingPost.media_urls"
+              :key="idx"
+              class="relative rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-900 aspect-video group"
+            >
+              <video
+                v-if="isVideoUrl(url)"
+                :src="url"
+                controls
+                class="w-full h-full object-cover"
+              ></video>
+              <img
+                v-else
+                :src="url"
+                alt="Media"
+                class="w-full h-full object-cover"
+              />
+              <button
+                type="button"
+                @click="removeEditMediaUrl(idx)"
+                class="absolute top-1 left-1 w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-bold hover:bg-rose-700 cursor-pointer shadow"
+                title="حذف"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">

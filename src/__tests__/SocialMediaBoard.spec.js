@@ -370,5 +370,27 @@ describe('SocialMediaBoard.vue and Social Media Management Features', () => {
     expect(store.syncSocialPosts).toHaveBeenCalled()
     expect(store.loadSocialAnalytics).toHaveBeenCalledWith('all')
   })
+
+  it('renders device file upload box in composer and handles upload', async () => {
+    store.uploadSocialMedia = vi.fn().mockResolvedValue({
+      url: 'https://example.com/uploaded_video.mp4',
+      name: 'uploaded_video.mp4',
+      type: 'video',
+      is_video: true
+    })
+
+    const wrapper = mount(SocialMediaBoard)
+
+    // Open composer
+    const newPostBtn = wrapper.findAll('button').find(b => b.text().includes('منشور جديد'))
+    await newPostBtn.trigger('click')
+
+    // Expect device upload zone
+    expect(wrapper.text()).toContain('الوسائط المرفقة (صور أو فيديو)')
+    expect(wrapper.text()).toContain('اضغط لاختيار صورة أو فيديو من جهازك')
+
+    const fileInput = wrapper.find('input[type="file"]')
+    expect(fileInput.exists()).toBe(true)
+  })
 })
 

@@ -3749,6 +3749,30 @@ export const store = reactive({
     return false
   },
 
+  async uploadSocialMedia(file) {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const uploadHeaders = {}
+    if (this.token) {
+      uploadHeaders['Authorization'] = `Bearer ${this.token}`
+    }
+    uploadHeaders['Accept'] = 'application/json'
+
+    const res = await fetch(`${this.apiBase}/social/upload-media`, {
+      method: 'POST',
+      headers: uploadHeaders,
+      body: formData
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.message || 'فشل رفع الملف')
+    }
+
+    return await res.json()
+  },
+
   async createSocialPost(postData) {
     const tempId = Date.now()
     const tempPost = {

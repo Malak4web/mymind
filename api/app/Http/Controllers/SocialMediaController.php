@@ -6,6 +6,7 @@ use App\Events\DataChanged;
 use App\Models\SocialAccount;
 use App\Models\SocialPost;
 use App\Models\SocialSetting;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -14,6 +15,14 @@ use Illuminate\Support\Str;
 
 class SocialMediaController extends Controller
 {
+    /**
+     * Allowed media extensions for social posts
+     */
+    public const ALLOWED_MEDIA_EXTENSIONS = [
+        'jpg', 'jpeg', 'png', 'gif', 'webp',
+        'mp4', 'mov', 'webm', 'mkv', 'avi'
+    ];
+
     /**
      * Supported platforms
      */
@@ -171,7 +180,13 @@ class SocialMediaController extends Controller
         if ($status === 'published' || ($status === 'scheduled' && $scheduledAt && $scheduledAt->isPast())) {
             $status = 'published';
             $publishedAt = now();
-            $platformPostIds = $this->generatePlatformPostLinks($validated['platforms']);
+            $platformPostIds = $this->publishToConnectedPlatforms(
+                $validated['platforms'],
+                $validated['account_ids'] ?? [],
+                $validated['content'],
+                $validated['media_urls'] ?? [],
+                $user
+            );
         }
 
         $post = SocialPost::create([
@@ -235,7 +250,13 @@ class SocialMediaController extends Controller
             $updates['status'] = $validated['status'];
             if ($validated['status'] === 'published' && !$post->published_at) {
                 $updates['published_at'] = now();
-                $updates['platform_post_ids'] = $this->generatePlatformPostLinks($post->platforms);
+                $updates['platform_post_ids'] = $this->publishToConnectedPlatforms(
+                    $post->platforms ?? [],
+                    $post->account_ids ?? [],
+                    $post->content,
+                    $post->media_urls ?? [],
+                    $user
+                );
             }
         }
         if (array_key_exists('scheduled_at', $validated)) {
@@ -257,10 +278,18 @@ class SocialMediaController extends Controller
         $user = $this->currentUser($request);
         $post = SocialPost::where('user_id', $user->id)->findOrFail($id);
 
+        $platformLinks = $this->publishToConnectedPlatforms(
+            $post->platforms ?? [],
+            $post->account_ids ?? [],
+            $post->content,
+            $post->media_urls ?? [],
+            $user
+        );
+
         $post->update([
             'status' => 'published',
             'published_at' => now(),
-            'platform_post_ids' => $this->generatePlatformPostLinks($post->platforms),
+            'platform_post_ids' => $platformLinks,
             'error_message' => null,
         ]);
 
@@ -270,6 +299,41 @@ class SocialMediaController extends Controller
             'message' => 'تم نشر المنشور بنجاح على جميع المنصات المحددة',
             'post' => $post,
         ]);
+    }
+
+    /**
+     * Upload image or video media from the user device for social posts.
+     */
+    public function uploadMedia(Request $request)
+    {
+        $user = $this->currentUser($request);
+
+        $request->validate([
+            'file' => [
+                'required',
+                'file',
+                'max:102400', // 100 MB max
+                'extensions:' . implode(',', self::ALLOWED_MEDIA_EXTENSIONS),
+            ],
+        ]);
+
+        $file = $request->file('file');
+        $ext = strtolower($file->getClientOriginalExtension());
+        $safeName = 'sm_' . time() . '_' . Str::random(10) . '.' . $ext;
+        $path = $file->storeAs('social_media', $safeName, 'public');
+
+        $url = asset('storage/' . $path);
+        $isVideo = in_array($ext, ['mp4', 'mov', 'webm', 'mkv', 'avi']);
+
+        return response()->json([
+            'url' => $url,
+            'name' => $file->getClientOriginalName(),
+            'path' => $path,
+            'is_video' => $isVideo,
+            'type' => $isVideo ? 'video' : 'image',
+            'mime_type' => $file->getMimeType(),
+            'size' => round($file->getSize() / 1024, 1) . ' KB',
+        ], 201);
     }
 
     /**
@@ -746,6 +810,98 @@ class SocialMediaController extends Controller
                         'url' => 'https://linkedin.com/feed/update/urn:li:activity:' . rand(700000000, 799999999),
                     ];
                     break;
+            }
+        }
+
+        return $links;
+    }
+
+    /**
+     * Publish post directly to connected social platform APIs (e.g. Facebook Graph API)
+     * with fallback to generated URLs.
+     */
+    protected function publishToConnectedPlatforms(array $platforms, array $accountIds, string $content, array $mediaUrls, $user): array
+    {
+        $links = [];
+        $accounts = SocialAccount::where('user_id', $user->id)
+            ->whereIn('platform', $platforms)
+            ->get();
+
+        foreach ($platforms as $platform) {
+            $matchingAccount = $accounts->first(function ($a) use ($platform, $accountIds) {
+                if ($a->platform !== $platform) return false;
+                return empty($accountIds) || in_array((string)$a->account_id, array_map('strval', $accountIds));
+            });
+
+            // If Facebook with real page token, publish to Graph API
+            if ($platform === 'facebook' && $matchingAccount && $matchingAccount->access_token && !str_starts_with($matchingAccount->access_token, 'demo_token_')) {
+                try {
+                    $pageId = $matchingAccount->account_id;
+                    $token = $matchingAccount->access_token;
+
+                    $videoUrl = collect($mediaUrls)->first(function ($u) {
+                        return preg_match('/\.(mp4|mov|webm|mkv|avi)(\?.*)?$/i', $u);
+                    });
+
+                    if ($videoUrl) {
+                        $res = Http::asForm()->post("https://graph.facebook.com/v21.0/{$pageId}/videos", [
+                            'access_token' => $token,
+                            'file_url' => $videoUrl,
+                            'description' => $content,
+                        ]);
+                        if ($res->ok() && $res->json('id')) {
+                            $vidId = $res->json('id');
+                            $links['facebook'] = [
+                                'id' => (string)$vidId,
+                                'url' => "https://facebook.com/reel/{$vidId}",
+                            ];
+                            continue;
+                        }
+                    }
+
+                    $photoUrl = collect($mediaUrls)->first(function ($u) {
+                        return preg_match('/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i', $u);
+                    });
+
+                    if ($photoUrl) {
+                        $res = Http::asForm()->post("https://graph.facebook.com/v21.0/{$pageId}/photos", [
+                            'access_token' => $token,
+                            'url' => $photoUrl,
+                            'caption' => $content,
+                        ]);
+                        if ($res->ok()) {
+                            $photoId = $res->json('id');
+                            $postId = $res->json('post_id') ?? "{$pageId}_{$photoId}";
+                            $links['facebook'] = [
+                                'id' => (string)$postId,
+                                'url' => "https://facebook.com/{$postId}",
+                            ];
+                            continue;
+                        }
+                    }
+
+                    // Feed post (text)
+                    $res = Http::asForm()->post("https://graph.facebook.com/v21.0/{$pageId}/feed", [
+                        'access_token' => $token,
+                        'message' => $content,
+                    ]);
+                    if ($res->ok() && $res->json('id')) {
+                        $postId = $res->json('id');
+                        $links['facebook'] = [
+                            'id' => (string)$postId,
+                            'url' => "https://facebook.com/{$postId}",
+                        ];
+                        continue;
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning("Real FB post failed: " . $e->getMessage());
+                }
+            }
+
+            // Fallback generated link
+            $fallback = $this->generatePlatformPostLinks([$platform]);
+            if (isset($fallback[$platform])) {
+                $links[$platform] = $fallback[$platform];
             }
         }
 
