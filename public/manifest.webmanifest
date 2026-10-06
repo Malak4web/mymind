@@ -1,0 +1,19 @@
+{
+  "name": "عقلي · mymind",
+  "short_name": "mymind",
+  "description": "منصة إدارة المهام والمشاريع والعادات الشخصية في مكان واحد",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#7c3aed",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

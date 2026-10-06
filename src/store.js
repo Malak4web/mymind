@@ -2097,34 +2097,84 @@ export const store = reactive({
     this.dismissToast(id)
   },
 
-  // Real-time synchronization via Pusher WebSocket
+  // Real-time synchronization via Pusher WebSocket & Multi-Device Polling
   _echoChannel: null,
   _syncListenersAttached: false,
+  _syncInterval: null,
 
   startRealtimeSync() {
-    if (this._echoChannel) return
     if (!this.currentUser || !this.currentUser.id) return
 
     const userId = this.currentUser.id
 
-    // Initialize Echo WebSocket connection
+    // Initialize Echo WebSocket connection if not already active
+    if (!this._echoChannel) {
+      try {
+        const echo = initEcho(this.token, this.apiBase)
+
+        this._echoChannel = echo.private(`user.${userId}`)
+          .listen('.data.changed', (event) => {
+            this._handleRealtimeEvent(event)
+          })
+
+        console.log(`[Pusher] ✅ متصل بقناة user.${userId}`)
+      } catch (e) {
+        console.error('[Pusher] ❌ فشل الاتصال بـ Pusher', e)
+      }
+    }
+
+    // Attach multi-device sync lifecycle listeners (focus, visibility, online)
+    if (!this._syncListenersAttached && typeof window !== 'undefined') {
+      this._syncListenersAttached = true
+
+      window.addEventListener('focus', () => {
+        this.syncRealtimeData(true)
+      })
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.syncRealtimeData(true)
+        }
+      })
+
+      window.addEventListener('online', () => {
+        this.syncRealtimeData(true)
+        if (!this._echoChannel) {
+          this.startRealtimeSync()
+        }
+      })
+
+      if (this._syncInterval) clearInterval(this._syncInterval)
+      this._syncInterval = setInterval(() => {
+        if (this.isAuthenticated && typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          this.syncRealtimeData(true)
+        }
+      }, 15000)
+    }
+  },
+
+  async syncRealtimeData(isSilent = true) {
+    if (!this.isAuthenticated || !this.token) return
     try {
-      const echo = initEcho(this.token, this.apiBase)
-
-      this._echoChannel = echo.private(`user.${userId}`)
-        .listen('.data.changed', (event) => {
-          this._handleRealtimeEvent(event)
-        })
-
-      console.log(`[Pusher] ✅ متصل بقناة user.${userId}`)
+      if (this.activeProjectId) {
+        await this.loadTasks(isSilent)
+      }
+      await this.loadProjects(isSilent)
+      await this.loadNotifications(isSilent)
+      await this.loadDailyTasks(isSilent)
+      await this.loadHabits(isSilent)
     } catch (e) {
-      console.error('[Pusher] ❌ فشل الاتصال بـ Pusher', e)
+      // Ignore background fetch errors
     }
   },
 
   stopRealtimeSync() {
     if (this._echoChannel) {
       this._echoChannel = null
+    }
+    if (this._syncInterval) {
+      clearInterval(this._syncInterval)
+      this._syncInterval = null
     }
     disconnectEcho()
   },

@@ -33,3 +33,9 @@ verify_suite.cjs
 
 # Impeccable design-review session artifacts (tool state, not source)
 .impeccable/
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/schemas/
+dist-desktop/
+

@@ -10,7 +10,10 @@
     "test": "vitest run --passWithNoTests --bail=1",
     "test:watch": "vitest",
     "lint:classes": "node scripts/fix-dead-classes.mjs --check",
-    "fix:classes": "node scripts/fix-dead-classes.mjs"
+    "fix:classes": "node scripts/fix-dead-classes.mjs",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build"
   },
   "dependencies": {
     "laravel-echo": "^2.4.0",
@@ -19,6 +22,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.2",
+    "@tauri-apps/cli": "^2.12.1",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/test-utils": "^2.4.6",
     "jsdom": "^29.0.2",
