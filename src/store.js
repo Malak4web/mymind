@@ -3687,6 +3687,7 @@ export const store = reactive({
       const params = new URLSearchParams()
       if (filters.status && filters.status !== 'all') params.append('status', filters.status)
       if (filters.platform && filters.platform !== 'all') params.append('platform', filters.platform)
+      if (filters.account_id && filters.account_id !== 'all') params.append('account_id', filters.account_id)
       if (filters.search) params.append('search', filters.search)
 
       const url = `${this.apiBase}/social/posts${params.toString() ? '?' + params.toString() : ''}`
@@ -3708,7 +3709,7 @@ export const store = reactive({
     try {
       const params = new URLSearchParams()
       if (platform && platform !== 'all') params.append('platform', platform)
-      if (accountId) params.append('account_id', accountId)
+      if (accountId && accountId !== 'all') params.append('account_id', accountId)
 
       const url = `${this.apiBase}/social/analytics${params.toString() ? '?' + params.toString() : ''}`
       const res = await fetch(url, { headers: this.getAuthHeaders() })

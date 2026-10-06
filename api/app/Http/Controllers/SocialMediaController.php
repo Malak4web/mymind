@@ -140,6 +140,12 @@ class SocialMediaController extends Controller
             $query->whereJsonContains('platforms', $platform);
         }
 
+        // Filter by account_id
+        if ($request->filled('account_id') && $request->query('account_id') !== 'all') {
+            $accountId = (string) $request->query('account_id');
+            $query->whereJsonContains('account_ids', $accountId);
+        }
+
         // Search in content
         if ($request->filled('search')) {
             $term = '%' . $request->query('search') . '%';
@@ -602,7 +608,7 @@ class SocialMediaController extends Controller
         if ($platformFilter !== 'all') {
             $accountsQuery->where('platform', $platformFilter);
         }
-        if ($accountFilter) {
+        if ($accountFilter && $accountFilter !== 'all') {
             $accountsQuery->where('account_id', $accountFilter);
         }
 
@@ -631,7 +637,7 @@ class SocialMediaController extends Controller
         if ($platformFilter !== 'all') {
             $postsQuery->whereJsonContains('platforms', $platformFilter);
         }
-        if ($accountFilter) {
+        if ($accountFilter && $accountFilter !== 'all') {
             $postsQuery->whereJsonContains('account_ids', $accountFilter);
         }
 

@@ -392,5 +392,120 @@ describe('SocialMediaBoard.vue and Social Media Management Features', () => {
     const fileInput = wrapper.find('input[type="file"]')
     expect(fileInput.exists()).toBe(true)
   })
+
+  it('allows clicking a connected account card to isolate its posts and analytics, and restores on clear', async () => {
+    store.socialPosts = [
+      {
+        id: 101,
+        content: 'منشور حصري لصفحة فيسبوك 🚀',
+        media_urls: [],
+        platforms: ['facebook'],
+        account_ids: ['fb_page_101'],
+        status: 'published',
+        published_at: new Date().toISOString(),
+      },
+      {
+        id: 102,
+        content: 'منشور حصري لحساب انستجرام 📸',
+        media_urls: [],
+        platforms: ['instagram'],
+        account_ids: ['ig_acc_202'],
+        status: 'published',
+        published_at: new Date().toISOString(),
+      },
+    ]
+
+    store.socialAnalytics = {
+      summary: {
+        total_pages: 2,
+        total_posts: 2,
+        total_followers: 57500,
+        total_likes: 200,
+        total_comments: 50,
+        total_shares: 20,
+        total_interactions: 270,
+        average_engagement_rate: 6.0,
+        total_reach: 1500,
+        total_impressions: 1500,
+      },
+      pages: [
+        {
+          account_id: 'fb_page_101',
+          account_name: 'صفحة الشركة الرسمية',
+          platform: 'facebook',
+          followers_count: 12500,
+          posts_count: 1,
+          total_likes: 120,
+          total_comments: 30,
+          total_shares: 15,
+          total_interactions: 165,
+          engagement_rate: 5.5,
+          total_views: 900,
+        },
+        {
+          account_id: 'ig_acc_202',
+          account_name: 'انستجرام الأعمال',
+          platform: 'instagram',
+          followers_count: 45000,
+          posts_count: 1,
+          total_likes: 80,
+          total_comments: 20,
+          total_shares: 5,
+          total_interactions: 105,
+          engagement_rate: 6.5,
+          total_views: 600,
+        },
+      ],
+    }
+
+    const wrapper = mount(SocialMediaBoard)
+
+    // Initially both posts are shown
+    expect(wrapper.text()).toContain('منشور حصري لصفحة فيسبوك 🚀')
+    expect(wrapper.text()).toContain('منشور حصري لحساب انستجرام 📸')
+
+    // Find card for Facebook page and click it
+    const fbHeading = wrapper.findAll('h4').find(h => h.text().includes('صفحة الشركة الرسمية'))
+    expect(fbHeading).toBeDefined()
+    const fbCard = fbHeading.element.closest('.cursor-pointer')
+    expect(fbCard).toBeTruthy()
+    await fbCard.click()
+
+    // Now only Facebook page post should appear
+    expect(wrapper.text()).toContain('منشور حصري لصفحة فيسبوك 🚀')
+    expect(wrapper.text()).not.toContain('منشور حصري لحساب انستجرام 📸')
+
+    // Expect active page banner and badge
+    expect(wrapper.text()).toContain('يتم الآن عرض منشورات وتحليلات هذه الصفحة فقط بشكل منفصل')
+    expect(wrapper.text()).toContain('الصفحة المعروضة حالياً')
+
+    // Click "عرض كل الصفحات" to clear the filter
+    const clearBtn = wrapper.findAll('button').find(b => b.text().includes('عرض كل الصفحات'))
+    expect(clearBtn).toBeDefined()
+    await clearBtn.trigger('click')
+
+    // Both posts should reappear
+    expect(wrapper.text()).toContain('منشور حصري لصفحة فيسبوك 🚀')
+    expect(wrapper.text()).toContain('منشور حصري لحساب انستجرام 📸')
+  })
+
+  it('pre-populates focused account when opening post composer from isolated page view', async () => {
+    const wrapper = mount(SocialMediaBoard)
+
+    // Focus on Instagram account
+    const igHeading = wrapper.findAll('h4').find(h => h.text().includes('انستجرام الأعمال'))
+    expect(igHeading).toBeDefined()
+    const igCard = igHeading.element.closest('.cursor-pointer')
+    await igCard.click()
+
+    // Click "نشر لهذه الصفحة" in the isolation banner
+    const postForPageBtn = wrapper.findAll('button').find(b => b.text().includes('نشر لهذه الصفحة'))
+    expect(postForPageBtn).toBeDefined()
+    await postForPageBtn.trigger('click')
+
+    // Expect composer modal open with Instagram pre-selected
+    expect(wrapper.text()).toContain('إنشاء وجدولة منشور جديد')
+    expect(wrapper.text()).toContain('1 صفحة محددة')
+  })
 })
 

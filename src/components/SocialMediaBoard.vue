@@ -5,6 +5,7 @@ import { store } from '../store'
 // View & Filter States
 const currentTab = ref('all') // 'all' | 'scheduled' | 'published' | 'draft' | 'analytics'
 const selectedPlatformFilter = ref('all') // 'all' | 'facebook' | 'instagram' | 'youtube' | 'linkedin'
+const selectedAccountId = ref('all') // 'all' | string account_id (e.g. '1266443159896214')
 const searchQuery = ref('')
 const isSyncingPosts = ref(false)
 const selectedAnalyticsPlatform = ref('all') // 'all' | 'facebook' | 'instagram'
@@ -212,13 +213,70 @@ const addHashtag = (tag) => {
   composerForm.value.content += tag + ' '
 }
 
+// Active Account Selection & Helpers
+const selectedAccount = computed(() => {
+  if (!selectedAccountId.value || selectedAccountId.value === 'all') return null
+  return (store.socialAccounts || []).find(a => String(a.account_id) === String(selectedAccountId.value)) || null
+})
+
+const handleSelectAccount = (acc) => {
+  if (!acc) return
+  const idStr = String(acc.account_id)
+  if (String(selectedAccountId.value) === idStr) {
+    selectedAccountId.value = 'all'
+  } else {
+    selectedAccountId.value = idStr
+  }
+}
+
+const handleClearAccountFilter = () => {
+  selectedAccountId.value = 'all'
+}
+
+const getAccountForPost = (post) => {
+  if (post && post.account_ids && Array.isArray(post.account_ids) && post.account_ids.length > 0) {
+    const accId = String(post.account_ids[0])
+    return (store.socialAccounts || []).find(a => String(a.account_id) === accId) || null
+  }
+  return null
+}
+
+const toggleComposerAccount = (acc) => {
+  if (!acc) return
+  const idStr = String(acc.account_id)
+  const idx = composerForm.value.account_ids.map(String).indexOf(idStr)
+  if (idx === -1) {
+    composerForm.value.account_ids.push(acc.account_id)
+    if (!composerForm.value.platforms.includes(acc.platform)) {
+      composerForm.value.platforms.push(acc.platform)
+    }
+  } else {
+    composerForm.value.account_ids.splice(idx, 1)
+  }
+}
+
 // Open Composer
-const openComposer = () => {
+const openComposer = (preselectedAccountId = null) => {
+  const targetAccId = (typeof preselectedAccountId === 'string' && preselectedAccountId)
+    ? preselectedAccountId
+    : (selectedAccountId.value !== 'all' ? selectedAccountId.value : null)
+  let initialPlatforms = ['facebook']
+  let initialAccountIds = []
+
+  if (targetAccId) {
+    const acc = (store.socialAccounts || []).find(a => String(a.account_id) === String(targetAccId))
+    if (acc) {
+      initialPlatforms = [acc.platform]
+      initialAccountIds = [acc.account_id]
+      activePreviewPlatform.value = acc.platform
+    }
+  }
+
   composerForm.value = {
     content: '',
     media_urls: [],
-    platforms: ['facebook'],
-    account_ids: [],
+    platforms: initialPlatforms,
+    account_ids: initialAccountIds,
     publishMode: 'now',
     scheduled_at: '',
   }
@@ -569,23 +627,46 @@ const goToSocialSettings = () => {
 }
 
 // Analytics Data & Computed Helpers
-const analyticsSummary = computed(() => store.socialAnalytics?.summary || {
-  total_pages: 0,
-  total_posts: 0,
-  total_followers: 0,
-  total_likes: 0,
-  total_comments: 0,
-  total_shares: 0,
-  total_interactions: 0,
-  average_engagement_rate: 0,
-  total_reach: 0,
-  total_impressions: 0,
+const analyticsSummary = computed(() => {
+  if (selectedAccountId.value && selectedAccountId.value !== 'all') {
+    const page = (store.socialAnalytics?.pages || []).find(p => String(p.account_id) === String(selectedAccountId.value))
+    if (page) {
+      return {
+        total_pages: 1,
+        total_posts: page.posts_count || 0,
+        total_followers: page.followers_count || 0,
+        total_likes: page.total_likes || 0,
+        total_comments: page.total_comments || 0,
+        total_shares: page.total_shares || 0,
+        total_interactions: page.total_interactions || 0,
+        average_engagement_rate: page.engagement_rate || 0,
+        total_reach: page.total_views || 0,
+        total_impressions: page.total_views || 0,
+      }
+    }
+  }
+  return store.socialAnalytics?.summary || {
+    total_pages: 0,
+    total_posts: 0,
+    total_followers: 0,
+    total_likes: 0,
+    total_comments: 0,
+    total_shares: 0,
+    total_interactions: 0,
+    average_engagement_rate: 0,
+    total_reach: 0,
+    total_impressions: 0,
+  }
 })
 
 const analyticsPages = computed(() => {
-  const pages = store.socialAnalytics?.pages || []
-  if (selectedAnalyticsPlatform.value === 'all') return pages
-  return pages.filter(p => p.platform === selectedAnalyticsPlatform.value)
+  let pages = store.socialAnalytics?.pages || []
+  if (selectedAccountId.value && selectedAccountId.value !== 'all') {
+    pages = pages.filter(p => String(p.account_id) === String(selectedAccountId.value))
+  } else if (selectedAnalyticsPlatform.value !== 'all') {
+    pages = pages.filter(p => p.platform === selectedAnalyticsPlatform.value)
+  }
+  return pages
 })
 
 const handleSyncExternalPosts = async () => {
@@ -593,7 +674,11 @@ const handleSyncExternalPosts = async () => {
   try {
     const ok = await store.syncSocialPosts()
     if (ok) {
-      await store.loadSocialAnalytics(selectedAnalyticsPlatform.value)
+      if (selectedAccountId.value && selectedAccountId.value !== 'all') {
+        await store.loadSocialAnalytics(selectedAnalyticsPlatform.value, selectedAccountId.value)
+      } else {
+        await store.loadSocialAnalytics(selectedAnalyticsPlatform.value)
+      }
     }
   } catch (e) {
     console.error('فشل مزامنة المنشورات', e)
@@ -604,8 +689,30 @@ const handleSyncExternalPosts = async () => {
 
 const handleFilterAnalyticsPlatform = async (p) => {
   selectedAnalyticsPlatform.value = p
-  await store.loadSocialAnalytics(p)
+  if (selectedAccountId.value && selectedAccountId.value !== 'all') {
+    await store.loadSocialAnalytics(p, selectedAccountId.value)
+  } else {
+    await store.loadSocialAnalytics(p)
+  }
 }
+
+// Filtered base posts by selected account
+const accountFilteredBasePosts = computed(() => {
+  let list = store.socialPosts || []
+  if (selectedAccountId.value && selectedAccountId.value !== 'all') {
+    list = list.filter(p => {
+      const accIds = p.account_ids || []
+      if (Array.isArray(accIds) && accIds.length > 0) {
+        return accIds.map(String).includes(String(selectedAccountId.value))
+      }
+      if (selectedAccount.value) {
+        return Array.isArray(p.platforms) && p.platforms.includes(selectedAccount.value.platform)
+      }
+      return false
+    })
+  }
+  return list
+})
 
 // Computed Posts List with Filters
 const filteredPosts = computed(() => {
@@ -613,7 +720,7 @@ const filteredPosts = computed(() => {
     return []
   }
 
-  let list = store.socialPosts || []
+  let list = accountFilteredBasePosts.value
 
   // Tab filter
   if (currentTab.value === 'scheduled') {
@@ -640,13 +747,13 @@ const filteredPosts = computed(() => {
 
 // Counts
 const counts = computed(() => {
-  const posts = store.socialPosts || []
+  const posts = accountFilteredBasePosts.value
   return {
     all: posts.length,
     scheduled: posts.filter(p => p.status === 'scheduled').length,
     published: posts.filter(p => p.status === 'published').length,
     draft: posts.filter(p => p.status === 'draft').length,
-    analytics: (store.socialAnalytics?.pages || []).length,
+    analytics: analyticsPages.value.length,
     accounts: (store.socialAccounts || []).length,
   }
 })
@@ -761,7 +868,7 @@ onUnmounted(() => {
 
       <div class="flex items-center gap-2.5 flex-wrap">
         <button
-          @click="openComposer"
+          @click="openComposer()"
           class="px-4 py-2.5 rounded-2xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-extrabold text-xs shadow-md shadow-violet-500/20 hover:opacity-95 active:scale-95 transition cursor-pointer flex items-center gap-1.5"
         >
           <span>✍️</span>
@@ -849,13 +956,33 @@ onUnmounted(() => {
 
     <!-- Connected Accounts Section -->
     <div class="space-y-3">
-      <div class="flex items-center justify-between">
-        <h3 class="text-sm font-black text-slate-800 dark:text-slate-200">
-          الحسابات والصفحات المربوطة
-        </h3>
-        <span class="text-xs text-slate-400">
-          {{ store.socialAccounts.length }} حسابات مسجلة
-        </span>
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <h3 class="text-sm font-black text-slate-800 dark:text-slate-200">
+            الحسابات والصفحات المربوطة
+          </h3>
+          <span class="text-xs text-slate-400">
+            ({{ store.socialAccounts.length }} صفحة/حساب)
+          </span>
+          <span v-if="selectedAccount" class="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-violet-600 dark:text-violet-400">
+            • تم تحديد: {{ selectedAccount.account_name }}
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            v-if="selectedAccountId !== 'all'"
+            @click="handleClearAccountFilter"
+            class="px-3 py-1 rounded-xl bg-violet-100 dark:bg-violet-950/60 hover:bg-violet-200 dark:hover:bg-violet-900/60 text-violet-700 dark:text-violet-300 font-extrabold text-xs transition cursor-pointer flex items-center gap-1.5"
+            title="إلغاء التصفية وعرض كل الصفحات"
+          >
+            <span>✕</span>
+            <span>عرض كل الصفحات معاً</span>
+          </button>
+          <span v-else class="text-[11px] text-slate-400 hidden sm:inline">
+            اضغط على أي صفحة لعزل منشوراتها وإحصائياتها
+          </span>
+        </div>
       </div>
 
       <!-- Accounts Grid -->
@@ -865,7 +992,13 @@ onUnmounted(() => {
         <div
           v-for="acc in store.socialAccounts"
           :key="acc.id"
-          class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm relative group hover:border-violet-500/40 transition"
+          @click="handleSelectAccount(acc)"
+          :class="[
+            'rounded-3xl p-4 shadow-sm relative group transition cursor-pointer select-none',
+            String(selectedAccountId) === String(acc.account_id)
+              ? 'border-2 border-violet-600 bg-violet-50/80 dark:bg-violet-950/50 ring-4 ring-violet-500/20 shadow-md shadow-violet-500/10'
+              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-violet-500/50 hover:shadow-md'
+          ]"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="flex items-center gap-2.5">
@@ -895,7 +1028,7 @@ onUnmounted(() => {
             </div>
 
             <button
-              @click="handleDisconnect(acc)"
+              @click.stop="handleDisconnect(acc)"
               class="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-700 p-1.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/30 transition text-xs cursor-pointer"
               title="فصل الحساب"
             >
@@ -904,10 +1037,21 @@ onUnmounted(() => {
           </div>
 
           <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
-            <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              متصل وجاهز
+            <span
+              v-if="String(selectedAccountId) === String(acc.account_id)"
+              class="inline-flex items-center gap-1 text-violet-600 dark:text-violet-400 font-black"
+            >
+              <span class="w-2 h-2 rounded-full bg-violet-600 animate-pulse"></span>
+              الصفحة المعروضة حالياً
             </span>
+            <span
+              v-else
+              class="inline-flex items-center gap-1 text-slate-400 group-hover:text-violet-600 font-bold transition"
+            >
+              <span>عرض هذه الصفحة</span>
+              <span>←</span>
+            </span>
+
             <span v-if="acc.followers_count" class="text-slate-400 font-medium">
               {{ Number(acc.followers_count).toLocaleString() }} متابع
             </span>
@@ -925,6 +1069,73 @@ onUnmounted(() => {
           <span class="text-xs font-bold">ربط حساب / صفحة جديدة</span>
         </button>
 
+      </div>
+    </div>
+
+    <!-- Active Isolated Page Banner -->
+    <div
+      v-if="selectedAccount"
+      class="bg-gradient-to-l from-violet-600/15 via-indigo-600/10 to-transparent border-2 border-violet-500/50 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-fade-in"
+    >
+      <div class="flex items-center gap-3.5 min-w-0">
+        <div
+          v-if="selectedAccount.avatar_url"
+          class="w-12 h-12 rounded-2xl bg-cover bg-center border-2 border-violet-500 shrink-0 shadow-sm"
+          :style="{ backgroundImage: `url(${selectedAccount.avatar_url})` }"
+        ></div>
+        <div
+          v-else
+          :class="[
+            'w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-white text-base shrink-0 shadow-sm',
+            getPlatformMeta(selectedAccount.platform).color
+          ]"
+        >
+          {{ getPlatformMeta(selectedAccount.platform).icon }}
+        </div>
+
+        <div class="truncate">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-violet-600 text-white">
+              ✓ صفحة محددة
+            </span>
+            <span
+              :class="[
+                'px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white',
+                getPlatformMeta(selectedAccount.platform).color
+              ]"
+            >
+              {{ getPlatformMeta(selectedAccount.platform).name }}
+            </span>
+            <span v-if="selectedAccount.followers_count" class="text-xs text-slate-500 dark:text-slate-400 font-bold">
+              • {{ Number(selectedAccount.followers_count).toLocaleString() }} متابع
+            </span>
+          </div>
+          <h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100 truncate mt-1">
+            {{ selectedAccount.account_name }}
+          </h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            يتم الآن عرض منشورات وتحليلات هذه الصفحة فقط بشكل منفصل بدون دمج مع باقي الصفحات
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+        <button
+          @click="openComposer(selectedAccount.account_id)"
+          class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs shadow-sm transition cursor-pointer flex items-center gap-1.5"
+        >
+          <span>✍️</span>
+          <span>نشر لهذه الصفحة</span>
+        </button>
+
+        <button
+          @click="handleClearAccountFilter"
+          class="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition cursor-pointer flex items-center gap-1.5"
+          title="عرض كل الصفحات معاً"
+        >
+          <span>✕</span>
+          <span>عرض كل الصفحات</span>
+        </button>
       </div>
     </div>
 
@@ -1051,7 +1262,7 @@ onUnmounted(() => {
           يمكنك البدء بكتابة محتوى جديد وجدولته أو نشره فوراً إلى جميع صفحاتك وحساباتك بضغطة واحدة.
         </p>
         <button
-          @click="openComposer"
+          @click="openComposer()"
           class="mt-4 px-4 py-2 rounded-xl bg-violet-600 text-white font-bold text-xs shadow-sm hover:bg-violet-700 transition cursor-pointer"
         >
           إنشاء أول منشور الآن
@@ -1067,25 +1278,39 @@ onUnmounted(() => {
           class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm flex flex-col justify-between space-y-4 hover:border-violet-500/30 transition group"
         >
           <div>
-            <!-- Post Header: Platforms & Status -->
+            <!-- Post Header: Platforms, Target Page & Status -->
             <div class="flex items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800/80">
-              <!-- Platforms Icons -->
-              <div class="flex items-center gap-1.5">
+              <!-- Platforms Icons & Target Page -->
+              <div class="flex items-center gap-1.5 flex-wrap min-w-0">
                 <span
                   v-for="p in post.platforms"
                   :key="p"
                   :class="[
-                    'w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shadow-xs',
+                    'w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shadow-xs shrink-0',
                     getPlatformMeta(p).color
                   ]"
                   :title="getPlatformMeta(p).name"
                 >
                   {{ getPlatformMeta(p).icon }}
                 </span>
+
+                <!-- Target Page Badge if identified -->
+                <div
+                  v-if="getAccountForPost(post)"
+                  class="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 truncate max-w-[150px]"
+                  :title="getAccountForPost(post).account_name"
+                >
+                  <img
+                    v-if="getAccountForPost(post).avatar_url"
+                    :src="getAccountForPost(post).avatar_url"
+                    class="w-3.5 h-3.5 rounded-full object-cover shrink-0"
+                  />
+                  <span class="truncate">{{ getAccountForPost(post).account_name }}</span>
+                </div>
               </div>
 
               <!-- Status Badge -->
-              <div>
+              <div class="shrink-0">
                 <span
                   v-if="post.status === 'published'"
                   class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
@@ -1765,6 +1990,53 @@ onUnmounted(() => {
               </span>
               <span>{{ getPlatformMeta(p).name }}</span>
             </button>
+          </div>
+        </div>
+
+        <!-- Target Connected Pages & Accounts -->
+        <div v-if="store.socialAccounts && store.socialAccounts.length" class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+              الصفحات المستهدفة للنشر:
+            </label>
+            <span class="text-[11px] text-slate-400">
+              {{ composerForm.account_ids.length ? `${composerForm.account_ids.length} صفحة محددة` : 'النشر لكافة صفحات المنصات المختارة' }}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto p-1.5 border border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-950/40">
+            <div
+              v-for="acc in store.socialAccounts"
+              :key="acc.id"
+              @click="toggleComposerAccount(acc)"
+              :class="[
+                'p-2 rounded-xl border transition flex items-center justify-between gap-2 cursor-pointer text-xs select-none',
+                composerForm.account_ids.map(String).includes(String(acc.account_id))
+                  ? 'border-violet-600 bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 font-bold shadow-xs'
+                  : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-violet-300'
+              ]"
+            >
+              <div class="flex items-center gap-2 truncate">
+                <img
+                  v-if="acc.avatar_url"
+                  :src="acc.avatar_url"
+                  class="w-6 h-6 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                />
+                <span
+                  v-else
+                  :class="[
+                    'w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shrink-0',
+                    getPlatformMeta(acc.platform).color
+                  ]"
+                >
+                  {{ getPlatformMeta(acc.platform).icon }}
+                </span>
+                <span class="truncate text-xs">{{ acc.account_name }}</span>
+              </div>
+              <span class="text-xs font-bold shrink-0">
+                {{ composerForm.account_ids.map(String).includes(String(acc.account_id)) ? '✓' : '＋' }}
+              </span>
+            </div>
           </div>
         </div>
 
