@@ -3583,18 +3583,85 @@ export const store = reactive({
   },
 
   async loadAvailablePages(platform = 'facebook') {
-    if (!this.token) return []
+    if (!this.token) return { needs_login: true, pages: [] }
     try {
       const res = await fetch(`${this.apiBase}/social/available-pages?platform=${platform}`, {
+        headers: this.getAuthHeaders()
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data)) {
+          return { needs_login: false, pages: data }
+        }
+        return data
+      }
+    } catch (e) {
+      console.error('فشل جلب الصفحات المتاحة', e)
+    }
+    return { needs_login: true, pages: [] }
+  },
+
+  async getSocialOAuthRedirectUrl(platform = 'facebook') {
+    if (!this.token) return null
+    try {
+      const res = await fetch(`${this.apiBase}/social/oauth/${platform}/redirect`, {
+        headers: this.getAuthHeaders()
+      })
+      const data = await res.json()
+      if (res.ok) {
+        return data
+      }
+      return { error: data.error || 'error', message: data.message || 'تعذر بدء تسجيل الدخول' }
+    } catch (e) {
+      return { error: 'network_error', message: 'خطأ في الاتصال بالخادم' }
+    }
+  },
+
+  async checkSocialAuthStatus(platform = 'facebook') {
+    if (!this.token) return { is_authenticated: false, has_app_credentials: false }
+    try {
+      const res = await fetch(`${this.apiBase}/social/oauth/${platform}/status`, {
         headers: this.getAuthHeaders()
       })
       if (res.ok) {
         return await res.json()
       }
     } catch (e) {
-      console.error('فشل جلب الصفحات المتاحة', e)
+      console.error('فشل فحص حالة تسجيل الدخول', e)
     }
-    return []
+    return { is_authenticated: false, has_app_credentials: false }
+  },
+
+  async socialDemoLogin(platform = 'facebook', token = null) {
+    if (!this.token) return false
+    try {
+      const res = await fetch(`${this.apiBase}/social/oauth/${platform}/demo-login`, {
+        method: 'POST',
+        headers: {
+          ...this.getAuthHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ access_token: token })
+      })
+      return res.ok
+    } catch (e) {
+      console.error('فشل تسجيل الدخول', e)
+      return false
+    }
+  },
+
+  async socialLogout(platform = 'facebook') {
+    if (!this.token) return false
+    try {
+      const res = await fetch(`${this.apiBase}/social/oauth/${platform}/logout`, {
+        method: 'POST',
+        headers: this.getAuthHeaders()
+      })
+      return res.ok
+    } catch (e) {
+      console.error('فشل تسجيل الخروج', e)
+      return false
+    }
   },
 
   async loadSocialPosts(isSilent = false, filters = {}) {

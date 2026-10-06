@@ -180,18 +180,27 @@ describe('SocialMediaBoard.vue and Social Media Management Features', () => {
     expect(fbAppIdInput.element.value).toBe('12345')
   })
 
-  it('opens connect modal, discovers available pages, and connects with 1-click', async () => {
-    store.loadAvailablePages = vi.fn().mockResolvedValue([
-      {
-        account_id: 'fb_page_discovered_99',
-        account_name: 'صفحة متجري الذكي',
-        account_username: 'smart_store',
-        avatar_url: '',
-        category: 'تسوق وتجارة',
-        followers_count: 8900,
-        is_connected: false,
-      }
-    ])
+  it('opens connect modal, requires login, discovers available pages, and connects with 1-click', async () => {
+    store.checkSocialAuthStatus = vi.fn()
+      .mockResolvedValueOnce({ is_authenticated: false, has_app_credentials: false })
+      .mockResolvedValue({ is_authenticated: true, has_app_credentials: true })
+
+    store.socialDemoLogin = vi.fn().mockResolvedValue(true)
+
+    store.loadAvailablePages = vi.fn().mockResolvedValue({
+      needs_login: false,
+      pages: [
+        {
+          account_id: 'fb_page_discovered_99',
+          account_name: 'صفحة متجري الذكي',
+          account_username: 'smart_store',
+          avatar_url: '',
+          category: 'تسوق وتجارة',
+          followers_count: 8900,
+          is_connected: false,
+        }
+      ]
+    })
     store.connectSocialAccount = vi.fn().mockResolvedValue({
       id: 99,
       platform: 'facebook',
@@ -205,14 +214,25 @@ describe('SocialMediaBoard.vue and Social Media Management Features', () => {
     expect(connectBtn).toBeDefined()
     await connectBtn.trigger('click')
 
-    // Expect store.loadAvailablePages to have been called for facebook
-    expect(store.loadAvailablePages).toHaveBeenCalledWith('facebook')
-
-    // Wait for async discovery
+    // Wait for auth check
     await new Promise(r => setTimeout(r, 20))
     await wrapper.vm.$nextTick()
 
-    // Assert page details rendered in modal
+    // Must show login requirement and NOT show pages yet
+    expect(wrapper.text()).toContain('تسجيل الدخول والتحقق من حسابك')
+    expect(wrapper.text()).toContain('تسجيل الدخول عبر فيسبوك')
+    expect(wrapper.text()).not.toContain('صفحة متجري الذكي')
+
+    // Click Demo Login button
+    const demoLoginBtn = wrapper.findAll('button').find(b => b.text().includes('تسجيل دخول تجريبي'))
+    expect(demoLoginBtn).toBeDefined()
+    await demoLoginBtn.trigger('click')
+
+    // Wait for login and discovery
+    await new Promise(r => setTimeout(r, 20))
+    await wrapper.vm.$nextTick()
+
+    // Now pages must be visible
     expect(wrapper.text()).toContain('صفحة متجري الذكي')
     expect(wrapper.text()).toContain('8,900 متابع')
     expect(wrapper.text()).toContain('تسوق وتجارة')

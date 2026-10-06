@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { store } from '../store'
 
 // View & Filter States
@@ -115,25 +115,128 @@ const openComposer = () => {
 const selectedConnectPlatform = ref('facebook')
 const availablePages = ref([])
 const isLoadingPages = ref(false)
+const isPlatformAuthenticated = ref(false)
+const isLoggingIn = ref(false)
+const authCredentialsMissing = ref(false)
+const authMissingMessage = ref('')
 const connectingPageId = ref(null)
 const isManualEntryOpen = ref(false)
 const connectSuccessPageName = ref('')
 const connectErrorMsg = ref('')
 
+// OAuth popup message listener (receives message when OAuth completes)
+const handleOAuthWindowMessage = async (event) => {
+  if (event.data && event.data.type === 'social_oauth_callback') {
+    isLoggingIn.value = false
+    if (event.data.success) {
+      isPlatformAuthenticated.value = true
+      authCredentialsMissing.value = false
+      connectErrorMsg.value = ''
+      await fetchAvailablePages(selectedConnectPlatform.value)
+    } else {
+      connectErrorMsg.value = event.data.error || 'فشل تسجيل الدخول على المنصة'
+    }
+  }
+}
+
+// Fetch available pages (Strictly requires authentication first)
 const fetchAvailablePages = async (platform) => {
   selectedConnectPlatform.value = platform
   connectForm.value.platform = platform
   isLoadingPages.value = true
   connectErrorMsg.value = ''
+  authCredentialsMissing.value = false
+
   try {
-    const pages = await store.loadAvailablePages(platform)
-    availablePages.value = Array.isArray(pages) ? pages : []
+    // Check auth status first
+    const status = await store.checkSocialAuthStatus(platform)
+    isPlatformAuthenticated.value = status.is_authenticated
+
+    if (!status.is_authenticated) {
+      availablePages.value = []
+      isLoadingPages.value = false
+      return
+    }
+
+    const res = await store.loadAvailablePages(platform)
+    if (res && res.needs_login) {
+      isPlatformAuthenticated.value = false
+      availablePages.value = []
+    } else if (res && Array.isArray(res.pages)) {
+      availablePages.value = res.pages
+      isPlatformAuthenticated.value = true
+    } else if (Array.isArray(res)) {
+      availablePages.value = res
+      isPlatformAuthenticated.value = true
+    } else {
+      availablePages.value = []
+    }
   } catch (e) {
     console.error('فشل جلب الصفحات', e)
     availablePages.value = []
-    connectErrorMsg.value = 'تعذر الاتصال بالمنصة، يرجى التحقق من الاتصال والمحاولة مجدداً'
+    connectErrorMsg.value = 'تعذر الاتصال بالمنصة، يرجى المحاولة مجدداً'
   } finally {
     isLoadingPages.value = false
+  }
+}
+
+// Trigger official OAuth Login popup
+const handleLoginPlatform = async (platform) => {
+  isLoggingIn.value = true
+  connectErrorMsg.value = ''
+  authCredentialsMissing.value = false
+  authMissingMessage.value = ''
+
+  try {
+    const res = await store.getSocialOAuthRedirectUrl(platform)
+    if (res && res.redirect_url) {
+      const width = 600
+      const height = 700
+      const left = window.screen.width / 2 - width / 2
+      const top = window.screen.height / 2 - height / 2
+      window.open(
+        res.redirect_url,
+        `oauth_${platform}`,
+        `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=1`
+      )
+    } else if (res && res.error === 'missing_credentials') {
+      authCredentialsMissing.value = true
+      authMissingMessage.value = res.message || 'يلزم إدخال App ID و App Secret في إعدادات المنصة أولاً'
+      isLoggingIn.value = false
+    } else {
+      connectErrorMsg.value = res?.message || 'تعذر بدء تسجيل الدخول'
+      isLoggingIn.value = false
+    }
+  } catch (e) {
+    connectErrorMsg.value = 'حدث خطأ أثناء محاولة بدء تسجيل الدخول'
+    isLoggingIn.value = false
+  }
+}
+
+// Fast demo login fallback
+const handleDemoLogin = async (platform) => {
+  isLoggingIn.value = true
+  connectErrorMsg.value = ''
+  authCredentialsMissing.value = false
+  try {
+    const ok = await store.socialDemoLogin(platform)
+    if (ok) {
+      isPlatformAuthenticated.value = true
+      await fetchAvailablePages(platform)
+    } else {
+      connectErrorMsg.value = 'فشل تسجيل الدخول التجريبي'
+    }
+  } finally {
+    isLoggingIn.value = false
+  }
+}
+
+// Logout from platform
+const handlePlatformLogout = async (platform) => {
+  if (confirm(`هل أنت متأكد من تسجيل الخروج من ${getPlatformMeta(platform).name}؟`)) {
+    await store.socialLogout(platform)
+    isPlatformAuthenticated.value = false
+    availablePages.value = []
   }
 }
 
@@ -192,6 +295,10 @@ const openConnectModal = (preferredPlatform = 'facebook') => {
   isManualEntryOpen.value = false
   connectSuccessPageName.value = ''
   connectErrorMsg.value = ''
+  authCredentialsMissing.value = false
+  authMissingMessage.value = ''
+  isPlatformAuthenticated.value = false
+  availablePages.value = []
   isConnectModalOpen.value = true
   fetchAvailablePages(preferredPlatform)
 }
@@ -426,6 +533,7 @@ const formatDate = (dateStr) => {
 }
 
 onMounted(() => {
+  window.addEventListener('message', handleOAuthWindowMessage)
   if (store.token) {
     if (!store.socialAccounts || !store.socialAccounts.length) {
       store.loadSocialAccounts(true)
@@ -434,6 +542,10 @@ onMounted(() => {
       store.loadSocialPosts(true)
     }
   }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('message', handleOAuthWindowMessage)
 })
 </script>
 
@@ -1202,144 +1314,254 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Discovered Pages & Channels Section -->
-        <div class="space-y-2.5 pt-2">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-extrabold text-slate-700 dark:text-slate-300">
-                2. الصفحات والقنوات المكتشفة في {{ getPlatformMeta(selectedConnectPlatform).name }}:
-              </span>
-              <span
-                v-if="!isLoadingPages && availablePages.length"
-                class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300"
-              >
-                {{ availablePages.length }} متاحة
-              </span>
-            </div>
+        <!-- Step 2: Login to Platform (Required before discovering pages) -->
+        <div v-if="!isPlatformAuthenticated" class="space-y-3 pt-2">
+          <label class="block text-xs font-extrabold text-slate-700 dark:text-slate-300">
+            2. تسجيل الدخول والتحقق من حسابك:
+          </label>
 
-            <button
-              type="button"
-              @click="fetchAvailablePages(selectedConnectPlatform)"
-              :disabled="isLoadingPages"
-              class="text-[11px] font-bold text-violet-600 hover:text-violet-700 dark:text-violet-400 cursor-pointer flex items-center gap-1 transition"
-            >
-              <span :class="{'animate-spin': isLoadingPages}">🔄</span>
-              <span>تحديث الفحص</span>
-            </button>
-          </div>
-
-          <!-- Loading State -->
-          <div
-            v-if="isLoadingPages"
-            class="p-6 rounded-2xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center gap-3 text-center"
-          >
-            <div class="w-7 h-7 border-2 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
-            <div class="text-xs font-bold text-slate-600 dark:text-slate-400">
-              جاري الاتصال بـ {{ getPlatformMeta(selectedConnectPlatform).name }} والتحقق من حسابك وجلب الصفحات والقنوات...
-            </div>
-          </div>
-
-          <!-- Discovered Pages List -->
-          <div
-            v-else-if="availablePages.length > 0"
-            class="space-y-2 max-h-64 overflow-y-auto pr-0.5"
-          >
+          <div class="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 flex flex-col items-center justify-center text-center space-y-3">
             <div
-              v-for="page in availablePages"
-              :key="page.account_id"
-              class="p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 bg-white dark:bg-slate-950"
-              :class="page.is_connected ? 'border-emerald-500/40 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-slate-200 dark:border-slate-800 hover:border-violet-300'"
+              :class="[
+                'w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-black text-white shadow-md',
+                getPlatformMeta(selectedConnectPlatform).color
+              ]"
             >
-              <!-- Page Info & Avatar -->
-              <div class="flex items-center gap-3 min-w-0">
-                <div class="relative shrink-0">
-                  <img
-                    v-if="page.avatar_url"
-                    :src="page.avatar_url"
-                    :alt="page.account_name"
-                    class="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-800"
-                  />
-                  <div
-                    v-else
-                    :class="[
-                      'w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-sm',
-                      getPlatformMeta(selectedConnectPlatform).color
-                    ]"
-                  >
-                    {{ getPlatformMeta(selectedConnectPlatform).icon }}
-                  </div>
-                  <span
-                    :class="[
-                      'absolute -bottom-1 -left-1 w-4 h-4 rounded-full text-[8px] flex items-center justify-center text-white font-bold ring-2 ring-white dark:ring-slate-900',
-                      getPlatformMeta(selectedConnectPlatform).color
-                    ]"
-                  >
-                    {{ getPlatformMeta(selectedConnectPlatform).icon }}
-                  </span>
-                </div>
+              {{ getPlatformMeta(selectedConnectPlatform).icon }}
+            </div>
 
-                <div class="min-w-0 text-right">
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs font-black text-slate-900 dark:text-slate-100 truncate block">
-                      {{ page.account_name }}
-                    </span>
-                    <span
-                      v-if="page.category"
-                      class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0"
-                    >
-                      {{ page.category }}
-                    </span>
-                  </div>
-                  <div class="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
-                    <span v-if="page.account_username">@{{ page.account_username }}</span>
-                    <span>•</span>
-                    <span>{{ Number(page.followers_count).toLocaleString() }} متابع</span>
-                  </div>
-                </div>
+            <div class="space-y-1">
+              <h4 class="text-sm font-extrabold text-slate-800 dark:text-slate-200">
+                تسجيل الدخول بحساب {{ getPlatformMeta(selectedConnectPlatform).name }}
+              </h4>
+              <p class="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+                سجّل الدخول بحسابك لمنح الإذن وعرض الصفحات والقنوات التي تمتلك صلاحية إدارتها لربطها فوراً.
+              </p>
+            </div>
+
+            <!-- Credentials Missing Warning -->
+            <div
+              v-if="authCredentialsMissing"
+              class="w-full max-w-md p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-right space-y-2 text-xs text-amber-800 dark:text-amber-200"
+            >
+              <div class="flex items-center gap-1.5 font-bold">
+                <span>⚠️</span>
+                <span>{{ authMissingMessage }}</span>
               </div>
-
-              <!-- Action Button -->
-              <div class="shrink-0">
-                <!-- Already Connected -->
-                <div v-if="page.is_connected" class="flex items-center gap-2">
-                  <span class="px-2.5 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-extrabold text-[11px] flex items-center gap-1">
-                    <span>✓</span>
-                    <span>مربوطة</span>
-                  </span>
-                  <button
-                    type="button"
-                    @click="handleDisconnectFromModal(page)"
-                    class="text-[10px] text-rose-500 hover:text-rose-700 hover:underline cursor-pointer"
-                  >
-                    فصل
-                  </button>
-                </div>
-
-                <!-- Connect Button -->
+              <p class="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                لاستخدام تسجيل الدخول الرسمي عبر نافذة المنصة، يلزم توفير مفاتيح تطبيق المطور (App ID & Secret). كما يمكنك تجربة تسجيل الدخول السريع (Demo Login) لمعاينة التجربة فوراً.
+              </p>
+              <div class="flex items-center gap-2 pt-1 flex-wrap">
                 <button
-                  v-else
                   type="button"
-                  @click="handleConnectDiscoveredPage(page)"
-                  :disabled="connectingPageId === page.account_id"
-                  class="px-4 py-2 rounded-xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-extrabold text-xs shadow-sm hover:opacity-95 active:scale-95 transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  @click="isConnectModalOpen = false; goToSocialSettings()"
+                  class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] transition cursor-pointer"
                 >
-                  <span
-                    v-if="connectingPageId === page.account_id"
-                    class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"
-                  ></span>
-                  <span v-else>🔗</span>
-                  <span>ربط هذه الصفحة</span>
+                  ⚙️ إدخال المفاتيح في الإعدادات
+                </button>
+                <button
+                  type="button"
+                  @click="handleDemoLogin(selectedConnectPlatform)"
+                  class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 text-slate-800 dark:text-slate-200 font-bold text-[11px] transition cursor-pointer"
+                >
+                  🚀 تجربة تسجيل الدخول السريع
                 </button>
               </div>
             </div>
+
+            <!-- Main Login Buttons -->
+            <div class="flex flex-col sm:flex-row items-center gap-2 pt-2">
+              <button
+                type="button"
+                @click="handleLoginPlatform(selectedConnectPlatform)"
+                :disabled="isLoggingIn"
+                :class="[
+                  'px-6 py-2.5 rounded-2xl text-white font-extrabold text-xs shadow-md transition cursor-pointer flex items-center gap-2 disabled:opacity-50 hover:opacity-95 active:scale-95',
+                  getPlatformMeta(selectedConnectPlatform).color
+                ]"
+              >
+                <span v-if="isLoggingIn" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span v-else>🔑</span>
+                <span>تسجيل الدخول عبر {{ getPlatformMeta(selectedConnectPlatform).name }}</span>
+              </button>
+
+              <button
+                v-if="!authCredentialsMissing"
+                type="button"
+                @click="handleDemoLogin(selectedConnectPlatform)"
+                :disabled="isLoggingIn"
+                class="px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
+              >
+                تسجيل دخول تجريبي سريع
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2 (Authenticated Status): Connected Info & Logout -->
+        <div v-else class="space-y-3 pt-2">
+          <div class="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                ✓
+              </div>
+              <div class="text-right">
+                <span class="block text-xs font-black text-emerald-800 dark:text-emerald-200">
+                  أنت مسجل الدخول حالياً بحسابك في {{ getPlatformMeta(selectedConnectPlatform).name }}
+                </span>
+                <span class="text-[11px] text-emerald-600 dark:text-emerald-400">
+                  تم التحقق من الحساب وجلب الصفحات والقنوات المتاحة
+                </span>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                @click="fetchAvailablePages(selectedConnectPlatform)"
+                :disabled="isLoadingPages"
+                class="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 cursor-pointer flex items-center gap-1 transition"
+              >
+                <span :class="{'animate-spin': isLoadingPages}">🔄</span>
+                <span>تحديث الصفحات</span>
+              </button>
+              <button
+                type="button"
+                @click="handlePlatformLogout(selectedConnectPlatform)"
+                class="text-xs font-bold text-rose-500 hover:text-rose-700 hover:underline cursor-pointer px-2 py-1"
+              >
+                تسجيل الخروج
+              </button>
+            </div>
           </div>
 
-          <!-- Empty State -->
-          <div
-            v-else
-            class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400"
-          >
-            لم نتمكن من جلب صفحات تلقائية لـ {{ getPlatformMeta(selectedConnectPlatform).name }}. يمكنك إدخال معرّف الصفحة يدوياً أدناه.
+          <!-- Step 3: Discovered Pages & Channels Section -->
+          <div class="space-y-2.5 pt-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-extrabold text-slate-700 dark:text-slate-300">
+                  3. الصفحات والقنوات التابعة لحسابك ({{ availablePages.length }}):
+                </span>
+                <span
+                  v-if="!isLoadingPages && availablePages.length"
+                  class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300"
+                >
+                  {{ availablePages.length }} متاحة
+                </span>
+              </div>
+            </div>
+
+            <!-- Loading State -->
+            <div
+              v-if="isLoadingPages"
+              class="p-6 rounded-2xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center gap-3 text-center"
+            >
+              <div class="w-7 h-7 border-2 border-violet-600 border-t-transparent rounded-full animate-spin"></div>
+              <div class="text-xs font-bold text-slate-600 dark:text-slate-400">
+                جاري استعراض الصفحات والقنوات المتاحة في {{ getPlatformMeta(selectedConnectPlatform).name }}...
+              </div>
+            </div>
+
+            <!-- Discovered Pages List -->
+            <div
+              v-else-if="availablePages.length > 0"
+              class="space-y-2 max-h-64 overflow-y-auto pr-0.5"
+            >
+              <div
+                v-for="page in availablePages"
+                :key="page.account_id"
+                class="p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 bg-white dark:bg-slate-950"
+                :class="page.is_connected ? 'border-emerald-500/40 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-slate-200 dark:border-slate-800 hover:border-violet-300'"
+              >
+                <!-- Page Info & Avatar -->
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="relative shrink-0">
+                    <img
+                      v-if="page.avatar_url"
+                      :src="page.avatar_url"
+                      :alt="page.account_name"
+                      class="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-800"
+                    />
+                    <div
+                      v-else
+                      :class="[
+                        'w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-sm',
+                        getPlatformMeta(selectedConnectPlatform).color
+                      ]"
+                    >
+                      {{ getPlatformMeta(selectedConnectPlatform).icon }}
+                    </div>
+                    <span
+                      :class="[
+                        'absolute -bottom-1 -left-1 w-4 h-4 rounded-full text-[8px] flex items-center justify-center text-white font-bold ring-2 ring-white dark:ring-slate-900',
+                        getPlatformMeta(selectedConnectPlatform).color
+                      ]"
+                    >
+                      {{ getPlatformMeta(selectedConnectPlatform).icon }}
+                    </span>
+                  </div>
+
+                  <div class="min-w-0 text-right">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs font-black text-slate-900 dark:text-slate-100 truncate block">
+                        {{ page.account_name }}
+                      </span>
+                      <span
+                        v-if="page.category"
+                        class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0"
+                      >
+                        {{ page.category }}
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                      <span v-if="page.account_username">@{{ page.account_username }}</span>
+                      <span>•</span>
+                      <span>{{ Number(page.followers_count).toLocaleString() }} متابع</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Action Button -->
+                <div class="shrink-0">
+                  <div v-if="page.is_connected" class="flex items-center gap-2">
+                    <span class="px-2.5 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-extrabold text-[11px] flex items-center gap-1">
+                      <span>✓</span>
+                      <span>مربوطة</span>
+                    </span>
+                    <button
+                      type="button"
+                      @click="handleDisconnectFromModal(page)"
+                      class="text-[10px] text-rose-500 hover:text-rose-700 hover:underline cursor-pointer"
+                    >
+                      فصل
+                    </button>
+                  </div>
+
+                  <button
+                    v-else
+                    type="button"
+                    @click="handleConnectDiscoveredPage(page)"
+                    :disabled="connectingPageId === page.account_id"
+                    class="px-4 py-2 rounded-xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-extrabold text-xs shadow-sm hover:opacity-95 active:scale-95 transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <span
+                      v-if="connectingPageId === page.account_id"
+                      class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"
+                    ></span>
+                    <span v-else>🔗</span>
+                    <span>ربط هذه الصفحة</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empty State -->
+            <div
+              v-else
+              class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400"
+            >
+              لم نتمكن من العثور على صفحات أو قنوات مدارة بحسابك في {{ getPlatformMeta(selectedConnectPlatform).name }}. يمكنك إدخال بيانات الصفحة يدوياً بالأسفل.
+            </div>
           </div>
         </div>
 

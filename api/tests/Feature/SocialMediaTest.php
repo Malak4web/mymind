@@ -134,18 +134,37 @@ class SocialMediaTest extends TestCase
             ->assertJsonPath('facebook.app_secret', '');
     }
 
-    public function test_user_can_discover_and_connect_available_pages()
+    public function test_user_must_login_before_discovering_pages()
     {
         Sanctum::actingAs($this->userA);
 
-        // Fetch available Facebook pages
+        // Before logging in on platform -> must return needs_login: true and 0 pages
         $res = $this->getJson('/api/social/available-pages?platform=facebook');
         $res->assertStatus(200)
+            ->assertJsonPath('needs_login', true)
+            ->assertJsonCount(0, 'pages');
+
+        // Check auth status
+        $statusRes = $this->getJson('/api/social/oauth/facebook/status');
+        $statusRes->assertStatus(200)
+            ->assertJsonPath('is_authenticated', false);
+
+        // Perform login on the platform
+        $loginRes = $this->postJson('/api/social/oauth/facebook/demo-login');
+        $loginRes->assertStatus(200)
+            ->assertJsonPath('is_authenticated', true);
+
+        // Now fetch available Facebook pages -> must return pages
+        $resAfter = $this->getJson('/api/social/available-pages?platform=facebook');
+        $resAfter->assertStatus(200)
+            ->assertJsonPath('needs_login', false)
             ->assertJsonStructure([
-                '*' => ['account_id', 'account_name', 'account_username', 'avatar_url', 'category', 'followers_count', 'is_connected']
+                'pages' => [
+                    '*' => ['account_id', 'account_name', 'account_username', 'avatar_url', 'category', 'followers_count', 'is_connected']
+                ]
             ]);
 
-        $firstPage = $res->json(0);
+        $firstPage = $resAfter->json('pages.0');
         $this->assertFalse($firstPage['is_connected']);
 
         // Connect this discovered page with 1-click
@@ -159,10 +178,10 @@ class SocialMediaTest extends TestCase
         ]);
         $connectRes->assertStatus(201);
 
-        // Now re-fetch available pages -> is_connected should be true for that page
-        $resAfter = $this->getJson('/api/social/available-pages?platform=facebook');
-        $resAfter->assertStatus(200);
-        $updatedFirstPage = $resAfter->json(0);
+        // Re-fetch available pages -> is_connected should be true for that page
+        $resConnected = $this->getJson('/api/social/available-pages?platform=facebook');
+        $resConnected->assertStatus(200);
+        $updatedFirstPage = $resConnected->json('pages.0');
         $this->assertTrue($updatedFirstPage['is_connected']);
     }
 }
