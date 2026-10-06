@@ -520,10 +520,14 @@ class SocialMediaController extends Controller
 
         $accounts = $accountsQuery->get();
 
-        // Auto-sync accounts if they have never been synced yet
+        // Auto-sync accounts if they have no posts in DB or synced more than 10 mins ago
         foreach ($accounts as $acc) {
+            $hasPostsForAcc = SocialPost::where('user_id', $user->id)
+                ->whereJsonContains('account_ids', (string)$acc->account_id)
+                ->exists();
             $lastSync = $acc->metadata['last_synced_at'] ?? null;
-            if (!$lastSync) {
+            $shouldSync = !$hasPostsForAcc || !$lastSync || Carbon::parse($lastSync)->diffInMinutes(now()) >= 10;
+            if ($shouldSync) {
                 $this->syncPostsForAccount($acc, $user);
             }
         }
@@ -846,54 +850,147 @@ class SocialMediaController extends Controller
         // 1. Try real Facebook Graph API (Page Access Token required)
         if ($account->platform === 'facebook' && $pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) {
             try {
-                // Request published_posts first
+                // Fetch videos first (videos/reels have exact views, likes, and comments without needing pages_read_user_content)
+                $videosMap = [];
+                try {
+                    $vidRes = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/videos", [
+                        'access_token' => $pageAccessToken,
+                        'fields' => 'id,title,description,created_time,picture,permalink_url,views,likes.summary(true),comments.summary(true)',
+                        'limit' => 50,
+                    ]);
+                    if ($vidRes->ok() && !empty($vidRes->json('data'))) {
+                        foreach ($vidRes->json('data') as $v) {
+                            $videosMap[(string)$v['id']] = $v;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::info("FB videos fetch notice for {$account->account_id}: " . $e->getMessage());
+                }
+
+                // Request published posts with safe fields (never request reactions.summary or comments.summary on published_posts edge as Meta rejects it without pages_read_user_content)
                 $res = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/published_posts", [
                     'access_token' => $pageAccessToken,
-                    'fields' => 'id,message,story,created_time,full_picture,permalink_url,shares,reactions.summary(true),comments.summary(true)',
-                    'limit' => 25,
+                    'fields' => 'id,message,story,created_time,full_picture,permalink_url,shares',
+                    'limit' => 50,
                 ]);
 
-                // Fallback to feed if published_posts returned empty or failed
+                // Fallback to posts if published_posts returned empty or failed
                 if (!$res->ok() || empty($res->json('data'))) {
-                    $res = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/feed", [
+                    $res = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/posts", [
                         'access_token' => $pageAccessToken,
-                        'fields' => 'id,message,story,created_time,full_picture,permalink_url,shares,reactions.summary(true),comments.summary(true)',
-                        'limit' => 25,
+                        'fields' => 'id,message,story,created_time,full_picture,permalink_url,shares',
+                        'limit' => 50,
                     ]);
                 }
 
-                if ($res->ok() && !empty($res->json('data'))) {
-                    foreach ($res->json('data') as $item) {
-                        $likes = (int)($item['reactions']['summary']['total_count'] ?? 0);
-                        $comments = (int)($item['comments']['summary']['total_count'] ?? 0);
-                        $shares = (int)($item['shares']['count'] ?? 0);
-                        $totalInteractions = $likes + $comments + $shares;
-                        $followers = max(1, (int)$account->followers_count);
-                        $engRate = $followers > 0 ? round(($totalInteractions / $followers) * 100, 2) : 0;
-                        $views = $totalInteractions > 0 ? (int)($likes * 10 + $comments * 5 + $shares * 15) : 0;
+                $rawItems = $res->ok() ? $res->json('data', []) : [];
+                $seenVideoIds = [];
 
-                        $content = $item['message'] ?? $item['story'] ?? 'منشور على صفحة فيسبوك';
-                        $permalink = $item['permalink_url'] ?? "https://facebook.com/{$item['id']}";
+                foreach ($rawItems as $item) {
+                    $externalId = (string)$item['id'];
+                    $permalink = $item['permalink_url'] ?? "https://facebook.com/{$externalId}";
+                    $shares = (int)($item['shares']['count'] ?? 0);
+                    $likes = (int)($item['likes']['summary']['total_count'] ?? $item['reactions']['summary']['total_count'] ?? 0);
+                    $comments = (int)($item['comments']['summary']['total_count'] ?? 0);
+                    $views = 0;
+
+                    // Check if this post is a reel or video
+                    $matchedVideo = null;
+                    if (preg_match('/(?:reel|videos)\/(\d+)/i', $permalink, $matches)) {
+                        $vidId = $matches[1];
+                        if (isset($videosMap[$vidId])) {
+                            $matchedVideo = $videosMap[$vidId];
+                            $seenVideoIds[$vidId] = true;
+                        }
+                    }
+
+                    if (!$matchedVideo && !empty($item['message'])) {
+                        foreach ($videosMap as $vidId => $v) {
+                            if (!empty($v['description']) && (trim($v['description']) === trim($item['message']) || str_contains($item['message'], substr($v['description'], 0, 30)))) {
+                                $matchedVideo = $v;
+                                $seenVideoIds[$vidId] = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($matchedVideo) {
+                        $likes = (int)($matchedVideo['likes']['summary']['total_count'] ?? 0);
+                        $comments = (int)($matchedVideo['comments']['summary']['total_count'] ?? 0);
+                        $views = (int)($matchedVideo['views'] ?? 0);
+                    } elseif ($likes === 0 && $comments === 0) {
+                        // Standard post / photo / status: try to get likes and comments if granted
+                        try {
+                            $singlePostRes = Http::get("https://graph.facebook.com/v21.0/{$externalId}", [
+                                'access_token' => $pageAccessToken,
+                                'fields' => 'shares,likes.summary(true),comments.summary(true)',
+                            ]);
+                            if ($singlePostRes->ok()) {
+                                $likes = (int)($singlePostRes->json('likes.summary.total_count', $likes));
+                                $comments = (int)($singlePostRes->json('comments.summary.total_count', $comments));
+                                $shares = (int)($singlePostRes->json('shares.count', $shares));
+                            }
+                        } catch (\Throwable $e) {}
+                    }
+
+                    $totalInteractions = $likes + $comments + $shares;
+                    $followers = max(1, (int)$account->followers_count);
+                    $engRate = $followers > 0 ? round(($totalInteractions / $followers) * 100, 2) : 0;
+                    if ($views === 0 && $totalInteractions > 0) {
+                        $views = (int)($likes * 10 + $comments * 5 + $shares * 15);
+                    }
+
+                    $content = $item['message'] ?? $item['story'] ?? 'منشور على صفحة فيسبوك';
+
+                    $importedPosts[] = [
+                        'external_id' => $externalId,
+                        'content' => $content,
+                        'media_urls' => !empty($item['full_picture']) ? [$item['full_picture']] : [],
+                        'published_at' => Carbon::parse($item['created_time']),
+                        'permalink' => $permalink,
+                        'metrics' => [
+                            'likes' => $likes,
+                            'comments' => $comments,
+                            'shares' => $shares,
+                            'views' => $views,
+                            'impressions' => $views,
+                            'engagement_rate' => $engRate,
+                        ],
+                    ];
+                }
+
+                // Also include any videos from videosMap that weren't in published_posts
+                foreach ($videosMap as $vidId => $v) {
+                    if (!isset($seenVideoIds[$vidId])) {
+                        $vLikes = (int)($v['likes']['summary']['total_count'] ?? 0);
+                        $vComments = (int)($v['comments']['summary']['total_count'] ?? 0);
+                        $vViews = (int)($v['views'] ?? 0);
+                        $vInteractions = $vLikes + $vComments;
+                        $followers = max(1, (int)$account->followers_count);
+                        $vEngRate = $followers > 0 ? round(($vInteractions / $followers) * 100, 2) : 0;
+
+                        $rawUrl = $v['permalink_url'] ?? "/reel/{$vidId}";
+                        $vPermalink = str_starts_with($rawUrl, 'http') ? $rawUrl : ("https://facebook.com" . $rawUrl);
 
                         $importedPosts[] = [
-                            'external_id' => (string)$item['id'],
-                            'content' => $content,
-                            'media_urls' => !empty($item['full_picture']) ? [$item['full_picture']] : [],
-                            'published_at' => Carbon::parse($item['created_time']),
-                            'permalink' => $permalink,
+                            'external_id' => (string)$vidId,
+                            'content' => $v['description'] ?? $v['title'] ?? 'فيديو على فيسبوك',
+                            'media_urls' => !empty($v['picture']) ? [$v['picture']] : [],
+                            'published_at' => Carbon::parse($v['created_time']),
+                            'permalink' => $vPermalink,
                             'metrics' => [
-                                'likes' => $likes,
-                                'comments' => $comments,
-                                'shares' => $shares,
-                                'views' => $views,
-                                'impressions' => $views,
-                                'engagement_rate' => $engRate,
+                                'likes' => $vLikes,
+                                'comments' => $vComments,
+                                'shares' => 0,
+                                'views' => $vViews,
+                                'impressions' => $vViews,
+                                'engagement_rate' => $vEngRate,
                             ],
                         ];
                     }
                 }
             } catch (\Throwable $e) {
-                Log::info("FB sync error for {$account->account_id}: " . $e->getMessage());
+                Log::warning("FB sync error for {$account->account_id}: " . $e->getMessage());
             }
         }
 

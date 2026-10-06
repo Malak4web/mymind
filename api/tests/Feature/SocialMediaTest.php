@@ -260,6 +260,9 @@ class SocialMediaTest extends TestCase
         Sanctum::actingAs($this->userA);
 
         \Illuminate\Support\Facades\Http::fake([
+            'https://graph.facebook.com/v21.0/fb_page_sync_1/videos*' => \Illuminate\Support\Facades\Http::response([
+                'data' => []
+            ], 200),
             'https://graph.facebook.com/v21.0/fb_page_sync_1/*' => \Illuminate\Support\Facades\Http::response([
                 'data' => [
                     [

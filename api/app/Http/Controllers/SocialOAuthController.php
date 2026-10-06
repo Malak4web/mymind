@@ -289,7 +289,7 @@ class SocialOAuthController extends Controller
                     'client_id'     => $appId,
                     'redirect_uri'  => $callbackUrl,
                     'state'         => $state,
-                    'scope'         => 'public_profile,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_metadata,business_management',
+                    'scope'         => 'public_profile,pages_show_list,pages_read_engagement,pages_read_user_content,pages_manage_posts,pages_manage_metadata,business_management',
                     'response_type' => 'code',
                     'auth_type'     => 'rerequest',
                 ]);
