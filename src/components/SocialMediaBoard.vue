@@ -1815,7 +1815,7 @@ onUnmounted(() => {
               'border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 group',
               isDraggingFile
                 ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/40 scale-[1.01]'
-                : 'border-slate-200 dark:border-slate-800 hover:border-violet-500/60 hover:bg-slate-50 dark:hover:bg-slate-850'
+                : 'border-slate-200 dark:border-slate-800 hover:border-violet-500/60 hover:bg-slate-50 dark:hover:bg-slate-800/60'
             ]"
           >
             <div class="w-11 h-11 rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center text-xl group-hover:scale-110 transition shadow-sm">
