@@ -75,6 +75,11 @@ const toggleTaskStatus = moveToNextStatus
 
 // Drag and drop state
 const draggedTaskId = ref(null)
+const draggedItemId = ref(null)
+const draggedIsSeparator = ref(false)
+const draggedSourceStatus = ref(null)
+const dropTargetItemId = ref(null)
+const dropTargetPosition = ref('after') // 'before' | 'after'
 const activeDragOverColumn = ref(null)
 
 // Quick Add States
@@ -388,8 +393,98 @@ const toggleTaskCompletion = async (task, event) => {
   }
 }
 
-const handleDragStart = (taskId) => {
-  draggedTaskId.value = taskId
+const handleDragStart = (id, isSep = false, status = null, event = null) => {
+  draggedItemId.value = id
+  draggedIsSeparator.value = isSep
+  draggedSourceStatus.value = status
+  draggedTaskId.value = isSep ? null : id
+
+  if (event && event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(id))
+  }
+}
+
+const handleItemDragOver = (e, targetItem, statusName) => {
+  e.preventDefault()
+  if (!draggedItemId.value || String(draggedItemId.value) === String(targetItem.data.id)) return
+
+  const rect = e.currentTarget.getBoundingClientRect()
+  const offset = e.clientY - rect.top
+  const position = offset < rect.height / 2 ? 'before' : 'after'
+
+  dropTargetItemId.value = targetItem.data.id
+  dropTargetPosition.value = position
+  activeDragOverColumn.value = statusName
+}
+
+const handleItemDragLeave = (e, targetItem) => {
+  if (dropTargetItemId.value === targetItem.data.id) {
+    if (e && e.currentTarget && e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) {
+      return
+    }
+    dropTargetItemId.value = null
+  }
+}
+
+const clearDragState = () => {
+  draggedItemId.value = null
+  draggedTaskId.value = null
+  draggedIsSeparator.value = false
+  draggedSourceStatus.value = null
+  dropTargetItemId.value = null
+  dropTargetPosition.value = 'after'
+  activeDragOverColumn.value = null
+}
+
+const handleDropOnItem = async (targetItem, statusName, e) => {
+  if (e) {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const itemId = draggedItemId.value
+  const targetId = targetItem?.data?.id
+  const position = dropTargetPosition.value || 'after'
+  const isSep = draggedIsSeparator.value
+
+  if (!itemId || !targetId || String(itemId) === String(targetId)) {
+    clearDragState()
+    return
+  }
+
+  if (isSep) {
+    await store.reorderColumnItem(
+      store.activeProjectId,
+      itemId,
+      statusName,
+      targetId,
+      position
+    )
+  } else {
+    if (selectedTaskIds.value.includes(itemId)) {
+      for (const id of selectedTaskIds.value) {
+        await store.reorderColumnItem(
+          store.activeProjectId,
+          id,
+          statusName,
+          targetId,
+          position
+        )
+      }
+      selectedTaskIds.value = []
+    } else {
+      await store.reorderColumnItem(
+        store.activeProjectId,
+        itemId,
+        statusName,
+        targetId,
+        position
+      )
+    }
+  }
+
+  clearDragState()
 }
 
 const handleDragOver = (e, statusName) => {
@@ -399,44 +494,52 @@ const handleDragOver = (e, statusName) => {
   }
 }
 
-const handleDragLeave = () => {
+const handleDragLeave = (e) => {
+  if (e && e.currentTarget && e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) {
+    return
+  }
   activeDragOverColumn.value = null
+  dropTargetItemId.value = null
 }
 
 const handleDrop = async (statusName) => {
-  if (!draggedTaskId.value) return
-  
-  // If the dragged task is part of the selected tasks group, move all of them together
-  if (selectedTaskIds.value.includes(draggedTaskId.value)) {
-    for (const id of selectedTaskIds.value) {
-      const task = store.tasks.find(t => String(t.id) === String(id))
-      if (task && task.status !== statusName) {
-        await store.updateTask(task.id, {
-          title: task.title,
-          description: task.description,
-          status: statusName,
-          startDate: task.startDate,
-          deadline: task.deadline
-        })
-      }
-    }
-    selectedTaskIds.value = []
+  const itemId = draggedItemId.value || draggedTaskId.value
+  if (!itemId) return
+
+  const isSep = draggedIsSeparator.value
+
+  if (isSep) {
+    await store.reorderColumnItem(
+      store.activeProjectId,
+      itemId,
+      statusName,
+      null,
+      'after'
+    )
   } else {
-    // Single card drag
-    const task = store.tasks.find(t => String(t.id) === String(draggedTaskId.value))
-    if (task && task.status !== statusName) {
-      await store.updateTask(task.id, {
-        title: task.title,
-        description: task.description,
-        status: statusName,
-        startDate: task.startDate,
-        deadline: task.deadline
-      })
+    if (selectedTaskIds.value.includes(itemId)) {
+      for (const id of selectedTaskIds.value) {
+        await store.reorderColumnItem(
+          store.activeProjectId,
+          id,
+          statusName,
+          null,
+          'after'
+        )
+      }
+      selectedTaskIds.value = []
+    } else {
+      await store.reorderColumnItem(
+        store.activeProjectId,
+        itemId,
+        statusName,
+        null,
+        'after'
+      )
     }
   }
-  
-  draggedTaskId.value = null
-  activeDragOverColumn.value = null
+
+  clearDragState()
 }
 
 const openEditTask = (taskId) => {
@@ -456,25 +559,37 @@ const getTasksByStatus = (statusName) => {
 // Section Separators State & Methods
 const activeSeparatorAddColumn = ref(null)
 const newSeparatorTitle = ref('')
+const insertAfterItemId = ref(null)
 const editingSeparatorId = ref(null)
 const editSeparatorTitle = ref('')
 
-const openAddSeparator = (status) => {
+const openAddSeparator = (status, afterItemId = null) => {
   activeSeparatorAddColumn.value = status
+  insertAfterItemId.value = afterItemId
   newSeparatorTitle.value = ''
+}
+
+const openAddSeparatorAfter = (taskId, status) => {
+  openAddSeparator(status, taskId)
 }
 
 const cancelAddSeparator = () => {
   activeSeparatorAddColumn.value = null
   newSeparatorTitle.value = ''
+  insertAfterItemId.value = null
 }
 
 const submitAddSeparator = async (status) => {
   const title = newSeparatorTitle.value.trim()
   if (!title) return
-  await store.addProjectSeparator(store.activeProjectId, status, title)
+  if (insertAfterItemId.value) {
+    await store.addProjectSeparator(store.activeProjectId, status, title, insertAfterItemId.value)
+  } else {
+    await store.addProjectSeparator(store.activeProjectId, status, title)
+  }
   activeSeparatorAddColumn.value = null
   newSeparatorTitle.value = ''
+  insertAfterItemId.value = null
 }
 
 const startEditSeparator = (sep) => {
@@ -506,11 +621,12 @@ const setAsCompletedStatus = async (status) => {
 const getColumnItems = (statusName) => {
   const tasks = getTasksByStatus(statusName)
   const seps = (activeProject.value?.separators || []).filter(s => s.status === statusName)
-  if (seps.length === 0) {
+  const orderList = activeProject.value?.columnOrders?.[statusName] || []
+
+  if (seps.length === 0 && orderList.length === 0) {
     return tasks.map(t => ({ isSeparator: false, data: t }))
   }
 
-  const orderList = activeProject.value?.columnOrders?.[statusName] || []
   const itemsMap = new Map()
   tasks.forEach(t => itemsMap.set(String(t.id), { isSeparator: false, data: t }))
   seps.forEach(s => itemsMap.set(String(s.id), { isSeparator: true, data: s }))
@@ -1212,12 +1328,27 @@ const onKanbanMouseMove = (e) => {
             <!-- Section Separator Widget -->
             <div 
               v-if="item.isSeparator"
-              class="my-2.5 py-2 px-3 rounded-xl bg-violet-50/80 dark:bg-violet-950/40 border-r-4 border-r-violet-600 dark:border-r-violet-400 border border-violet-200/60 dark:border-violet-800/60 shadow-2xs select-none transition group/sep"
+              draggable="true"
+              @dragstart="handleDragStart(item.data.id, true, status, $event)"
+              @dragend="clearDragState"
+              @dragover="handleItemDragOver($event, item, status)"
+              @dragleave="handleItemDragLeave($event, item)"
+              @drop.stop="handleDropOnItem(item, status, $event)"
+              class="my-2.5 py-2 px-3 rounded-xl bg-violet-50/80 dark:bg-violet-950/40 border-r-4 border-r-violet-600 dark:border-r-violet-400 border border-violet-200/60 dark:border-violet-800/60 shadow-2xs select-none transition-all group/sep cursor-grab active:cursor-grabbing relative"
+              :class="{
+                'opacity-40 scale-95 border-dashed border-violet-400': draggedItemId === item.data.id,
+                'ring-2 ring-violet-500': dropTargetItemId === item.data.id
+              }"
               @click.stop
             >
+              <!-- Indicator lines for drop insertion -->
+              <div v-if="dropTargetItemId === item.data.id && dropTargetPosition === 'before'" class="absolute -top-1.5 left-0 right-0 h-1 bg-violet-600 rounded-full z-20 pointer-events-none shadow-sm"></div>
+              <div v-if="dropTargetItemId === item.data.id && dropTargetPosition === 'after'" class="absolute -bottom-1.5 left-0 right-0 h-1 bg-violet-600 rounded-full z-20 pointer-events-none shadow-sm"></div>
+
               <!-- Display Mode -->
               <div v-if="editingSeparatorId !== item.data.id" class="flex items-center justify-between gap-2">
                 <div class="flex items-center gap-1.5 min-w-0">
+                  <span class="text-slate-400 dark:text-slate-500 cursor-grab active:cursor-grabbing text-xs hover:text-violet-600 select-none" title="اسحب لإعادة الترتيب بين المهام">⠿</span>
                   <span class="text-xs">🔖</span>
                   <h5 class="text-xs font-black text-slate-800 dark:text-slate-100 truncate">
                     {{ item.data.title }}
@@ -1274,13 +1405,25 @@ const onKanbanMouseMove = (e) => {
             <div 
               v-else
               draggable="true"
-              @dragstart="handleDragStart(item.data.id)"
+              @dragstart="handleDragStart(item.data.id, false, status, $event)"
+              @dragend="clearDragState"
+              @dragover="handleItemDragOver($event, item, status)"
+              @dragleave="handleItemDragLeave($event, item)"
+              @drop.stop="handleDropOnItem(item, status, $event)"
               @click="store.openTaskInspector(item.data.id)"
               @dblclick="openEditTask(item.data.id)"
               class="glass-card-hover rounded-2xl p-3.5 shadow-sm hover:-translate-y-1 hover:shadow-glass-glow transition-all duration-300 btn-touch-active cursor-grab active:cursor-grabbing select-none relative group space-y-2 bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80"
+              :class="{
+                'opacity-40 scale-95 border-dashed border-violet-400': draggedItemId === item.data.id,
+                'ring-2 ring-violet-500': dropTargetItemId === item.data.id
+              }"
               :title="item.data.title"
             >
-              <!-- Card Header Row: Completion Checkbox + Title + Next Button + Bulk Select + 3-Dots Menu -->
+              <!-- Indicator lines for drop insertion -->
+              <div v-if="dropTargetItemId === item.data.id && dropTargetPosition === 'before'" class="absolute -top-1.5 left-0 right-0 h-1 bg-violet-600 rounded-full z-20 pointer-events-none shadow-sm"></div>
+              <div v-if="dropTargetItemId === item.data.id && dropTargetPosition === 'after'" class="absolute -bottom-1.5 left-0 right-0 h-1 bg-violet-600 rounded-full z-20 pointer-events-none shadow-sm"></div>
+
+              <!-- Card Header Row: Completion Checkbox + Title + Bulk Select + 3-Dots Menu (No redundant next button) -->
               <div class="flex items-center justify-between gap-2 w-full min-w-0">
                 <!-- Left: Checkbox + Full Title -->
                 <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -1310,19 +1453,8 @@ const onKanbanMouseMove = (e) => {
                   </div>
                 </div>
 
-                <!-- Right: Small Next Button + Bulk Select Checkbox & 3-Dots Action Menu -->
+                <!-- Right: Bulk Select Checkbox & 3-Dots Action Menu -->
                 <div class="flex items-center gap-1.5 shrink-0" @click.stop>
-                  <!-- Small visible button on task: Advance to next status -->
-                  <button 
-                    @click.stop="moveToNextStatus(item.data, $event)"
-                    class="px-2 py-1 rounded-lg text-[10px] font-black text-violet-700 dark:text-violet-300 bg-violet-50 hover:bg-violet-600 hover:text-white dark:bg-violet-950/50 dark:hover:bg-violet-600 dark:hover:text-white border border-violet-200/80 dark:border-violet-800/80 transition-all duration-150 min-h-[34px] flex items-center justify-center gap-1 cursor-pointer shadow-2xs shrink-0" 
-                    :title="'نقل تلقائي للحالة التالية: ' + getNextStatus(item.data.status)"
-                    aria-label="نقل للحالة التالية تلقائياً"
-                  >
-                    <span class="max-w-[70px] truncate hidden sm:inline">{{ getNextStatus(item.data.status) }}</span>
-                    <span class="text-xs">◀</span>
-                  </button>
-
                   <!-- Bulk selection checkbox -->
                   <input 
                     type="checkbox" 
@@ -1349,9 +1481,16 @@ const onKanbanMouseMove = (e) => {
                     <Transition name="fade">
                       <div 
                         v-if="activeTaskMenuId === item.data.id" 
-                        class="absolute left-0 top-full mt-1 z-30 w-36 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1 text-right animate-fade-in"
+                        class="absolute left-0 top-full mt-1 z-30 min-w-[195px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1 text-right animate-fade-in"
                         @click.stop
                       >
+                        <button 
+                          @click="closeTaskMenu(); openAddSeparatorAfter(item.data.id, status)"
+                          class="w-full text-right px-3 py-1.5 text-xs font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition cursor-pointer flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60"
+                        >
+                          <span>🔖</span>
+                          <span>إضافة عنوان فاصل بعد هذه المهمة</span>
+                        </button>
                         <button 
                           @click="closeTaskMenu(); copyTaskTitle(item.data.title)"
                           class="w-full text-right px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition cursor-pointer flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60"
@@ -1393,11 +1532,12 @@ const onKanbanMouseMove = (e) => {
                     {{ item.data.status }}
                   </span>
 
-                  <!-- Visible Next Status Button in Card Footer -->
+                  <!-- Single Visible Next Status Button in Card Footer (In front of status badge) -->
                   <button
                     @click.stop="moveToNextStatus(item.data, $event)"
                     class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-violet-600 hover:bg-violet-700 active:scale-95 text-white transition-all duration-200 min-h-[34px] flex items-center gap-1 cursor-pointer shadow-xs"
                     :title="'نقل تلقائي إلى ' + getNextStatus(item.data.status)"
+                    aria-label="نقل للحالة التالية تلقائياً"
                   >
                     <span>{{ isLastOrCompletedStatus(item.data.status) ? '↺ إعادة للبدء' : getNextStatus(item.data.status) }}</span>
                     <span>{{ isLastOrCompletedStatus(item.data.status) ? '↺' : '◀' }}</span>
@@ -1412,17 +1552,48 @@ const onKanbanMouseMove = (e) => {
               <!-- Soft hover overlay -->
               <div class="absolute inset-0 bg-violet-500/[0.01] dark:bg-violet-400/[0.01] opacity-0 group-hover:opacity-100 rounded-xl pointer-events-none transition duration-200"></div>
             </div>
+
+            <!-- Contextual Separator Add Form (Right after this task!) -->
+            <div 
+              v-if="!item.isSeparator && activeSeparatorAddColumn === status && insertAfterItemId === item.data.id"
+              class="bg-white dark:bg-slate-900 border-2 border-violet-400 dark:border-violet-600 rounded-xl p-3 shadow-md space-y-2 text-right my-2 animate-fade-in"
+              @click.stop
+            >
+              <div class="flex items-center justify-between text-xs font-extrabold text-violet-700 dark:text-violet-300">
+                <div class="flex items-center gap-1.5 truncate">
+                  <span>🔖</span>
+                  <span class="truncate">إضافة عنوان فاصل بعد: "{{ item.data.title }}"</span>
+                </div>
+                <button @click="cancelAddSeparator" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm font-bold leading-none cursor-pointer">✕</button>
+              </div>
+              <input 
+                v-model="newSeparatorTitle" 
+                @keyup.enter="submitAddSeparator(status)" 
+                @keydown.esc="cancelAddSeparator"
+                type="text" 
+                placeholder="اكتب عنوان الفاصل (مثال: المرحلة القادمة، مهام عاجلة)..."
+                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                autofocus
+              />
+              <div class="flex items-center gap-2 justify-start flex-row-reverse">
+                <button @click="submitAddSeparator(status)" class="bg-violet-600 hover:bg-violet-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition cursor-pointer min-h-[36px]">إضافة الفاصل</button>
+                <button @click="cancelAddSeparator" class="text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold px-2 py-1.5 rounded-lg text-xs transition cursor-pointer min-h-[36px]">إلغاء</button>
+              </div>
+            </div>
           </template>
 
           <div v-if="getColumnItems(status).length === 0 && activeQuickAddColumn !== status && activeSeparatorAddColumn !== status" class="text-center py-8 text-xs text-slate-400 dark:text-slate-600 border border-dashed border-slate-200 dark:border-slate-900 rounded-xl">
             أفلت المهام هنا
           </div>
 
-          <!-- Inline Section Separator Add Form -->
-          <div v-if="activeSeparatorAddColumn === status" class="bg-white dark:bg-slate-900 border border-violet-300 dark:border-violet-700 rounded-xl p-3 shadow-md space-y-2.5 text-right my-2" @click.stop>
-            <div class="flex items-center gap-1.5 text-xs font-extrabold text-violet-700 dark:text-violet-300">
-              <span>🔖</span>
-              <span>إضافة عنوان فاصل بين المهام</span>
+          <!-- Inline Section Separator Add Form (Bottom of column when not contextual) -->
+          <div v-if="activeSeparatorAddColumn === status && !insertAfterItemId" class="bg-white dark:bg-slate-900 border border-violet-300 dark:border-violet-700 rounded-xl p-3 shadow-md space-y-2.5 text-right my-2" @click.stop>
+            <div class="flex items-center justify-between text-xs font-extrabold text-violet-700 dark:text-violet-300">
+              <div class="flex items-center gap-1.5">
+                <span>🔖</span>
+                <span>إضافة عنوان فاصل بين المهام</span>
+              </div>
+              <button @click="cancelAddSeparator" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm font-bold leading-none cursor-pointer">✕</button>
             </div>
             <input 
               v-model="newSeparatorTitle" 
@@ -1433,6 +1604,19 @@ const onKanbanMouseMove = (e) => {
               class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
               autofocus
             />
+            <!-- Placement selector in bottom form -->
+            <div v-if="getTasksByStatus(status).length > 0" class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+              <span class="shrink-0 text-[11px] font-bold">الموقع:</span>
+              <select 
+                v-model="insertAfterItemId"
+                class="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              >
+                <option :value="null">في نهاية القائمة</option>
+                <option v-for="t in getTasksByStatus(status)" :key="t.id" :value="t.id">
+                  بعد المهمة: {{ t.title }}
+                </option>
+              </select>
+            </div>
             <div class="flex items-center gap-2 justify-start flex-row-reverse">
               <button @click="submitAddSeparator(status)" class="bg-violet-600 hover:bg-violet-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition cursor-pointer min-h-[36px]">إضافة الفاصل</button>
               <button @click="cancelAddSeparator" class="text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold px-2 py-1.5 rounded-lg text-xs transition cursor-pointer min-h-[36px]">إلغاء</button>

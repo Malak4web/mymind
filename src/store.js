@@ -842,7 +842,7 @@ export const store = reactive({
       }
     },
 
-    async addProjectSeparator(projectId, status, title) {
+    async addProjectSeparator(projectId, status, title, afterItemId = null) {
       const project = this.projects.find(p => p.id === projectId)
       if (!project || !status || !title || !title.trim()) return null
       const trimmedTitle = title.trim()
@@ -862,7 +862,17 @@ export const store = reactive({
       if (!project.columnOrders) project.columnOrders = {}
       if (!Array.isArray(project.columnOrders[status])) {
         const taskIds = this.tasks.filter(t => t.projectId === projectId && t.status === status).map(t => t.id)
-        project.columnOrders[status] = [...taskIds, newSeparator.id]
+        const existingSepIds = (project.separators || []).filter(s => s.status === status && s.id !== newSeparator.id).map(s => s.id)
+        project.columnOrders[status] = [...taskIds, ...existingSepIds]
+      }
+
+      if (afterItemId) {
+        const targetIdx = project.columnOrders[status].findIndex(id => String(id) === String(afterItemId))
+        if (targetIdx !== -1) {
+          project.columnOrders[status].splice(targetIdx + 1, 0, newSeparator.id)
+        } else {
+          project.columnOrders[status].push(newSeparator.id)
+        }
       } else {
         project.columnOrders[status].push(newSeparator.id)
       }
@@ -912,7 +922,7 @@ export const store = reactive({
       }
 
       const orderList = [...project.columnOrders[status]]
-      const currIdx = orderList.indexOf(separatorId)
+      const currIdx = orderList.findIndex(id => String(id) === String(separatorId))
       if (currIdx === -1) return
       const targetIdx = direction === 'up' ? currIdx - 1 : currIdx + 1
       if (targetIdx < 0 || targetIdx >= orderList.length) return
@@ -922,6 +932,73 @@ export const store = reactive({
       project.columnOrders[status] = orderList
 
       await this.saveProjectSeparators(projectId, project.separators, project.columnOrders)
+    },
+
+    async reorderColumnItem(projectId, itemId, targetStatus, targetItemId = null, position = 'after') {
+      const project = this.projects.find(p => p.id === projectId)
+      if (!project) return
+      if (!project.columnOrders) project.columnOrders = {}
+
+      const isSep = typeof itemId === 'string' && itemId.startsWith('sep_')
+      let sourceStatus = null
+
+      if (isSep) {
+        const sep = (project.separators || []).find(s => String(s.id) === String(itemId))
+        if (sep) {
+          sourceStatus = sep.status
+          sep.status = targetStatus
+        }
+      } else {
+        const task = this.tasks.find(t => String(t.id) === String(itemId))
+        if (task) {
+          sourceStatus = task.status
+          if (task.status !== targetStatus) {
+            await this.updateTask(task.id, {
+              title: task.title,
+              description: task.description,
+              status: targetStatus,
+              startDate: task.startDate,
+              deadline: task.deadline
+            })
+          }
+        }
+      }
+
+      const initColumn = (status) => {
+        if (!status) return
+        if (!Array.isArray(project.columnOrders[status])) {
+          const taskIds = this.tasks.filter(t => t.projectId === projectId && t.status === status).map(t => t.id)
+          const sepIds = (project.separators || []).filter(s => s.status === status).map(s => s.id)
+          project.columnOrders[status] = [...taskIds, ...sepIds]
+        }
+      }
+
+      if (sourceStatus) initColumn(sourceStatus)
+      initColumn(targetStatus)
+
+      // Remove itemId from all column orders to prevent duplicates
+      for (const s of Object.keys(project.columnOrders)) {
+        if (Array.isArray(project.columnOrders[s])) {
+          project.columnOrders[s] = project.columnOrders[s].filter(id => String(id) !== String(itemId))
+        }
+      }
+
+      // Insert itemId into targetStatus column orders
+      const targetCol = [...(project.columnOrders[targetStatus] || [])]
+      if (targetItemId && String(targetItemId) !== String(itemId)) {
+        const targetIdx = targetCol.findIndex(id => String(id) === String(targetItemId))
+        if (targetIdx !== -1) {
+          const insertIdx = position === 'before' ? targetIdx : targetIdx + 1
+          targetCol.splice(insertIdx, 0, itemId)
+        } else {
+          targetCol.push(itemId)
+        }
+      } else {
+        targetCol.push(itemId)
+      }
+
+      project.columnOrders[targetStatus] = targetCol
+      await this.saveProjectSeparators(projectId, project.separators || [], project.columnOrders)
     },
 
     // Update Project Statuses (إعادة ترتيب أو تعديل حالات المشروع وتعيين حالة الإكمال)

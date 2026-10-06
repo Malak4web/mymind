@@ -243,4 +243,55 @@ describe('TaskBoard.vue Component Tests', () => {
     const checkbox = wrapper.find('input[type="checkbox"][title="تحديد المهمة كمكتملة"]')
     expect(checkbox.element.checked).toBe(true)
   })
+
+  it('renders exactly one next-status button per task card in the card footer', () => {
+    store.currentUser = { role: { name: 'مدير' } }
+    const wrapper = mount(TaskBoard)
+    const nextButtons = wrapper.findAll('button[aria-label="نقل للحالة التالية تلقائياً"]')
+    expect(nextButtons.length).toBe(store.tasks.length)
+  })
+
+  it('inserts separator right after a specific task when afterItemId is provided', async () => {
+    store.currentUser = { role: { name: 'مدير' } }
+    const proj = store.projects[0]
+    proj.separators = []
+    proj.columnOrders = { 'بانتظار البدء': [101, 102] }
+    
+    await store.addProjectSeparator(1, 'بانتظار البدء', 'فاصل بعد أول مهمة', 101)
+    
+    expect(proj.columnOrders['بانتظار البدء'][0]).toBe(101)
+    expect(proj.columnOrders['بانتظار البدء'][1]).toContain('sep_')
+    expect(proj.columnOrders['بانتظار البدء'][2]).toBe(102)
+  })
+
+  it('reorders separators and tasks using store.reorderColumnItem', async () => {
+    store.currentUser = { role: { name: 'مدير' } }
+    const proj = store.projects[0]
+    proj.separators = [{ id: 'sep-test', projectId: 1, status: 'بانتظار البدء', title: 'فاصل تجريبي' }]
+    proj.columnOrders = { 'بانتظار البدء': [101, 102, 'sep-test'] }
+    
+    // Move separator before task 101
+    await store.reorderColumnItem(1, 'sep-test', 'بانتظار البدء', 101, 'before')
+    expect(proj.columnOrders['بانتظار البدء']).toEqual(['sep-test', 101, 102])
+
+    // Move task 102 before sep-test
+    await store.reorderColumnItem(1, 102, 'بانتظار البدء', 'sep-test', 'before')
+    expect(proj.columnOrders['بانتظار البدء']).toEqual([102, 'sep-test', 101])
+  })
+
+  it('provides an action in task menu to insert separator after the task', async () => {
+    store.currentUser = { role: { name: 'مدير' } }
+    const wrapper = mount(TaskBoard)
+    
+    // Open 3-dots menu on first task
+    const menuBtn = wrapper.find('button[aria-label="خيارات المهمة"]')
+    await menuBtn.trigger('click')
+    
+    const addSepAfterBtn = wrapper.findAll('button').find(b => b.text().includes('إضافة عنوان فاصل بعد هذه المهمة'))
+    expect(addSepAfterBtn).toBeTruthy()
+    
+    await addSepAfterBtn.trigger('click')
+    // Should display contextual input for this task
+    expect(wrapper.text()).toContain('إضافة عنوان فاصل بعد: "مهمة تصميم"')
+  })
 })
