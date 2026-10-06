@@ -184,5 +184,101 @@ class SocialMediaTest extends TestCase
         $updatedFirstPage = $resConnected->json('pages.0');
         $this->assertTrue($updatedFirstPage['is_connected']);
     }
+
+    public function test_user_can_retrieve_analytics_and_per_page_percentages()
+    {
+        Sanctum::actingAs($this->userA);
+
+        $acc = SocialAccount::create([
+            'user_id' => $this->userA->id,
+            'platform' => 'facebook',
+            'account_id' => 'fb_page_anal_1',
+            'account_name' => 'صفحة التحليلات',
+            'followers_count' => 10000,
+        ]);
+
+        SocialPost::create([
+            'user_id' => $this->userA->id,
+            'content' => 'منشور فيسبوك تحليلي',
+            'platforms' => ['facebook'],
+            'account_ids' => ['fb_page_anal_1'],
+            'status' => 'published',
+            'published_at' => now(),
+            'metrics' => [
+                'likes' => 500,
+                'comments' => 100,
+                'shares' => 50,
+                'views' => 4500,
+                'engagement_rate' => 6.5,
+            ],
+        ]);
+
+        $res = $this->getJson('/api/social/analytics?platform=facebook');
+
+        $res->assertStatus(200)
+            ->assertJsonStructure([
+                'summary' => [
+                    'total_pages',
+                    'total_posts',
+                    'total_followers',
+                    'total_likes',
+                    'total_comments',
+                    'total_shares',
+                    'total_interactions',
+                    'average_engagement_rate',
+                    'total_reach',
+                ],
+                'pages' => [
+                    '*' => [
+                        'account_id',
+                        'account_name',
+                        'followers_count',
+                        'posts_count',
+                        'total_likes',
+                        'total_comments',
+                        'total_shares',
+                        'total_interactions',
+                        'engagement_rate',
+                        'likes_percentage',
+                        'comments_percentage',
+                        'shares_percentage',
+                        'interactions_per_post',
+                    ]
+                ],
+                'posts',
+            ]);
+
+        $page = $res->json('pages.0');
+        $this->assertEquals('fb_page_anal_1', $page['account_id']);
+        $this->assertEquals(650, $page['total_interactions']);
+        $this->assertEquals(6.5, $page['engagement_rate']);
+        $this->assertGreaterThan(0, $page['likes_percentage']);
+    }
+
+    public function test_user_can_sync_external_posts_and_populate_metrics()
+    {
+        Sanctum::actingAs($this->userA);
+
+        SocialAccount::create([
+            'user_id' => $this->userA->id,
+            'platform' => 'facebook',
+            'account_id' => 'fb_page_sync_1',
+            'account_name' => 'صفحة المزامنة',
+            'followers_count' => 8000,
+        ]);
+
+        $res = $this->postJson('/api/social/sync-posts');
+
+        $res->assertStatus(200)
+            ->assertJsonPath('synced_accounts', 1);
+
+        $postsRes = $this->getJson('/api/social/posts');
+        $postsRes->assertStatus(200);
+        $this->assertNotEmpty($postsRes->json());
+
+        $firstPost = $postsRes->json('0');
+        $this->assertNotNull($firstPost['metrics']);
+        $this->assertArrayHasKey('engagement_rate', $firstPost['metrics']);
+    }
 }
 

@@ -259,6 +259,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/social/posts/{id}', [SocialMediaController::class, 'updatePost']);
     Route::delete('/social/posts/{id}', [SocialMediaController::class, 'deletePost']);
     Route::post('/social/posts/{id}/publish', [SocialMediaController::class, 'publishNow']);
+    Route::get('/social/analytics', [SocialMediaController::class, 'getAnalytics']);
+    Route::post('/social/sync-posts', [SocialMediaController::class, 'syncExternalPosts']);
 
     Route::get('/social/settings', [SocialMediaController::class, 'getSettings']);
     Route::post('/social/settings', [SocialMediaController::class, 'saveSettings']);

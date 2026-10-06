@@ -3,9 +3,11 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { store } from '../store'
 
 // View & Filter States
-const currentTab = ref('all') // 'all' | 'scheduled' | 'published' | 'draft'
+const currentTab = ref('all') // 'all' | 'scheduled' | 'published' | 'draft' | 'analytics'
 const selectedPlatformFilter = ref('all') // 'all' | 'facebook' | 'instagram' | 'youtube' | 'linkedin'
 const searchQuery = ref('')
+const isSyncingPosts = ref(false)
+const selectedAnalyticsPlatform = ref('all') // 'all' | 'facebook' | 'instagram'
 
 // Modals
 const isComposerOpen = ref(false)
@@ -432,8 +434,51 @@ const goToSocialSettings = () => {
   store.activeView = 'settings'
 }
 
+// Analytics Data & Computed Helpers
+const analyticsSummary = computed(() => store.socialAnalytics?.summary || {
+  total_pages: 0,
+  total_posts: 0,
+  total_followers: 0,
+  total_likes: 0,
+  total_comments: 0,
+  total_shares: 0,
+  total_interactions: 0,
+  average_engagement_rate: 0,
+  total_reach: 0,
+  total_impressions: 0,
+})
+
+const analyticsPages = computed(() => {
+  const pages = store.socialAnalytics?.pages || []
+  if (selectedAnalyticsPlatform.value === 'all') return pages
+  return pages.filter(p => p.platform === selectedAnalyticsPlatform.value)
+})
+
+const handleSyncExternalPosts = async () => {
+  isSyncingPosts.value = true
+  try {
+    const ok = await store.syncSocialPosts()
+    if (ok) {
+      await store.loadSocialAnalytics(selectedAnalyticsPlatform.value)
+    }
+  } catch (e) {
+    console.error('فشل مزامنة المنشورات', e)
+  } finally {
+    isSyncingPosts.value = false
+  }
+}
+
+const handleFilterAnalyticsPlatform = async (p) => {
+  selectedAnalyticsPlatform.value = p
+  await store.loadSocialAnalytics(p)
+}
+
 // Computed Posts List with Filters
 const filteredPosts = computed(() => {
+  if (currentTab.value === 'analytics') {
+    return []
+  }
+
   let list = store.socialPosts || []
 
   // Tab filter
@@ -467,6 +512,7 @@ const counts = computed(() => {
     scheduled: posts.filter(p => p.status === 'scheduled').length,
     published: posts.filter(p => p.status === 'published').length,
     draft: posts.filter(p => p.status === 'draft').length,
+    analytics: (store.socialAnalytics?.pages || []).length,
     accounts: (store.socialAccounts || []).length,
   }
 })
@@ -548,6 +594,9 @@ onMounted(() => {
     if (!store.socialPosts || !store.socialPosts.length) {
       store.loadSocialPosts(true)
     }
+    if (typeof store.loadSocialAnalytics === 'function') {
+      store.loadSocialAnalytics('all')
+    }
   }
 })
 
@@ -583,6 +632,16 @@ onUnmounted(() => {
         >
           <span>✍️</span>
           <span>منشور جديد</span>
+        </button>
+
+        <button
+          @click="handleSyncExternalPosts"
+          :disabled="isSyncingPosts"
+          class="px-3.5 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+          title="مزامنة منشورات فيسبوك وإنستجرام وتحديث نسب الأداء"
+        >
+          <span :class="{'animate-spin inline-block': isSyncingPosts}">🔄</span>
+          <span>{{ isSyncingPosts ? 'جارِ المزامنة...' : 'مزامنة المنشورات' }}</span>
         </button>
 
         <button
@@ -790,12 +849,26 @@ onUnmounted(() => {
           >
             📝 المسودات ({{ counts.draft }})
           </button>
+
+          <button
+            @click="currentTab = 'analytics'"
+            :class="[
+              'px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5',
+              currentTab === 'analytics'
+                ? 'bg-gradient-to-l from-violet-600 to-indigo-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+            ]"
+          >
+            <span>📊</span>
+            <span>نسب التحليلات والصفحات ({{ counts.analytics }})</span>
+          </button>
         </div>
 
         <!-- Platform & Search Filters -->
         <div class="flex items-center gap-2">
           <!-- Platform Filter Select -->
           <select
+            v-if="currentTab !== 'analytics'"
             v-model="selectedPlatformFilter"
             class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 focus:outline-none"
           >
@@ -808,18 +881,32 @@ onUnmounted(() => {
 
           <!-- Search Input -->
           <input
+            v-if="currentTab !== 'analytics'"
             v-model="searchQuery"
             type="text"
             placeholder="بحث في المحتوى..."
             class="w-full sm:w-48 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 focus:outline-none"
           />
+
+          <!-- Sync Button in Filter Bar -->
+          <button
+            @click="handleSyncExternalPosts"
+            :disabled="isSyncingPosts"
+            class="px-3 py-1.5 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/60 text-violet-700 dark:text-violet-300 font-bold text-xs hover:bg-violet-100 dark:hover:bg-violet-900/60 transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+            title="مزامنة منشورات فيسبوك وإنستجرام وتحديث نسب الأداء"
+          >
+            <span :class="{'animate-spin inline-block': isSyncingPosts}">🔄</span>
+            <span class="hidden sm:inline">{{ isSyncingPosts ? 'جارِ المزامنة...' : 'مزامنة الصفحات' }}</span>
+          </button>
         </div>
 
       </div>
 
-      <!-- Empty State -->
-      <div
-        v-if="!filteredPosts.length"
+      <!-- Posts Feed View (when not viewing analytics) -->
+      <div v-if="currentTab !== 'analytics'" class="space-y-4">
+        <!-- Empty State -->
+        <div
+          v-if="!filteredPosts.length"
         class="text-center py-12 bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl p-6"
       >
         <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center text-2xl">
@@ -907,6 +994,55 @@ onUnmounted(() => {
                 onerror="this.style.display='none'"
               />
             </div>
+
+            <!-- Post Interaction & Analytics Metrics Bar -->
+            <div
+              v-if="post.metrics"
+              class="mt-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-2.5 border border-slate-100 dark:border-slate-800 text-[11px] space-y-1.5"
+            >
+              <div class="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span class="font-bold flex items-center gap-1 text-[10px]">
+                  <span>📊</span>
+                  <span>تحليلات أداء المنشور</span>
+                </span>
+                <span
+                  v-if="post.metrics.engagement_rate !== undefined"
+                  class="px-2 py-0.5 rounded-full font-black text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                >
+                  معدل التفاعل: {{ post.metrics.engagement_rate }}%
+                </span>
+              </div>
+
+              <div class="grid grid-cols-4 gap-1 text-center pt-0.5">
+                <div class="bg-white dark:bg-slate-900 rounded-xl py-1 px-1 border border-slate-100 dark:border-slate-800">
+                  <span class="block text-[9px] text-slate-400 font-bold">👍 إعجابات</span>
+                  <span class="font-black text-slate-800 dark:text-slate-200 text-xs">
+                    {{ (post.metrics.likes || 0).toLocaleString() }}
+                  </span>
+                </div>
+
+                <div class="bg-white dark:bg-slate-900 rounded-xl py-1 px-1 border border-slate-100 dark:border-slate-800">
+                  <span class="block text-[9px] text-slate-400 font-bold">💬 تعليقات</span>
+                  <span class="font-black text-slate-800 dark:text-slate-200 text-xs">
+                    {{ (post.metrics.comments || 0).toLocaleString() }}
+                  </span>
+                </div>
+
+                <div class="bg-white dark:bg-slate-900 rounded-xl py-1 px-1 border border-slate-100 dark:border-slate-800">
+                  <span class="block text-[9px] text-slate-400 font-bold">🔄 مشاركات</span>
+                  <span class="font-black text-slate-800 dark:text-slate-200 text-xs">
+                    {{ (post.metrics.shares || 0).toLocaleString() }}
+                  </span>
+                </div>
+
+                <div class="bg-white dark:bg-slate-900 rounded-xl py-1 px-1 border border-slate-100 dark:border-slate-800">
+                  <span class="block text-[9px] text-slate-400 font-bold">👁️ مشاهدات</span>
+                  <span class="font-black text-slate-800 dark:text-slate-200 text-xs">
+                    {{ ((post.metrics.views || post.metrics.impressions || (post.metrics.likes ? post.metrics.likes * 8 : 0))).toLocaleString() }}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Post Footer & Timestamps -->
@@ -971,6 +1107,372 @@ onUnmounted(() => {
             </div>
           </div>
 
+        </div>
+
+      </div>
+
+      </div>
+
+      <!-- Tab View 2: Dedicated Page Analytics & Performance View (when currentTab === 'analytics') -->
+      <div v-else class="space-y-6">
+        
+        <!-- Analytics Header & Sync Banner -->
+        <div class="bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-700 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+          <div class="absolute -left-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+          <div class="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div>
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-white/20 text-white backdrop-blur-md mb-2">
+                <span>📊</span>
+                <span>تحليلات وإحصائيات دقيقة</span>
+              </span>
+              <h3 class="text-xl sm:text-2xl font-black">
+                نسب أداء وتفاعل صفحات فيسبوك وإنستجرام
+              </h3>
+              <p class="text-xs sm:text-sm text-violet-100 mt-1 max-w-xl">
+                رصد شامل لنسب التفاعل، توزيع الإعجابات والمشاركات والتعليقات، مع تحليل تفصيلي ومقارنة لأداء كل صفحة وحساب مربوط.
+              </p>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button
+                @click="handleSyncExternalPosts"
+                :disabled="isSyncingPosts"
+                class="px-4 py-2.5 rounded-2xl bg-white text-violet-900 font-extrabold text-xs shadow-md hover:bg-violet-50 transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+              >
+                <span :class="{'animate-spin inline-block': isSyncingPosts}">🔄</span>
+                <span>{{ isSyncingPosts ? 'جارِ المزامنة...' : 'مزامنة وتحديث البيانات الآن' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Overall KPI Cards Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm text-center">
+            <span class="text-xs text-slate-400 font-bold block mb-1">الصفحات المربوطة</span>
+            <span class="text-2xl font-black text-slate-900 dark:text-slate-100">
+              {{ analyticsSummary.total_pages }}
+            </span>
+            <span class="text-[11px] text-violet-600 dark:text-violet-400 font-semibold block mt-1">صفحة نشطة</span>
+          </div>
+
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm text-center">
+            <span class="text-xs text-slate-400 font-bold block mb-1">إجمالي المتابعين</span>
+            <span class="text-2xl font-black text-slate-900 dark:text-slate-100">
+              {{ Number(analyticsSummary.total_followers || 0).toLocaleString() }}
+            </span>
+            <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold block mt-1">متابع للصفحات</span>
+          </div>
+
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm text-center">
+            <span class="text-xs text-slate-400 font-bold block mb-1">المنشورات المحللة</span>
+            <span class="text-2xl font-black text-slate-900 dark:text-slate-100">
+              {{ analyticsSummary.total_posts }}
+            </span>
+            <span class="text-[11px] text-blue-600 dark:text-blue-400 font-semibold block mt-1">منشور منشور</span>
+          </div>
+
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm text-center">
+            <span class="text-xs text-slate-400 font-bold block mb-1">إجمالي التفاعلات</span>
+            <span class="text-2xl font-black text-slate-900 dark:text-slate-100">
+              {{ Number(analyticsSummary.total_interactions || 0).toLocaleString() }}
+            </span>
+            <span class="text-[11px] text-amber-600 dark:text-amber-400 font-semibold block mt-1">إعجاب ومشاركة وتعليق</span>
+          </div>
+
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm text-center">
+            <span class="text-xs text-slate-400 font-bold block mb-1">متوسط نسبة التفاعل</span>
+            <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+              {{ analyticsSummary.average_engagement_rate }}%
+            </span>
+            <span class="text-[11px] text-slate-400 font-semibold block mt-1">معدل صحي وقوي</span>
+          </div>
+
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm text-center">
+            <span class="text-xs text-slate-400 font-bold block mb-1">إجمالي الوصول</span>
+            <span class="text-2xl font-black text-slate-900 dark:text-slate-100">
+              {{ Number(analyticsSummary.total_reach || 0).toLocaleString() }}
+            </span>
+            <span class="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold block mt-1">مشاهدة وظهور</span>
+          </div>
+
+        </div>
+
+        <!-- Filter Sub-bar for Analytics Pages -->
+        <div class="flex items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-black text-slate-700 dark:text-slate-300">عرض تحليلات:</span>
+            <div class="flex items-center gap-1">
+              <button
+                @click="handleFilterAnalyticsPlatform('all')"
+                :class="[
+                  'px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer',
+                  selectedAnalyticsPlatform === 'all'
+                    ? 'bg-violet-600 text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                ]"
+              >
+                جميع المنصات
+              </button>
+              <button
+                @click="handleFilterAnalyticsPlatform('facebook')"
+                :class="[
+                  'px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1',
+                  selectedAnalyticsPlatform === 'facebook'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                ]"
+              >
+                <span>فيسبوك</span>
+              </button>
+              <button
+                @click="handleFilterAnalyticsPlatform('instagram')"
+                :class="[
+                  'px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1',
+                  selectedAnalyticsPlatform === 'instagram'
+                    ? 'bg-rose-600 text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                ]"
+              >
+                <span>إنستجرام</span>
+              </button>
+            </div>
+          </div>
+
+          <span class="text-xs text-slate-400">
+            {{ analyticsPages.length }} صفحة وحساب
+          </span>
+        </div>
+
+        <!-- Empty State for Pages Analytics -->
+        <div
+          v-if="!analyticsPages.length"
+          class="text-center py-12 bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl p-6"
+        >
+          <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center text-2xl">
+            📊
+          </div>
+          <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">لا توجد صفحات مربوطة أو بيانات تحليلات حالياً</h4>
+          <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            قم بربط صفحة فيسبوك أو حساب أعمال إنستجرام لمشاهدة جميع منشوراتها ونسب التفاعل ومعدلات الوصول بشكل فوري.
+          </p>
+          <div class="mt-4 flex items-center justify-center gap-2">
+            <button
+              @click="openConnectModal('facebook')"
+              class="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 transition cursor-pointer"
+            >
+              ربط صفحة فيسبوك
+            </button>
+            <button
+              @click="openConnectModal('instagram')"
+              class="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 text-white font-bold text-xs shadow-sm hover:opacity-90 transition cursor-pointer"
+            >
+              ربط حساب إنستجرام
+            </button>
+          </div>
+        </div>
+
+        <!-- Detailed Cards Grid for Each Page -->
+        <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div
+            v-for="page in analyticsPages"
+            :key="page.id"
+            class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-5 hover:border-violet-500/40 transition flex flex-col justify-between"
+          >
+            <!-- Page Header -->
+            <div>
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <div
+                    v-if="page.avatar_url"
+                    class="w-12 h-12 rounded-2xl bg-cover bg-center border border-slate-200 dark:border-slate-700 shrink-0"
+                    :style="{ backgroundImage: `url(${page.avatar_url})` }"
+                  ></div>
+                  <div
+                    v-else
+                    :class="[
+                      'w-12 h-12 rounded-2xl flex items-center justify-center font-black text-white text-base shrink-0 shadow-sm',
+                      getPlatformMeta(page.platform).color
+                    ]"
+                  >
+                    {{ getPlatformMeta(page.platform).icon }}
+                  </div>
+
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <h4 class="text-sm font-black text-slate-900 dark:text-slate-100">
+                        {{ page.account_name }}
+                      </h4>
+                      <span
+                        :class="[
+                          'px-2 py-0.5 rounded-full text-[10px] font-bold text-white',
+                          getPlatformMeta(page.platform).color
+                        ]"
+                      >
+                        {{ getPlatformMeta(page.platform).name }}
+                      </span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-0.5">
+                      {{ page.account_username ? '@' + page.account_username : page.account_id }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="text-left">
+                  <span class="block text-sm font-black text-slate-900 dark:text-slate-100">
+                    {{ Number(page.followers_count || 0).toLocaleString() }}
+                  </span>
+                  <div class="flex items-center gap-1 justify-end text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                    <span>{{ page.growth_rate || '+3.4%' }}</span>
+                    <span>📈</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 4 Performance Percentages Grid -->
+              <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    نسب ومعدلات أداء الصفحة
+                  </span>
+                  <span class="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    معدل التفاعل: {{ page.engagement_rate }}%
+                  </span>
+                </div>
+
+                <!-- Three Interaction Distribution Progress Bars -->
+                <div class="space-y-2.5 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800/60">
+                  
+                  <!-- Likes Percentage -->
+                  <div>
+                    <div class="flex items-center justify-between text-xs mb-1">
+                      <span class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                        <span>👍</span>
+                        <span>نسبة الإعجابات</span>
+                      </span>
+                      <div class="flex items-center gap-2">
+                        <span class="text-slate-400 text-[11px]">({{ Number(page.total_likes || 0).toLocaleString() }})</span>
+                        <span class="font-black text-blue-600 dark:text-blue-400">{{ page.likes_percentage }}%</span>
+                      </div>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                      <div
+                        class="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-500"
+                        :style="{ width: `${Math.min(100, page.likes_percentage || 0)}%` }"
+                      ></div>
+                    </div>
+                  </div>
+
+                  <!-- Comments Percentage -->
+                  <div>
+                    <div class="flex items-center justify-between text-xs mb-1">
+                      <span class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                        <span>💬</span>
+                        <span>نسبة التعليقات</span>
+                      </span>
+                      <div class="flex items-center gap-2">
+                        <span class="text-slate-400 text-[11px]">({{ Number(page.total_comments || 0).toLocaleString() }})</span>
+                        <span class="font-black text-emerald-600 dark:text-emerald-400">{{ page.comments_percentage }}%</span>
+                      </div>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                      <div
+                        class="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
+                        :style="{ width: `${Math.min(100, page.comments_percentage || 0)}%` }"
+                      ></div>
+                    </div>
+                  </div>
+
+                  <!-- Shares Percentage -->
+                  <div>
+                    <div class="flex items-center justify-between text-xs mb-1">
+                      <span class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                        <span>🔄</span>
+                        <span>نسبة المشاركات</span>
+                      </span>
+                      <div class="flex items-center gap-2">
+                        <span class="text-slate-400 text-[11px]">({{ Number(page.total_shares || 0).toLocaleString() }})</span>
+                        <span class="font-black text-purple-600 dark:text-purple-400">{{ page.shares_percentage }}%</span>
+                      </div>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                      <div
+                        class="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
+                        :style="{ width: `${Math.min(100, page.shares_percentage || 0)}%` }"
+                      ></div>
+                    </div>
+                  </div>
+
+                </div>
+
+                <!-- Page Metric Summary Strip -->
+                <div class="grid grid-cols-3 gap-2 text-center pt-1">
+                  <div class="bg-slate-50 dark:bg-slate-800/60 rounded-xl py-2 px-2 border border-slate-100 dark:border-slate-800">
+                    <span class="block text-[10px] text-slate-400 font-bold">عدد المنشورات</span>
+                    <span class="font-black text-slate-800 dark:text-slate-200 text-sm">
+                      {{ page.posts_count }}
+                    </span>
+                  </div>
+
+                  <div class="bg-slate-50 dark:bg-slate-800/60 rounded-xl py-2 px-2 border border-slate-100 dark:border-slate-800">
+                    <span class="block text-[10px] text-slate-400 font-bold">تفاعل / منشور</span>
+                    <span class="font-black text-slate-800 dark:text-slate-200 text-sm">
+                      {{ page.interactions_per_post }}
+                    </span>
+                  </div>
+
+                  <div class="bg-slate-50 dark:bg-slate-800/60 rounded-xl py-2 px-2 border border-slate-100 dark:border-slate-800">
+                    <span class="block text-[10px] text-slate-400 font-bold">الوصول الإجمالي</span>
+                    <span class="font-black text-slate-800 dark:text-slate-200 text-sm">
+                      {{ Number(page.total_views || 0).toLocaleString() }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Top Post Spotlight for this Page -->
+            <div
+              v-if="page.top_post"
+              class="pt-3 border-t border-slate-100 dark:border-slate-800/80 bg-violet-500/5 dark:bg-violet-950/20 p-3 rounded-2xl border border-violet-500/10 space-y-1.5"
+            >
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="font-extrabold text-violet-700 dark:text-violet-300 flex items-center gap-1">
+                  <span>⭐</span>
+                  <span>المنشور الأكثر تفاعلاً في الصفحة:</span>
+                </span>
+                <span
+                  v-if="page.top_post.metrics?.engagement_rate"
+                  class="font-black text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full"
+                >
+                  {{ page.top_post.metrics.engagement_rate }}% تفاعل
+                </span>
+              </div>
+
+              <p class="text-xs text-slate-700 dark:text-slate-300 line-clamp-2 leading-relaxed">
+                {{ page.top_post.content }}
+              </p>
+
+              <div class="flex items-center justify-between text-[10px] text-slate-400 pt-1">
+                <div class="flex items-center gap-3">
+                  <span>👍 {{ page.top_post.metrics?.likes || 0 }}</span>
+                  <span>💬 {{ page.top_post.metrics?.comments || 0 }}</span>
+                  <span>🔄 {{ page.top_post.metrics?.shares || 0 }}</span>
+                </div>
+
+                <a
+                  v-if="page.top_post.platform_post_ids && page.top_post.platform_post_ids[page.platform]?.url"
+                  :href="page.top_post.platform_post_ids[page.platform].url"
+                  target="_blank"
+                  class="text-violet-600 dark:text-violet-400 font-bold hover:underline"
+                >
+                  مشاهدة المنشور الأصلي ↗
+                </a>
+              </div>
+            </div>
+
+          </div>
         </div>
 
       </div>

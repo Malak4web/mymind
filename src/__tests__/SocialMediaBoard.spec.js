@@ -248,5 +248,125 @@ describe('SocialMediaBoard.vue and Social Media Management Features', () => {
       account_name: 'صفحة متجري الذكي',
     }))
   })
+
+  it('renders post metrics bar on published posts having metrics data', async () => {
+    store.socialPosts[0].metrics = {
+      likes: 245,
+      comments: 38,
+      shares: 19,
+      views: 3200,
+      engagement_rate: 4.8,
+    }
+
+    const wrapper = mount(SocialMediaBoard)
+    expect(wrapper.text()).toContain('تحليلات أداء المنشور')
+    expect(wrapper.text()).toContain('معدل التفاعل: 4.8%')
+    expect(wrapper.text()).toContain('245')
+    expect(wrapper.text()).toContain('38')
+    expect(wrapper.text()).toContain('19')
+  })
+
+  it('switches to analytics tab, displays summary KPIs and per-page metrics breakdown', async () => {
+    store.socialAnalytics = {
+      summary: {
+        total_pages: 2,
+        total_posts: 14,
+        total_followers: 57500,
+        total_likes: 3420,
+        total_comments: 890,
+        total_shares: 410,
+        total_interactions: 4720,
+        average_engagement_rate: 6.2,
+        total_reach: 48900,
+        total_impressions: 66000,
+      },
+      pages: [
+        {
+          id: 1,
+          platform: 'facebook',
+          account_id: 'fb_page_101',
+          account_name: 'صفحة الشركة الرسمية',
+          account_username: 'mybrand',
+          avatar_url: '',
+          followers_count: 12500,
+          growth_rate: '+4.2%',
+          posts_count: 8,
+          total_likes: 1200,
+          total_comments: 300,
+          total_shares: 150,
+          total_views: 18000,
+          total_interactions: 1650,
+          engagement_rate: 5.4,
+          likes_percentage: 72.7,
+          comments_percentage: 18.2,
+          shares_percentage: 9.1,
+          interactions_per_post: 206.3,
+          top_post: {
+            content: 'المنشور المميز لصفحة فيسبوك 🚀',
+            metrics: { likes: 520, comments: 110, shares: 60, engagement_rate: 7.8 },
+            platform_post_ids: { facebook: { url: 'https://facebook.com/posts/top_fb' } }
+          }
+        },
+        {
+          id: 2,
+          platform: 'instagram',
+          account_id: 'ig_acc_202',
+          account_name: 'انستجرام الأعمال',
+          account_username: 'mybrand_official',
+          avatar_url: '',
+          followers_count: 45000,
+          growth_rate: '+5.1%',
+          posts_count: 6,
+          total_likes: 2220,
+          total_comments: 590,
+          total_shares: 260,
+          total_views: 30900,
+          total_interactions: 3070,
+          engagement_rate: 6.8,
+          likes_percentage: 72.3,
+          comments_percentage: 19.2,
+          shares_percentage: 8.5,
+          interactions_per_post: 511.7,
+          top_post: null
+        }
+      ],
+      posts: store.socialPosts,
+    }
+
+    const wrapper = mount(SocialMediaBoard)
+
+    // Click Analytics Tab
+    const analyticsTab = wrapper.findAll('button').find(b => b.text().includes('نسب التحليلات والصفحات'))
+    expect(analyticsTab).toBeDefined()
+    await analyticsTab.trigger('click')
+
+    // Expect Summary KPIs
+    expect(wrapper.text()).toContain('نسب أداء وتفاعل صفحات فيسبوك وإنستجرام')
+    expect(wrapper.text()).toContain('57,500')
+    expect(wrapper.text()).toContain('4,720')
+    expect(wrapper.text()).toContain('6.2%')
+
+    // Expect Per-page analytics
+    expect(wrapper.text()).toContain('معدل التفاعل: 5.4%')
+    expect(wrapper.text()).toContain('72.7%')
+    expect(wrapper.text()).toContain('18.2%')
+    expect(wrapper.text()).toContain('9.1%')
+    expect(wrapper.text()).toContain('معدل التفاعل: 6.8%')
+    expect(wrapper.text()).toContain('المنشور المميز لصفحة فيسبوك')
+  })
+
+  it('triggers syncSocialPosts and reloads analytics when sync button is clicked', async () => {
+    store.syncSocialPosts = vi.fn().mockResolvedValue(true)
+    store.loadSocialAnalytics = vi.fn().mockResolvedValue({})
+
+    const wrapper = mount(SocialMediaBoard)
+
+    const syncBtn = wrapper.findAll('button').find(b => b.text().includes('مزامنة المنشورات'))
+    expect(syncBtn).toBeDefined()
+    await syncBtn.trigger('click')
+
+    expect(store.syncSocialPosts).toHaveBeenCalled()
+    expect(store.loadSocialAnalytics).toHaveBeenCalledWith('all')
+  })
 })
 

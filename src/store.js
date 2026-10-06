@@ -61,6 +61,22 @@ export const store = reactive({
   // Social Media Management State (إدارة السوشيال ميديا - خاص بكل مستخدم)
   socialAccounts: [],
   socialPosts: [],
+  socialAnalytics: {
+    summary: {
+      total_pages: 0,
+      total_posts: 0,
+      total_followers: 0,
+      total_likes: 0,
+      total_comments: 0,
+      total_shares: 0,
+      total_interactions: 0,
+      average_engagement_rate: 0,
+      total_reach: 0,
+      total_impressions: 0,
+    },
+    pages: [],
+    posts: [],
+  },
   socialSettings: {
     facebook: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', webhook_verify_token: '', is_active: false },
     instagram: { app_id: '', app_secret: '', access_token: '', page_or_channel_id: '', webhook_verify_token: '', is_active: false },
@@ -3685,6 +3701,48 @@ export const store = reactive({
     } catch (e) {
       if (!isSilent) console.error('فشل تحميل منشورات السوشيال ميديا', e)
     }
+  },
+
+  async loadSocialAnalytics(platform = 'all', accountId = null) {
+    if (!this.token) return null
+    try {
+      const params = new URLSearchParams()
+      if (platform && platform !== 'all') params.append('platform', platform)
+      if (accountId) params.append('account_id', accountId)
+
+      const url = `${this.apiBase}/social/analytics${params.toString() ? '?' + params.toString() : ''}`
+      const res = await fetch(url, { headers: this.getAuthHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        this.socialAnalytics = data
+        if (Array.isArray(data.posts) && data.posts.length > 0) {
+          this.socialPosts = data.posts
+          this.saveSocialPostsLocal()
+        }
+        return data
+      }
+    } catch (e) {
+      console.error('فشل تحميل تحليلات السوشيال ميديا', e)
+    }
+    return null
+  },
+
+  async syncSocialPosts() {
+    if (!this.token) return false
+    try {
+      const res = await fetch(`${this.apiBase}/social/sync-posts`, {
+        method: 'POST',
+        headers: this.getAuthHeaders()
+      })
+      if (res.ok) {
+        await this.loadSocialAnalytics()
+        await this.loadSocialPosts(true)
+        return true
+      }
+    } catch (e) {
+      console.error('فشل مزامنة المنشورات الخارجية', e)
+    }
+    return false
   },
 
   async createSocialPost(postData) {
