@@ -842,6 +842,47 @@ export const store = reactive({
       }
     },
 
+    getNormalizedColumnOrder(projectId, status) {
+      const project = this.projects.find(p => p.id === projectId)
+      if (!project) return []
+
+      const tasksInCol = this.tasks.filter(t => (t.projectId === projectId || t.project_id === projectId) && t.status === status)
+      const sepsInCol = (project.separators || []).filter(s => s.status === status)
+
+      const existingOrder = Array.isArray(project.columnOrders?.[status]) ? project.columnOrders[status] : []
+      const result = []
+      const seen = new Set()
+
+      // 1. Keep everything already ordered in existingOrder
+      for (const id of existingOrder) {
+        const key = String(id)
+        if (!seen.has(key)) {
+          result.push(id)
+          seen.add(key)
+        }
+      }
+
+      // 2. Append any tasks in this column not yet in existingOrder
+      for (const t of tasksInCol) {
+        const key = String(t.id)
+        if (!seen.has(key)) {
+          result.push(t.id)
+          seen.add(key)
+        }
+      }
+
+      // 3. Append any separators in this column not yet in existingOrder
+      for (const s of sepsInCol) {
+        const key = String(s.id)
+        if (!seen.has(key)) {
+          result.push(s.id)
+          seen.add(key)
+        }
+      }
+
+      return result
+    },
+
     async addProjectSeparator(projectId, status, title, afterItemId = null) {
       const project = this.projects.find(p => p.id === projectId)
       if (!project || !status || !title || !title.trim()) return null
@@ -859,23 +900,21 @@ export const store = reactive({
       }
       project.separators.push(newSeparator)
 
-      if (!project.columnOrders) project.columnOrders = {}
-      if (!Array.isArray(project.columnOrders[status])) {
-        const taskIds = this.tasks.filter(t => t.projectId === projectId && t.status === status).map(t => t.id)
-        const existingSepIds = (project.separators || []).filter(s => s.status === status && s.id !== newSeparator.id).map(s => s.id)
-        project.columnOrders[status] = [...taskIds, ...existingSepIds]
-      }
+      const colOrder = this.getNormalizedColumnOrder(projectId, status).filter(id => String(id) !== String(newSeparator.id))
 
       if (afterItemId) {
-        const targetIdx = project.columnOrders[status].findIndex(id => String(id) === String(afterItemId))
+        const targetIdx = colOrder.findIndex(id => String(id) === String(afterItemId))
         if (targetIdx !== -1) {
-          project.columnOrders[status].splice(targetIdx + 1, 0, newSeparator.id)
+          colOrder.splice(targetIdx + 1, 0, newSeparator.id)
         } else {
-          project.columnOrders[status].push(newSeparator.id)
+          colOrder.push(newSeparator.id)
         }
       } else {
-        project.columnOrders[status].push(newSeparator.id)
+        colOrder.push(newSeparator.id)
       }
+
+      if (!project.columnOrders) project.columnOrders = {}
+      project.columnOrders[status] = colOrder
 
       await this.saveProjectSeparators(projectId, project.separators, project.columnOrders)
       this.toastSuccess(`تمت إضافة العنوان الفاصل "${trimmedTitle}"`)
@@ -899,8 +938,10 @@ export const store = reactive({
       const status = sep?.status
       project.separators = project.separators.filter(s => s.id !== separatorId)
 
-      if (status && project.columnOrders && Array.isArray(project.columnOrders[status])) {
-        project.columnOrders[status] = project.columnOrders[status].filter(id => id !== separatorId)
+      if (status) {
+        const colOrder = this.getNormalizedColumnOrder(projectId, status).filter(id => String(id) !== String(separatorId))
+        if (!project.columnOrders) project.columnOrders = {}
+        project.columnOrders[status] = colOrder
       }
 
       await this.saveProjectSeparators(projectId, project.separators, project.columnOrders)
@@ -914,14 +955,7 @@ export const store = reactive({
       if (!sep) return
       const status = sep.status
 
-      if (!project.columnOrders || !Array.isArray(project.columnOrders[status])) {
-        const tasksInCol = this.tasks.filter(t => t.projectId === projectId && t.status === status).map(t => t.id)
-        const sepsInCol = project.separators.filter(s => s.status === status).map(s => s.id)
-        project.columnOrders = project.columnOrders || {}
-        project.columnOrders[status] = [...tasksInCol, ...sepsInCol]
-      }
-
-      const orderList = [...project.columnOrders[status]]
+      const orderList = this.getNormalizedColumnOrder(projectId, status)
       const currIdx = orderList.findIndex(id => String(id) === String(separatorId))
       if (currIdx === -1) return
       const targetIdx = direction === 'up' ? currIdx - 1 : currIdx + 1
@@ -929,6 +963,7 @@ export const store = reactive({
 
       const [item] = orderList.splice(currIdx, 1)
       orderList.splice(targetIdx, 0, item)
+      if (!project.columnOrders) project.columnOrders = {}
       project.columnOrders[status] = orderList
 
       await this.saveProjectSeparators(projectId, project.separators, project.columnOrders)
@@ -939,11 +974,11 @@ export const store = reactive({
       if (!project) return
       if (!project.columnOrders) project.columnOrders = {}
 
-      const isSep = typeof itemId === 'string' && itemId.startsWith('sep_')
+      const sep = (project.separators || []).find(s => String(s.id) === String(itemId))
+      const isSep = Boolean(sep) || (typeof itemId === 'string' && itemId.startsWith('sep'))
       let sourceStatus = null
 
       if (isSep) {
-        const sep = (project.separators || []).find(s => String(s.id) === String(itemId))
         if (sep) {
           sourceStatus = sep.status
           sep.status = targetStatus
@@ -964,27 +999,15 @@ export const store = reactive({
         }
       }
 
-      const initColumn = (status) => {
-        if (!status) return
-        if (!Array.isArray(project.columnOrders[status])) {
-          const taskIds = this.tasks.filter(t => t.projectId === projectId && t.status === status).map(t => t.id)
-          const sepIds = (project.separators || []).filter(s => s.status === status).map(s => s.id)
-          project.columnOrders[status] = [...taskIds, ...sepIds]
-        }
+      // If sourceStatus was different, update source column order
+      if (sourceStatus && sourceStatus !== targetStatus) {
+        const sourceCol = this.getNormalizedColumnOrder(projectId, sourceStatus).filter(id => String(id) !== String(itemId))
+        project.columnOrders[sourceStatus] = sourceCol
       }
 
-      if (sourceStatus) initColumn(sourceStatus)
-      initColumn(targetStatus)
+      // Get normalized order of targetStatus
+      let targetCol = this.getNormalizedColumnOrder(projectId, targetStatus).filter(id => String(id) !== String(itemId))
 
-      // Remove itemId from all column orders to prevent duplicates
-      for (const s of Object.keys(project.columnOrders)) {
-        if (Array.isArray(project.columnOrders[s])) {
-          project.columnOrders[s] = project.columnOrders[s].filter(id => String(id) !== String(itemId))
-        }
-      }
-
-      // Insert itemId into targetStatus column orders
-      const targetCol = [...(project.columnOrders[targetStatus] || [])]
       if (targetItemId && String(targetItemId) !== String(itemId)) {
         const targetIdx = targetCol.findIndex(id => String(id) === String(targetItemId))
         if (targetIdx !== -1) {

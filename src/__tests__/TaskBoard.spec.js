@@ -294,4 +294,29 @@ describe('TaskBoard.vue Component Tests', () => {
     // Should display contextual input for this task
     expect(wrapper.text()).toContain('إضافة عنوان فاصل بعد: "مهمة تصميم"')
   })
+
+  it('correctly drops and positions separator between tasks even when columnOrders only had separators initially', async () => {
+    store.currentUser = { role: { name: 'مدير' } }
+    const proj = store.projects[0]
+    store.tasks = [
+      { id: 201, projectId: 1, title: 'المهمة 1', status: 'بانتظار البدء' },
+      { id: 202, projectId: 1, title: 'المهمة 2', status: 'بانتظار البدء' },
+      { id: 203, projectId: 1, title: 'المهمة 3', status: 'بانتظار البدء' }
+    ]
+    proj.separators = [
+      { id: 'sep-alpha', projectId: 1, status: 'بانتظار البدء', title: 'عنوان فاصل' }
+    ]
+    // Initially, columnOrders only knew about the separator
+    proj.columnOrders = { 'بانتظار البدء': ['sep-alpha'] }
+
+    // User drags sep-alpha and drops it after task 202
+    await store.reorderColumnItem(1, 'sep-alpha', 'بانتظار البدء', 202, 'after')
+
+    // Must place sep-alpha right after 202 and before 203
+    expect(proj.columnOrders['بانتظار البدء']).toEqual([201, 202, 'sep-alpha', 203])
+
+    const wrapper = mount(TaskBoard)
+    const items = wrapper.vm.getColumnItems('بانتظار البدء')
+    expect(items.map(i => i.data.id)).toEqual([201, 202, 'sep-alpha', 203])
+  })
 })

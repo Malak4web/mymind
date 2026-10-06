@@ -407,6 +407,9 @@ const handleDragStart = (id, isSep = false, status = null, event = null) => {
 
 const handleItemDragOver = (e, targetItem, statusName) => {
   e.preventDefault()
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = 'move'
+  }
   if (!draggedItemId.value || String(draggedItemId.value) === String(targetItem.data.id)) return
 
   const rect = e.currentTarget.getBoundingClientRect()
@@ -418,13 +421,8 @@ const handleItemDragOver = (e, targetItem, statusName) => {
   activeDragOverColumn.value = statusName
 }
 
-const handleItemDragLeave = (e, targetItem) => {
-  if (dropTargetItemId.value === targetItem.data.id) {
-    if (e && e.currentTarget && e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) {
-      return
-    }
-    dropTargetItemId.value = null
-  }
+const handleItemDragLeave = () => {
+  // Handled by column dragleave and drop/dragend
 }
 
 const clearDragState = () => {
@@ -489,6 +487,9 @@ const handleDropOnItem = async (targetItem, statusName, e) => {
 
 const handleDragOver = (e, statusName) => {
   e.preventDefault()
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = 'move'
+  }
   if (activeDragOverColumn.value !== statusName) {
     activeDragOverColumn.value = statusName
   }
@@ -621,12 +622,12 @@ const setAsCompletedStatus = async (status) => {
 const getColumnItems = (statusName) => {
   const tasks = getTasksByStatus(statusName)
   const seps = (activeProject.value?.separators || []).filter(s => s.status === statusName)
-  const orderList = activeProject.value?.columnOrders?.[statusName] || []
 
-  if (seps.length === 0 && orderList.length === 0) {
+  if (seps.length === 0 && (!activeProject.value?.columnOrders?.[statusName] || activeProject.value.columnOrders[statusName].length === 0)) {
     return tasks.map(t => ({ isSeparator: false, data: t }))
   }
 
+  const orderList = store.getNormalizedColumnOrder(store.activeProjectId, statusName)
   const itemsMap = new Map()
   tasks.forEach(t => itemsMap.set(String(t.id), { isSeparator: false, data: t }))
   seps.forEach(s => itemsMap.set(String(s.id), { isSeparator: true, data: s }))
@@ -1331,9 +1332,8 @@ const onKanbanMouseMove = (e) => {
               draggable="true"
               @dragstart="handleDragStart(item.data.id, true, status, $event)"
               @dragend="clearDragState"
-              @dragover="handleItemDragOver($event, item, status)"
-              @dragleave="handleItemDragLeave($event, item)"
-              @drop.stop="handleDropOnItem(item, status, $event)"
+              @dragover.prevent="handleItemDragOver($event, item, status)"
+              @drop.stop.prevent="handleDropOnItem(item, status, $event)"
               class="my-2.5 py-2 px-3 rounded-xl bg-violet-50/80 dark:bg-violet-950/40 border-r-4 border-r-violet-600 dark:border-r-violet-400 border border-violet-200/60 dark:border-violet-800/60 shadow-2xs select-none transition-all group/sep cursor-grab active:cursor-grabbing relative"
               :class="{
                 'opacity-40 scale-95 border-dashed border-violet-400': draggedItemId === item.data.id,
@@ -1407,9 +1407,8 @@ const onKanbanMouseMove = (e) => {
               draggable="true"
               @dragstart="handleDragStart(item.data.id, false, status, $event)"
               @dragend="clearDragState"
-              @dragover="handleItemDragOver($event, item, status)"
-              @dragleave="handleItemDragLeave($event, item)"
-              @drop.stop="handleDropOnItem(item, status, $event)"
+              @dragover.prevent="handleItemDragOver($event, item, status)"
+              @drop.stop.prevent="handleDropOnItem(item, status, $event)"
               @click="store.openTaskInspector(item.data.id)"
               @dblclick="openEditTask(item.data.id)"
               class="glass-card-hover rounded-2xl p-3.5 shadow-sm hover:-translate-y-1 hover:shadow-glass-glow transition-all duration-300 btn-touch-active cursor-grab active:cursor-grabbing select-none relative group space-y-2 bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80"
