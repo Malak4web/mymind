@@ -813,14 +813,23 @@ class SocialOAuthController extends Controller
         <div class="{$this->getStatusClass($success)}">{$this->getStatusIcon($success)}</div>
         <h2>{$this->getStatusTitle($success, $platform)}</h2>
         <p>{$this->getStatusMessage($success, $errorMessage)}</p>
+        <div style="margin-top: 1.5rem;">
+            <a href="/#social" style="display: inline-block; background: #6366f1; color: white; padding: 0.6rem 1.5rem; border-radius: 12px; font-weight: bold; text-decoration: none; font-size: 0.85rem;">
+                العودة إلى لوحة التحكم
+            </a>
+        </div>
     </div>
     <script>
         try {
             if (window.opener) {
                 window.opener.postMessage({$data}, '*');
+                setTimeout(function() { window.close(); }, 1800);
+            } else {
+                setTimeout(function() { window.location.href = '/#social'; }, 2000);
             }
-        } catch(e) {}
-        setTimeout(function() { window.close(); }, 2000);
+        } catch(e) {
+            setTimeout(function() { window.location.href = '/#social'; }, 2500);
+        }
     </script>
 </body>
 </html>

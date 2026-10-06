@@ -76,6 +76,73 @@ const savePlatformSettings = async (platform) => {
   }
 }
 
+const isOAuthLoggingIn = ref(false)
+const startPlatformLogin = async (platform, forceDirect = false) => {
+  isOAuthLoggingIn.value = true
+  socialSuccessMsg.value = ''
+  socialErrorMsg.value = ''
+
+  let popup = null
+  if (!forceDirect && typeof window !== 'undefined' && window.open) {
+    const width = 600
+    const height = 700
+    const left = window.screen.width / 2 - width / 2
+    const top = window.screen.height / 2 - height / 2
+    try {
+      popup = window.open('about:blank', `oauth_${platform}`, `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=1`)
+      if (popup && popup.document) {
+        popup.document.write(`
+          <!DOCTYPE html>
+          <html dir="rtl" lang="ar">
+          <head>
+            <meta charset="utf-8">
+            <title>جارِ التحويل...</title>
+            <style>
+              body { background: #0f172a; color: #f8fafc; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
+              .box { padding: 2rem; background: #1e293b; border-radius: 1.25rem; border: 1px solid #334155; }
+              .spinner { width: 32px; height: 32px; border: 3px solid #8b5cf6; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+              @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+          </head>
+          <body>
+            <div class="box">
+              <div class="spinner"></div>
+              <div style="font-weight: 800; font-size: 14px;">جارِ الاتصال بالمنصة والانتقال لصفحة تسجيل الدخول...</div>
+            </div>
+          </body>
+          </html>
+        `)
+      }
+    } catch (e) {}
+  }
+
+  try {
+    const res = await store.getSocialOAuthRedirectUrl(platform)
+    if (res && res.redirect_url) {
+      if (forceDirect) {
+        window.location.href = res.redirect_url
+        return
+      }
+      if (popup && !popup.closed) {
+        popup.location.href = res.redirect_url
+      } else {
+        const tab = window.open(res.redirect_url, '_blank')
+        if (!tab) {
+          window.location.href = res.redirect_url
+        }
+      }
+    } else {
+      if (popup && !popup.closed) popup.close()
+      socialErrorMsg.value = res?.message || 'تعذر بدء تسجيل الدخول، تأكد من صحة Client ID & Secret'
+    }
+  } catch (e) {
+    if (popup && !popup.closed) popup.close()
+    socialErrorMsg.value = 'حدث خطأ أثناء محاولة بدء تسجيل الدخول'
+  } finally {
+    isOAuthLoggingIn.value = false
+  }
+}
+
 // User Management states
 const isEditing = ref(false)
 const userIdToEdit = ref(null)
@@ -1517,15 +1584,29 @@ const handleSaveTaskTemplate = async () => {
 
           <!-- Bottom Action Buttons & Quick Help -->
           <div class="pt-4 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between flex-row-reverse flex-wrap gap-3">
-            <button
-              type="button"
-              @click="savePlatformSettings(activeSocialPlatform)"
-              :disabled="socialSaving"
-              class="px-6 py-2.5 rounded-2xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-extrabold text-xs shadow-md shadow-violet-500/20 hover:opacity-95 active:scale-95 transition cursor-pointer flex items-center gap-2"
-            >
-              <span v-if="socialSaving" class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-              <span>{{ socialSaving ? 'جاري الحفظ...' : 'حفظ إعدادات المنصة' }}</span>
-            </button>
+            <div class="flex items-center gap-2 flex-wrap flex-row-reverse">
+              <button
+                type="button"
+                @click="savePlatformSettings(activeSocialPlatform)"
+                :disabled="socialSaving"
+                class="px-6 py-2.5 rounded-2xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-extrabold text-xs shadow-md shadow-violet-500/20 hover:opacity-95 active:scale-95 transition cursor-pointer flex items-center gap-2"
+              >
+                <span v-if="socialSaving" class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span>{{ socialSaving ? 'جاري الحفظ...' : 'حفظ إعدادات المنصة' }}</span>
+              </button>
+
+              <button
+                v-if="socialSettingsForms[activeSocialPlatform]?.app_id && socialSettingsForms[activeSocialPlatform]?.app_secret"
+                type="button"
+                @click="startPlatformLogin(activeSocialPlatform)"
+                :disabled="isOAuthLoggingIn"
+                class="px-5 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-extrabold text-xs shadow-sm transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+              >
+                <span v-if="isOAuthLoggingIn" class="inline-block w-3.5 h-3.5 border-2 border-slate-700 border-t-transparent rounded-full animate-spin"></span>
+                <span v-else>🔑</span>
+                <span>تسجيل الدخول وربط {{ getPlatformName(activeSocialPlatform) }} الآن</span>
+              </button>
+            </div>
 
             <div class="text-[11px] text-slate-400">
               💡 يمكنك الحصول على بيانات الـ App ID و Secret من لوحة تحكم المطورين لكل منصة.

@@ -368,34 +368,79 @@ const fetchAvailablePages = async (platform) => {
 }
 
 // Trigger official OAuth Login popup
-const handleLoginPlatform = async (platform) => {
+const handleLoginPlatform = async (platform, forceDirect = false) => {
   isLoggingIn.value = true
   connectErrorMsg.value = ''
   authCredentialsMissing.value = false
   authMissingMessage.value = ''
 
-  try {
-    const res = await store.getSocialOAuthRedirectUrl(platform)
-    if (res && res.redirect_url) {
-      const width = 600
-      const height = 700
-      const left = window.screen.width / 2 - width / 2
-      const top = window.screen.height / 2 - height / 2
-      window.open(
-        res.redirect_url,
+  let popup = null
+  if (!forceDirect && typeof window !== 'undefined' && window.open) {
+    const width = 600
+    const height = 700
+    const left = window.screen.width / 2 - width / 2
+    const top = window.screen.height / 2 - height / 2
+    try {
+      popup = window.open(
+        'about:blank',
         `oauth_${platform}`,
         `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=1`
       )
+      if (popup && popup.document) {
+        popup.document.write(`
+          <!DOCTYPE html>
+          <html dir="rtl" lang="ar">
+          <head>
+            <meta charset="utf-8">
+            <title>جارِ التحويل...</title>
+            <style>
+              body { background: #0f172a; color: #f8fafc; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
+              .box { padding: 2rem; background: #1e293b; border-radius: 1.25rem; border: 1px solid #334155; }
+              .spinner { width: 32px; height: 32px; border: 3px solid #8b5cf6; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+              @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+          </head>
+          <body>
+            <div class="box">
+              <div class="spinner"></div>
+              <div style="font-weight: 800; font-size: 14px;">جارِ الاتصال بالمنصة والانتقال لصفحة تسجيل الدخول...</div>
+            </div>
+          </body>
+          </html>
+        `)
+      }
+    } catch (e) {
+      console.warn('Popup blocked synchronously:', e)
+    }
+  }
+
+  try {
+    const res = await store.getSocialOAuthRedirectUrl(platform)
+    if (res && res.redirect_url) {
+      if (forceDirect) {
+        window.location.href = res.redirect_url
+        return
+      }
+      if (popup && !popup.closed) {
+        popup.location.href = res.redirect_url
+      } else {
+        const tab = window.open(res.redirect_url, '_blank')
+        if (!tab) {
+          window.location.href = res.redirect_url
+        }
+      }
     } else if (res && res.error === 'missing_credentials') {
+      if (popup && !popup.closed) popup.close()
       authCredentialsMissing.value = true
       authMissingMessage.value = res.message || 'يلزم إدخال App ID و App Secret في إعدادات المنصة أولاً'
-      isLoggingIn.value = false
     } else {
+      if (popup && !popup.closed) popup.close()
       connectErrorMsg.value = res?.message || 'تعذر بدء تسجيل الدخول'
-      isLoggingIn.value = false
     }
   } catch (e) {
+    if (popup && !popup.closed) popup.close()
     connectErrorMsg.value = 'حدث خطأ أثناء محاولة بدء تسجيل الدخول'
+  } finally {
     isLoggingIn.value = false
   }
 }
@@ -2503,6 +2548,18 @@ onUnmounted(() => {
                 class="px-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
               >
                 تسجيل دخول تجريبي سريع
+              </button>
+            </div>
+
+            <!-- Direct redirect fallback if popup is blocked -->
+            <div class="pt-1.5 text-center">
+              <button
+                type="button"
+                @click="handleLoginPlatform(selectedConnectPlatform, true)"
+                class="text-[11px] text-violet-600 dark:text-violet-400 font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
+              >
+                <span>🔗</span>
+                <span>إذا لم تفتح نافذة المتصفح، اضغط هنا لفتح صفحة تسجيل دخول {{ getPlatformMeta(selectedConnectPlatform).name }} مباشرة</span>
               </button>
             </div>
           </div>
