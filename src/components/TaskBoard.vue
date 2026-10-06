@@ -619,6 +619,15 @@ const setAsCompletedStatus = async (status) => {
   await store.setProjectCompletedStatus(store.activeProjectId, status)
 }
 
+const promptRenameActiveProject = async () => {
+  if (!activeProject.value) return
+  const current = activeProject.value.name
+  const newName = prompt('أدخل الاسم الجديد للمشروع:', current)
+  if (newName && newName.trim() && newName.trim() !== current) {
+    await store.renameProject(activeProject.value.id, newName.trim())
+  }
+}
+
 const getColumnSeparators = (statusName) => {
   return (activeProject.value?.separators || []).filter(s => s.status === statusName)
 }
@@ -1136,8 +1145,18 @@ const onKanbanMouseMove = (e) => {
     <!-- Kanban Header Actions -->
     <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 flex-wrap gap-2">
       <div>
-        <h2 class="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-          لوحة المهام (Kanban)
+        <h2 class="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2 flex-wrap">
+          <span>لوحة المهام (Kanban)</span>
+          <span class="text-slate-300 dark:text-slate-700">|</span>
+          <span class="text-violet-600 dark:text-violet-400 font-black">{{ activeProject.name }}</span>
+          <button 
+            @click="promptRenameActiveProject"
+            class="text-xs text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer min-h-[32px] min-w-[32px] flex items-center justify-center"
+            title="تعديل اسم المشروع"
+            aria-label="تعديل اسم المشروع"
+          >
+            ✏️
+          </button>
           <span class="text-xs font-bold text-slate-400 font-sans">({{ projectTasks.length }} مهام)</span>
         </h2>
       </div>

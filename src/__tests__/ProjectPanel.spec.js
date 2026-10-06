@@ -33,7 +33,7 @@ describe('ProjectPanel.vue Component Tests', () => {
     expect(wrapper.text()).toContain('مشروع الإعلانات')
   })
 
-  it('displays correct task count for each project status badge', () => {
+  it('displays correct task count for each project status badge when expanded', async () => {
     store.projects[0].statuses = ['بانتظار البدء', 'قيد العمل']
     store.tasks = [
       { id: 1, projectId: 1, title: 'تاسك 1', status: 'بانتظار البدء' },
@@ -43,23 +43,40 @@ describe('ProjectPanel.vue Component Tests', () => {
     const wrapper = mount(ProjectPanel)
     const webProjectCard = wrapper.findAll('.glass-card-hover').find(c => c.text().includes('مشروع الويب'))
     expect(webProjectCard).toBeTruthy()
+
+    // Default is collapsed - status counts should not be visible yet
+    expect(webProjectCard.text()).not.toContain('بانتظار البدء')
+
+    // Click arrow to expand details
+    const expandBtn = webProjectCard.find('button[aria-label="عرض تفاصيل المشروع"]')
+    expect(expandBtn.exists()).toBe(true)
+    await expandBtn.trigger('click')
+
     expect(webProjectCard.text()).toContain('بانتظار البدء')
     expect(webProjectCard.text()).toContain('2')
     expect(webProjectCard.text()).toContain('قيد العمل')
     expect(webProjectCard.text()).toContain('1')
   })
 
-  it('filters projects by active category pill', async () => {
+  it('filters projects by category dropdown and provides compact "+" button', async () => {
     const wrapper = mount(ProjectPanel)
 
-    // Click on category "تسويق" (id: 2)
-    const marketingPill = wrapper.findAll('button').find(b => b.text().includes('تسويق'))
-    expect(marketingPill).toBeTruthy()
-    await marketingPill.trigger('click')
+    // Select category "تسويق" (id: 2) from dropdown
+    const select = wrapper.find('select[aria-label="فلترة المشاريع حسب التصنيف"]')
+    expect(select.exists()).toBe(true)
+    
+    // Check "+" button exists with icon only
+    const addCatBtn = wrapper.find('button[aria-label="إضافة تصنيف جديد"]')
+    expect(addCatBtn.exists()).toBe(true)
+    expect(addCatBtn.text()).toBe('＋')
+
+    await select.setValue('2')
+    await select.trigger('change')
 
     expect(store.activeCategoryId).toBe(2)
     // Only "مشروع الإعلانات" should be shown
     expect(wrapper.text()).toContain('مشروع الإعلانات')
+    expect(wrapper.text()).not.toContain('مشروع الويب')
   })
 
   it('filters projects in real-time when typing in project search input', async () => {
@@ -102,13 +119,41 @@ describe('ProjectPanel.vue Component Tests', () => {
     expect(createBtn.attributes('disabled')).toBeDefined()
   })
 
+  it('allows editing project name inline and persists changes', async () => {
+    store.currentUser = { role: { name: 'مدير' } }
+    vi.spyOn(store, 'renameProject').mockResolvedValue(true)
+
+    const wrapper = mount(ProjectPanel)
+    const webProjectCard = wrapper.findAll('.glass-card-hover').find(c => c.text().includes('مشروع الويب'))
+    expect(webProjectCard).toBeTruthy()
+
+    // Click edit project name button ✏️
+    const editBtn = webProjectCard.find('button[aria-label="تعديل اسم المشروع"]')
+    expect(editBtn.exists()).toBe(true)
+    await editBtn.trigger('click')
+
+    // Find input and submit new name
+    const editInput = webProjectCard.find('input[placeholder="اسم المشروع الجديد..."]')
+    expect(editInput.exists()).toBe(true)
+    await editInput.setValue('مشروع الويب المطور')
+    await editInput.trigger('keyup.enter')
+
+    expect(store.renameProject).toHaveBeenCalledWith(1, 'مشروع الويب المطور')
+  })
+
   it('asks before deleting a project, and does nothing if the user backs out', async () => {
     store.currentUser = { role: { name: 'مدير' } }
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
 
     const wrapper = mount(ProjectPanel)
-    const deleteBtn = wrapper.find('button[title="نقل المشروع لسلة المهملات"]')
+    const webProjectCard = wrapper.findAll('.glass-card-hover').find(c => c.text().includes('مشروع الويب'))
+    
+    // First expand card to access delete button
+    const expandBtn = webProjectCard.find('button[aria-label="عرض تفاصيل المشروع"]')
+    await expandBtn.trigger('click')
+
+    const deleteBtn = webProjectCard.find('button[aria-label="نقل المشروع لسلة المهملات"]')
     expect(deleteBtn.exists()).toBe(true)
 
     await deleteBtn.trigger('click')
@@ -127,7 +172,13 @@ describe('ProjectPanel.vue Component Tests', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     const wrapper = mount(ProjectPanel)
-    const deleteBtn = wrapper.find('button[title="نقل المشروع لسلة المهملات"]')
+    const webProjectCard = wrapper.findAll('.glass-card-hover').find(c => c.text().includes('مشروع الويب'))
+
+    // First expand card to access delete button
+    const expandBtn = webProjectCard.find('button[aria-label="عرض تفاصيل المشروع"]')
+    await expandBtn.trigger('click')
+
+    const deleteBtn = webProjectCard.find('button[aria-label="نقل المشروع لسلة المهملات"]')
     expect(deleteBtn.exists()).toBe(true)
 
     await deleteBtn.trigger('click')

@@ -90,7 +90,70 @@ const editingCategoryId = ref(null)
 const editCatName = ref('')
 const editCatColor = ref('')
 const editCatIcon = ref('')
-const showCategoryMenu = ref(null)
+// Expanded projects state: default is empty (all closed/collapsed as requested)
+const expandedProjectIds = ref(new Set())
+
+const isProjectExpanded = (projectId) => {
+  return expandedProjectIds.value.has(projectId)
+}
+
+const toggleProjectExpand = (projectId) => {
+  const next = new Set(expandedProjectIds.value)
+  if (next.has(projectId)) {
+    next.delete(projectId)
+  } else {
+    next.add(projectId)
+  }
+  expandedProjectIds.value = next
+}
+
+// Project Name Editing State
+const editingProjectId = ref(null)
+const editProjectNameInput = ref('')
+
+const startEditProjectName = (project) => {
+  if (!project) return
+  editingProjectId.value = project.id
+  editProjectNameInput.value = project.name
+}
+
+const cancelEditProjectName = () => {
+  editingProjectId.value = null
+  editProjectNameInput.value = ''
+}
+
+const saveEditProjectName = async (project) => {
+  const newName = editProjectNameInput.value.trim()
+  if (!newName || !project) {
+    cancelEditProjectName()
+    return
+  }
+  if (newName !== project.name) {
+    await store.renameProject(project.id, newName)
+  }
+  cancelEditProjectName()
+}
+
+// Category filter computed & methods
+const selectedCategoryObject = computed(() => {
+  if (!store.activeCategoryId || store.activeCategoryId === 'none') return null
+  return store.projectCategories.find(c => c.id === store.activeCategoryId) || null
+})
+
+const editingCategoryObject = computed(() => {
+  if (!editingCategoryId.value) return null
+  return store.projectCategories.find(c => c.id === editingCategoryId.value) || null
+})
+
+const handleCategoryDropdownChange = (val) => {
+  if (val === 'all') {
+    store.activeCategoryId = null
+  } else if (val === 'none') {
+    store.activeCategoryId = 'none'
+  } else {
+    store.activeCategoryId = parseInt(val)
+  }
+}
 
 const categoryColors = [
   '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4', '#14b8a6',
@@ -420,131 +483,100 @@ const handleTouchEnd = (closeFn) => {
       </div>
 
     <!-- ═══════════════════════════════════════════ -->
-    <!--  CATEGORY PILLS BAR                        -->
+    <!--  CATEGORY FILTER DROPDOWN BAR              -->
     <!-- ═══════════════════════════════════════════ -->
-    <div class="glass-card rounded-2xl p-4 shadow-sm">
-      <div class="flex items-center justify-between mb-3">
-        <button 
-          @click="showCategoryForm = !showCategoryForm"
-          class="text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1"
-          title="إضافة تصنيف جديد" aria-label="إضافة تصنيف جديد"
-        >
-          <span>＋</span>
-          <span>تصنيف</span>
-        </button>
-        <h3 class="text-xs font-bold text-slate-400 dark:text-slate-400">التصنيفات</h3>
-      </div>
-
-      <!-- Category Pills (horizontal scrollable) -->
-      <div class="flex flex-wrap gap-2">
-        <!-- "All" pill -->
-        <button
-          @click="store.activeCategoryId = null"
-          :class="[
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all duration-200 cursor-pointer shrink-0',
-            store.activeCategoryId === null
-              ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100 shadow-md shadow-slate-900/20'
-              : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
-          ]"
-        >
-          <span>📋</span>
-          <span>الكل</span>
-          <span class="text-[10px] opacity-70 font-extrabold">{{ activeProjectsList.length }}</span>
-        </button>
-
-        <!-- Category pills -->
-        <div 
-          v-for="cat in store.projectCategories" 
-          :key="cat.id" 
-          class="relative group/cat"
-        >
-          <!-- Inline editing mode -->
-          <div v-if="editingCategoryId === cat.id" class="flex items-center gap-1.5 bg-white dark:bg-slate-900 border-2 border-violet-500 rounded-xl p-1.5 shadow-lg">
-            <input
-              v-model="editCatName"
-              @keyup.enter="saveEditCategory"
-              @keyup.escape="editingCategoryId = null"
-              class="w-24 bg-transparent text-[11px] font-bold text-slate-800 dark:text-slate-200 outline-none px-1"
-              autofocus
-            />
-            <div class="flex gap-0.5">
-              <button aria-label="خيارات التصنيف" 
-                v-for="c in categoryColors.slice(0, 6)" :key="c"
-                @click="editCatColor = c"
-                :class="['w-4 h-4 rounded-full border-2 transition cursor-pointer', editCatColor === c ? 'border-slate-900 dark:border-white scale-110' : 'border-transparent']"
-                :style="{ backgroundColor: c }"
-              ></button>
-            </div>
-            <button aria-label="حفظ اسم التصنيف" @click="saveEditCategory" class="text-emerald-500 hover:text-emerald-600 text-sm font-bold cursor-pointer">✓</button>
-            <button aria-label="إلغاء التعديل" @click="editingCategoryId = null" class="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer">✕</button>
-          </div>
+    <div class="glass-card rounded-2xl p-3 shadow-sm space-y-2">
+      <div class="flex items-center gap-2 justify-between">
+        <div class="flex items-center gap-2 flex-1 min-w-0">
+          <span class="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">التصنيفات</span>
           
-          <!-- Normal pill -->
-          <button
-            v-else
-            @click="store.activeCategoryId = cat.id"
-            :class="[
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all duration-200 cursor-pointer shrink-0',
-              store.activeCategoryId === cat.id
-                ? 'text-white shadow-md'
-                : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
-            ]"
-            :style="store.activeCategoryId === cat.id 
-              ? { backgroundColor: cat.color || '#8b5cf6', borderColor: cat.color || '#8b5cf6', boxShadow: `0 4px 12px ${(cat.color || '#8b5cf6')}40` } 
-              : { color: cat.color || '#8b5cf6' }
-            "
-          >
-            <span>{{ cat.icon || '📂' }}</span>
-            <span>{{ cat.name }}</span>
-            <span class="text-[10px] opacity-70 font-extrabold">{{ cat.projects_count ?? getCategoryProjectCount(cat.id) }}</span>
-          </button>
-
-          <!-- Context menu trigger (appears on hover) -->
-          <div 
-            v-if="editingCategoryId !== cat.id"
-            class="absolute -top-1 -left-1 opacity-100 sm:opacity-0 sm:group-hover/cat:opacity-100 sm:focus-within:opacity-100 transition"
-          >
-            <button aria-label="خيارات التصنيف" 
-              @click.stop="showCategoryMenu = showCategoryMenu === cat.id ? null : cat.id"
-              class="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] flex items-center justify-center cursor-pointer hover:bg-slate-300 dark:hover:bg-slate-600 transition"
-            >⋯</button>
-          </div>
-          
-          <!-- Context dropdown -->
-          <div 
-            v-if="showCategoryMenu === cat.id" 
-            class="absolute top-full left-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1.5 z-30 min-w-[120px] text-right"
-          >
-            <button 
-              @click="startEditCategory(cat)" 
-              class="w-full text-right px-3 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-2"
+          <div class="relative flex-1 min-w-0">
+            <select
+              :value="store.activeCategoryId === null ? 'all' : (store.activeCategoryId === 'none' ? 'none' : String(store.activeCategoryId))"
+              @change="handleCategoryDropdownChange($event.target.value)"
+              class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-violet-500 cursor-pointer truncate"
+              aria-label="فلترة المشاريع حسب التصنيف"
             >
-              <span>✏️</span><span>تعديل</span>
-            </button>
-            <button 
-              @click="handleDeleteCategory(cat.id)" 
-              class="w-full text-right px-3 py-1.5 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition cursor-pointer flex items-center gap-2"
-            >
-              <span>🗑️</span><span>حذف</span>
-            </button>
+              <option value="all" class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold">
+                📋 الكل ({{ activeProjectsList.length }})
+              </option>
+              <option 
+                v-for="cat in store.projectCategories" 
+                :key="cat.id" 
+                :value="String(cat.id)"
+                class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold"
+              >
+                {{ cat.icon || '📂' }} {{ cat.name }} ({{ cat.projects_count ?? getCategoryProjectCount(cat.id) }})
+              </option>
+              <option v-if="getUncategorizedCount() > 0" value="none" class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold">
+                📌 بدون تصنيف ({{ getUncategorizedCount() }})
+              </option>
+            </select>
           </div>
         </div>
 
-        <!-- Uncategorized pill (if any projects have no category) -->
-        <button
-          v-if="getUncategorizedCount() > 0"
-          @click="store.activeCategoryId = 'none'"
-          :class="[
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all duration-200 cursor-pointer shrink-0',
-            store.activeCategoryId === 'none'
-              ? 'bg-slate-600 text-white border-slate-600 shadow-md shadow-slate-600/20'
-              : 'bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 border-dashed'
-          ]"
+        <!-- Add Category: Icon '+' only to save space -->
+        <button 
+          @click="showCategoryForm = !showCategoryForm"
+          class="w-8 h-8 rounded-xl bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/40 dark:hover:bg-violet-900/50 text-violet-600 dark:text-violet-400 font-extrabold text-sm transition cursor-pointer flex items-center justify-center shrink-0 border border-violet-200/50 dark:border-violet-800/50"
+          title="إضافة تصنيف جديد" 
+          aria-label="إضافة تصنيف جديد"
         >
-          <span>📌</span>
-          <span>بدون تصنيف</span>
-          <span class="text-[10px] opacity-70 font-extrabold">{{ getUncategorizedCount() }}</span>
+          ＋
         </button>
+      </div>
+
+      <!-- Quick Category Management (Edit / Delete if a specific category is active) -->
+      <div 
+        v-if="selectedCategoryObject" 
+        class="flex items-center justify-between text-[11px] pt-1.5 px-1 border-t border-slate-100 dark:border-slate-800/60 text-slate-500 dark:text-slate-400"
+      >
+        <div class="flex items-center gap-1.5 truncate">
+          <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: selectedCategoryObject.color || '#8b5cf6' }"></span>
+          <span class="font-bold text-slate-700 dark:text-slate-200 truncate">{{ selectedCategoryObject.icon }} {{ selectedCategoryObject.name }}</span>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button 
+            @click="startEditCategory(selectedCategoryObject)" 
+            class="hover:text-violet-600 dark:hover:text-violet-400 font-bold flex items-center gap-1 text-[10px] cursor-pointer"
+            title="تعديل هذا التصنيف"
+            aria-label="تعديل هذا التصنيف"
+          >
+            <span>✏️</span>
+            <span>تعديل</span>
+          </button>
+          <button 
+            @click="handleDeleteCategory(selectedCategoryObject.id)" 
+            class="hover:text-rose-600 dark:hover:text-rose-400 font-bold flex items-center gap-1 text-[10px] cursor-pointer"
+            title="حذف هذا التصنيف"
+            aria-label="حذف هذا التصنيف"
+          >
+            <span>🗑️</span>
+            <span>حذف</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Inline Category Edit Mode if editingCategoryId is set -->
+      <div v-if="editingCategoryId" class="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-violet-500 rounded-xl p-2 shadow-sm">
+        <input
+          v-model="editCatName"
+          @keyup.enter="saveEditCategory"
+          @keyup.escape="editingCategoryId = null"
+          class="flex-1 bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none px-1"
+          placeholder="اسم التصنيف..."
+          autofocus
+        />
+        <div class="flex gap-1 shrink-0">
+          <button aria-label="خيارات التصنيف" 
+            v-for="c in categoryColors.slice(0, 5)" :key="c"
+            @click="editCatColor = c"
+            :class="['w-4 h-4 rounded-full border-2 transition cursor-pointer', editCatColor === c ? 'border-slate-900 dark:border-white scale-110' : 'border-transparent']"
+            :style="{ backgroundColor: c }"
+          ></button>
+        </div>
+        <button aria-label="حفظ اسم التصنيف" @click="saveEditCategory" class="text-emerald-500 hover:text-emerald-600 text-xs font-bold cursor-pointer px-1">✓</button>
+        <button aria-label="إلغاء التعديل" @click="editingCategoryId = null" class="text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer px-1">✕</button>
       </div>
 
       <!-- New Category Inline Form -->
@@ -660,9 +692,9 @@ const handleTouchEnd = (closeFn) => {
           @dragend="handleDragEnd"
           @click="store.activeProjectId = p.id"
           :class="[
-            'p-4 rounded-xl text-right cursor-pointer transition-all duration-300 relative group flex items-start justify-between gap-3 overflow-hidden glass-card-hover btn-touch-active',
+            'rounded-xl text-right cursor-pointer transition-all duration-300 relative group overflow-hidden glass-card-hover btn-touch-active border border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80',
             store.activeProjectId === p.id 
-              ? 'ring-2 ring-violet-500/50 shadow-glass-glow' 
+              ? 'ring-2 ring-violet-500/50 shadow-glass-glow bg-white dark:bg-slate-900' 
               : '',
             draggedProjectIndex === idx ? 'opacity-30 border-dashed border-violet-500 scale-95' : '',
             dragOverProjectIndex === idx && draggedProjectIndex !== idx ? 'ring-2 ring-violet-500 border-violet-500 bg-violet-50/40 dark:bg-violet-950/30' : ''
@@ -671,26 +703,106 @@ const handleTouchEnd = (closeFn) => {
           <!-- Selected accent right bar -->
           <div 
             v-if="store.activeProjectId === p.id"
-            class="absolute top-0 right-0 w-1 h-full shadow-[0_0_8px_rgba(139,92,246,0.5)]"
+            class="absolute top-0 right-0 w-1.5 h-full shadow-[0_0_8px_rgba(139,92,246,0.5)] z-10"
             :style="{ background: `linear-gradient(to bottom, ${store.projectCategories.find(c => c.id === p.categoryId)?.color || '#8b5cf6'}, #4f46e5)` }"
           ></div>
 
-          <!-- Drag Handle Grip Icon -->
-          <div 
-            class="text-slate-300 dark:text-slate-600 hover:text-violet-500 dark:hover:text-violet-400 cursor-grab active:cursor-grabbing p-0.5 -mr-1 transition shrink-0 self-center"
-            title="اسحب لترتيب المشروع"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 8h16M4 16h16" />
-            </svg>
+          <!-- Card Header: ALWAYS VISIBLE (Only Project Name + Edit + Toggle Arrow) -->
+          <div class="p-3 flex items-center justify-between gap-2">
+            <!-- Left: Grip & Name / Edit input -->
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+              <!-- Drag Handle Grip Icon -->
+              <div 
+                class="text-slate-300 dark:text-slate-600 hover:text-violet-500 dark:hover:text-violet-400 cursor-grab active:cursor-grabbing p-0.5 transition shrink-0"
+                title="اسحب لترتيب المشروع"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 8h16M4 16h16" />
+                </svg>
+              </div>
+
+              <!-- Inline Project Name Edit Mode -->
+              <div v-if="editingProjectId === p.id" class="flex items-center gap-1.5 flex-1 min-w-0" @click.stop>
+                <input
+                  v-model="editProjectNameInput"
+                  @keyup.enter="saveEditProjectName(p)"
+                  @keyup.escape="cancelEditProjectName"
+                  class="flex-1 bg-white dark:bg-slate-950 border border-violet-500 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none shadow-inner"
+                  autofocus
+                  placeholder="اسم المشروع الجديد..."
+                />
+                <button 
+                  @click="saveEditProjectName(p)" 
+                  class="p-1 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 text-xs font-bold transition cursor-pointer"
+                  title="حفظ الاسم"
+                  aria-label="حفظ الاسم"
+                >
+                  ✓
+                </button>
+                <button 
+                  @click="cancelEditProjectName" 
+                  class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold transition cursor-pointer"
+                  title="إلغاء"
+                  aria-label="إلغاء"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <!-- Normal Display Mode: Project Name -->
+              <div v-else class="flex items-center gap-1.5 min-w-0 flex-1">
+                <h4 
+                  class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate"
+                  :title="p.name"
+                  @dblclick.stop="startEditProjectName(p)"
+                >
+                  {{ p.name }}
+                </h4>
+                
+                <!-- Quick Edit Button (appears on hover/focus) -->
+                <button
+                  @click.stop="startEditProjectName(p)"
+                  class="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-violet-600 transition text-[11px] shrink-0"
+                  title="تعديل اسم المشروع"
+                  aria-label="تعديل اسم المشروع"
+                >
+                  ✏️
+                </button>
+              </div>
+            </div>
+
+            <!-- Right: Arrow Button (Toggle Expand/Collapse) -->
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                @click.stop="toggleProjectExpand(p.id)"
+                class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-violet-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                :title="isProjectExpanded(p.id) ? 'إخفاء تفاصيل المشروع' : 'عرض تفاصيل المشروع'"
+                :aria-label="isProjectExpanded(p.id) ? 'إخفاء تفاصيل المشروع' : 'عرض تفاصيل المشروع'"
+              >
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  class="h-4 w-4 transform transition-transform duration-200" 
+                  :class="{ 'rotate-180 text-violet-600': isProjectExpanded(p.id) }"
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor" 
+                  stroke-width="2.5"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
           </div>
 
-          
-          <div class="space-y-1.5 pr-1.5 flex-1 min-w-0">
-            <div class="flex items-center gap-2 flex-wrap justify-between">
-              <div class="flex items-center gap-1.5 flex-wrap min-w-0">
-                <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{{ p.name }}</h4>
-                <!-- Interactive Category Selector Badge on Project Card -->
+          <!-- Card Body: ONLY VISIBLE WHEN EXPANDED (باقي معلومات المشروع) -->
+          <Transition name="fade">
+            <div 
+              v-if="isProjectExpanded(p.id)" 
+              class="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-800/60 space-y-2.5 text-right"
+              @click.stop
+            >
+              <!-- Category Selector & Total Tasks Count -->
+              <div class="flex items-center justify-between gap-2 flex-wrap pt-1">
                 <select
                   :value="p.categoryId || ''"
                   @click.stop
@@ -713,65 +825,85 @@ const handleTouchEnd = (closeFn) => {
                     {{ cat.icon }} {{ cat.name }}
                   </option>
                 </select>
-              </div>
-              <span class="text-[10px] font-extrabold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 rounded-lg border border-violet-200 dark:border-violet-800/60 shrink-0" title="إجمالي عدد المهام في هذا المشروع">
-                {{ getProjectTotalTaskCount(p.id) }} مهمة
-              </span>
-            </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">{{ p.description }}</p>
-            <div class="flex flex-wrap items-center gap-1.5 pt-2">
-              <span 
-                v-for="s in p.statuses" 
-                :key="s" 
-                :class="['text-[10px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1.5', getStatusColor(s)]"
-                :title="`${s}: ${getTaskCountByStatus(p.id, s)} مهمة`"
-              >
-                <span>{{ s }}</span>
-                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-slate-900/10 dark:bg-white/15">
-                  {{ getTaskCountByStatus(p.id, s) }}
-                </span>
-              </span>
-            </div>
 
-            <!-- Project Assigned Members List & Manage Button -->
-            <div class="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-2 flex-wrap" @click.stop>
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="text-[10px] font-bold text-slate-400">الأعضاء:</span>
+                <span class="text-[10px] font-extrabold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 rounded-lg border border-violet-200 dark:border-violet-800/60 shrink-0" title="إجمالي عدد المهام في هذا المشروع">
+                  {{ getProjectTotalTaskCount(p.id) }} مهمة
+                </span>
+              </div>
+
+              <!-- Description -->
+              <p v-if="p.description" class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-3">
+                {{ p.description }}
+              </p>
+
+              <!-- Statuses Badges with counts -->
+              <div class="flex flex-wrap items-center gap-1.5 pt-1">
                 <span 
-                  v-for="u in store.users.filter(u => (p.memberIds || []).includes(u.id))" 
-                  :key="u.id" 
-                  @click.stop="toggleProjectMember(p, u.id)"
-                  class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/30 flex items-center gap-1 group/u cursor-pointer hover:bg-rose-500/10 hover:text-rose-600 hover:border-rose-500/30 transition"
-                  :title="'انقر لإزالة ' + u.name + ' من المشروع'"
+                  v-for="s in p.statuses" 
+                  :key="s" 
+                  :class="['text-[10px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1.5', getStatusColor(s)]"
+                  :title="`${s}: ${getTaskCountByStatus(p.id, s)} مهمة`"
                 >
-                  <span>👤 {{ u.name }}</span>
-                  <span class="text-[10px] opacity-60 group-hover/u:opacity-100">✕</span>
+                  <span>{{ s }}</span>
+                  <span class="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-slate-900/10 dark:bg-white/15">
+                    {{ getTaskCountByStatus(p.id, s) }}
+                  </span>
                 </span>
-                <span v-if="(p.memberIds || []).length === 0" class="text-[10px] text-slate-400 italic">لم يحدد أعضاء</span>
               </div>
 
-              <!-- Button to open Member Search Popup Modal -->
-              <button 
-                @click="openMemberModal(p)"
-                class="bg-slate-100 hover:bg-violet-50 dark:bg-slate-800 dark:hover:bg-violet-950/30 text-slate-700 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 font-bold px-2.5 py-1.5 min-h-[44px] rounded-xl text-[10px] border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1 shrink-0 active-scale"
-              >
-                <span>👥 إدارة الأعضاء</span>
-                <span class="bg-violet-600 text-white font-extrabold text-[10px] px-1.5 py-0.2 rounded-md">
-                  {{ (p.memberIds || []).length }}
-                </span>
-              </button>
+              <!-- Project Assigned Members List & Manage Button -->
+              <div class="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-2 flex-wrap">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-[10px] font-bold text-slate-400">الأعضاء:</span>
+                  <span 
+                    v-for="u in store.users.filter(u => (p.memberIds || []).includes(u.id))" 
+                    :key="u.id" 
+                    @click.stop="toggleProjectMember(p, u.id)"
+                    class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/30 flex items-center gap-1 group/u cursor-pointer hover:bg-rose-500/10 hover:text-rose-600 hover:border-rose-500/30 transition"
+                    :title="'انقر لإزالة ' + u.name + ' من المشروع'"
+                  >
+                    <span>👤 {{ u.name }}</span>
+                    <span class="text-[10px] opacity-60 group-hover/u:opacity-100">✕</span>
+                  </span>
+                  <span v-if="(p.memberIds || []).length === 0" class="text-[10px] text-slate-400 italic">لم يحدد أعضاء</span>
+                </div>
+
+                <!-- Button to open Member Search Popup Modal -->
+                <button 
+                  @click.stop="openMemberModal(p)"
+                  class="bg-slate-100 hover:bg-violet-50 dark:bg-slate-800 dark:hover:bg-violet-950/30 text-slate-700 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 font-bold px-2.5 py-1.5 min-h-[36px] rounded-xl text-[10px] border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1 shrink-0 active-scale"
+                >
+                  <span>👥 إدارة الأعضاء</span>
+                  <span class="bg-violet-600 text-white font-extrabold text-[10px] px-1.5 py-0.2 rounded-md">
+                    {{ (p.memberIds || []).length }}
+                  </span>
+                </button>
+              </div>
+
+              <!-- Footer Actions: Delete Project & Rename button -->
+              <div class="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
+                <button
+                  @click.stop="startEditProjectName(p)"
+                  class="text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <span>✏️</span>
+                  <span>تعديل اسم المشروع</span>
+                </button>
+
+                <button 
+                  @click.stop="confirmDeleteProject(p)"
+                  class="p-1.5 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition duration-200 cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+                  title="نقل المشروع لسلة المهملات" 
+                  aria-label="نقل المشروع لسلة المهملات"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  <span>حذف</span>
+                </button>
+              </div>
             </div>
-          </div>
-          
-          <button 
-            @click.stop="confirmDeleteProject(p)"
-            class="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-rose-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition duration-200 cursor-pointer self-start active-scale"
-            title="نقل المشروع لسلة المهملات" aria-label="نقل المشروع لسلة المهملات"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
+          </Transition>
         </div>
       </div>
     </div>

@@ -715,7 +715,7 @@ export const store = reactive({
   async updateProject(id, name, description, memberIds = [], categoryId = undefined) {
     if (!this.hasPermission('manage-projects')) {
       alert("غير مصرح لك بتعديل المشاريع.")
-      return
+      return false
     }
 
     try {
@@ -733,11 +733,30 @@ export const store = reactive({
         await this.loadProjects(true)
         await this.loadProjectCategories(true)
         this.addNotification('تعديل مشروع', `تم تحديث تفاصيل المشروع "${name}" بنجاح.`)
+        return true
       }
+      return false
     } catch (e) {
       console.error("خطأ في تحديث المشروع", e)
       this.toastError('تعذّر حفظ المشروع. حاول مرة أخرى.')
+      return false
     }
+  },
+
+  // Rename Project (تعديل اسم المشروع)
+  async renameProject(id, newName) {
+    const trimmed = (newName || '').trim()
+    if (!trimmed) return false
+    const proj = this.projects.find(p => p.id === id)
+    if (!proj) return false
+    const oldName = proj.name
+    proj.name = trimmed
+    const success = await this.updateProject(id, trimmed, proj.description || '', proj.memberIds || [], proj.categoryId)
+    if (!success) {
+      proj.name = oldName
+      return false
+    }
+    return true
   },
 
     getProjectLocalMeta(projectId) {
