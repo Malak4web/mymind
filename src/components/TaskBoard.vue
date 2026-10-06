@@ -18,7 +18,37 @@ const setMobileStatusFilter = (status) => {
   selectedMobileStatus.value = status
 }
 
-const toggleTaskStatus = async (task, e) => {
+// Active Project Statuses & Completed Status
+const activeProjectStatuses = computed(() => activeProject.value?.statuses || store.globalStatuses)
+const activeProjectCompletedStatus = computed(() => {
+  return store.getProjectCompletedStatus(activeProject.value)
+})
+
+const getNextStatus = (currentStatus) => {
+  const statuses = activeProjectStatuses.value
+  if (!statuses || statuses.length === 0) return currentStatus
+  const currentIndex = statuses.indexOf(currentStatus)
+  if (currentIndex === -1) return statuses[0]
+  return statuses[(currentIndex + 1) % statuses.length]
+}
+
+const isTaskDone = (task) => {
+  if (!task) return false
+  return task.status === activeProjectCompletedStatus.value || task.status === 'مكتمل'
+}
+
+const isStatusCompleted = (status) => {
+  return status === activeProjectCompletedStatus.value || status === 'مكتمل'
+}
+
+const isLastOrCompletedStatus = (status) => {
+  if (isStatusCompleted(status)) return true
+  const statuses = activeProjectStatuses.value
+  if (statuses && statuses.length > 0 && statuses[statuses.length - 1] === status) return true
+  return false
+}
+
+const moveToNextStatus = async (task, e) => {
   if (e) e.stopPropagation()
   const statuses = activeProjectStatuses.value
   if (!statuses || statuses.length === 0) return
@@ -31,7 +61,17 @@ const toggleTaskStatus = async (task, e) => {
     startDate: task.startDate,
     deadline: task.deadline
   })
+
+  if (isStatusCompleted(nextStatus)) {
+    triggerCelebration()
+    playSuccessSound()
+    store.toastSuccess(`🎉 مبروك! اكتملت المهمة وتم نقلها إلى "${nextStatus}"`)
+  } else {
+    store.toastSuccess(`تم نقل المهمة إلى: "${nextStatus}"`)
+  }
 }
+
+const toggleTaskStatus = moveToNextStatus
 
 // Drag and drop state
 const draggedTaskId = ref(null)
@@ -332,7 +372,7 @@ onUnmounted(() => {
 
 const toggleTaskCompletion = async (task, event) => {
   const isChecked = event.target.checked
-  const targetStatus = isChecked ? 'مكتمل' : (activeProject.value?.statuses[0] || 'بانتظار البدء')
+  const targetStatus = isChecked ? activeProjectCompletedStatus.value : (activeProjectStatuses.value[0] || 'بانتظار البدء')
   
   await store.updateTask(task.id, {
     title: task.title,
@@ -413,9 +453,97 @@ const getTasksByStatus = (statusName) => {
   return projectTasks.value.filter(t => t.status === statusName)
 }
 
+// Section Separators State & Methods
+const activeSeparatorAddColumn = ref(null)
+const newSeparatorTitle = ref('')
+const editingSeparatorId = ref(null)
+const editSeparatorTitle = ref('')
+
+const openAddSeparator = (status) => {
+  activeSeparatorAddColumn.value = status
+  newSeparatorTitle.value = ''
+}
+
+const cancelAddSeparator = () => {
+  activeSeparatorAddColumn.value = null
+  newSeparatorTitle.value = ''
+}
+
+const submitAddSeparator = async (status) => {
+  const title = newSeparatorTitle.value.trim()
+  if (!title) return
+  await store.addProjectSeparator(store.activeProjectId, status, title)
+  activeSeparatorAddColumn.value = null
+  newSeparatorTitle.value = ''
+}
+
+const startEditSeparator = (sep) => {
+  editingSeparatorId.value = sep.id
+  editSeparatorTitle.value = sep.title
+}
+
+const saveEditSeparator = async (sep) => {
+  const title = editSeparatorTitle.value.trim()
+  if (!title) return
+  await store.updateProjectSeparator(store.activeProjectId, sep.id, title)
+  editingSeparatorId.value = null
+}
+
+const deleteSeparator = async (sep) => {
+  if (confirm(`هل أنت متأكد من حذف العنوان الفاصل "${sep.title}"؟ المهام ستبقى داخل الحالة.`)) {
+    await store.deleteProjectSeparator(store.activeProjectId, sep.id)
+  }
+}
+
+const moveSeparator = async (sep, direction) => {
+  await store.moveProjectSeparator(store.activeProjectId, sep.id, direction)
+}
+
+const setAsCompletedStatus = async (status) => {
+  await store.setProjectCompletedStatus(store.activeProjectId, status)
+}
+
+const getColumnItems = (statusName) => {
+  const tasks = getTasksByStatus(statusName)
+  const seps = (activeProject.value?.separators || []).filter(s => s.status === statusName)
+  if (seps.length === 0) {
+    return tasks.map(t => ({ isSeparator: false, data: t }))
+  }
+
+  const orderList = activeProject.value?.columnOrders?.[statusName] || []
+  const itemsMap = new Map()
+  tasks.forEach(t => itemsMap.set(String(t.id), { isSeparator: false, data: t }))
+  seps.forEach(s => itemsMap.set(String(s.id), { isSeparator: true, data: s }))
+
+  const result = []
+  const seen = new Set()
+
+  for (const id of orderList) {
+    const key = String(id)
+    if (itemsMap.has(key)) {
+      result.push(itemsMap.get(key))
+      seen.add(key)
+    }
+  }
+
+  for (const [key, item] of itemsMap.entries()) {
+    if (!seen.has(key)) {
+      result.push(item)
+    }
+  }
+
+  return result
+}
+
 // Map color indicators for Kanban columns
 const getColumnColorClass = (status) => {
+  if (status === activeProjectCompletedStatus.value) {
+    return 'border-t-2 border-t-emerald-400'
+  }
   const s = status.toLowerCase()
+  if (s.includes('done') || s.includes('مكتمل') || s.includes('منشور') || s.includes('publish') || s.includes('complete')) {
+    return 'border-t-2 border-t-emerald-400'
+  }
   if (s.includes('todo') || s.includes('to do') || s.includes('بدء') || s.includes('بانتظار')) {
     return 'border-t-2 border-t-sky-400'
   }
@@ -424,9 +552,6 @@ const getColumnColorClass = (status) => {
   }
   if (s.includes('review') || s.includes('مراجعة') || s.includes('schedule') || s.includes('مجدول')) {
     return 'border-t-2 border-t-amber-400'
-  }
-  if (s.includes('done') || s.includes('مكتمل') || s.includes('منشور') || s.includes('publish') || s.includes('complete')) {
-    return 'border-t-2 border-t-emerald-400'
   }
   return 'border-t-2 border-t-slate-350 dark:border-t-slate-700'
 }
@@ -480,7 +605,6 @@ const toggleSelectColumn = (statusName, event) => {
   })
 }
 
-const activeProjectStatuses = computed(() => activeProject.value?.statuses || store.globalStatuses)
 const otherProjects = computed(() => store.projects.filter(p => p.id !== store.activeProjectId && !p.isDeleted))
 
 const bulkChangeStatus = async (newStatus) => {
@@ -722,11 +846,13 @@ const moveColumnLeftOrRight = async (index, direction) => {
 // Side Drawer State & Actions for Status Customization
 const isStatusDrawerOpen = ref(false)
 const drawerStatuses = ref([])
+const drawerCompletedStatus = ref('')
 const newDrawerStatusName = ref('')
 const draggedDrawerIdx = ref(null)
 
 const openStatusDrawer = () => {
   drawerStatuses.value = [...(activeProject.value?.statuses || [])]
+  drawerCompletedStatus.value = activeProjectCompletedStatus.value || (drawerStatuses.value.includes('مكتمل') ? 'مكتمل' : drawerStatuses.value[drawerStatuses.value.length - 1] || '')
   newDrawerStatusName.value = ''
   isStatusDrawerOpen.value = true
 }
@@ -743,6 +869,9 @@ const addDrawerStatus = () => {
     return
   }
   drawerStatuses.value.push(name)
+  if (!drawerCompletedStatus.value) {
+    drawerCompletedStatus.value = name
+  }
   newDrawerStatusName.value = ''
 }
 
@@ -751,7 +880,15 @@ const removeDrawerStatus = (idx) => {
     alert('يجب الإبقاء على حالة واحدة على الأقل.')
     return
   }
+  const removed = drawerStatuses.value[idx]
   drawerStatuses.value.splice(idx, 1)
+  if (drawerCompletedStatus.value === removed) {
+    drawerCompletedStatus.value = drawerStatuses.value.includes('مكتمل') ? 'مكتمل' : (drawerStatuses.value[drawerStatuses.value.length - 1] || '')
+  }
+}
+
+const setDrawerCompletedStatus = (st) => {
+  drawerCompletedStatus.value = st
 }
 
 const moveDrawerItem = (idx, direction) => {
@@ -786,7 +923,11 @@ const saveDrawerStatuses = async () => {
     alert('يجب الإبقاء على حالة واحدة على الأقل.')
     return
   }
-  await store.updateProjectStatuses(store.activeProjectId, cleaned)
+  const finalCompStatus = drawerCompletedStatus.value && cleaned.includes(drawerCompletedStatus.value)
+    ? drawerCompletedStatus.value
+    : (cleaned.includes('مكتمل') ? 'مكتمل' : cleaned[cleaned.length - 1])
+
+  await store.updateProjectStatuses(store.activeProjectId, cleaned, finalCompStatus)
   isStatusDrawerOpen.value = false
 }
 
@@ -964,10 +1105,13 @@ const onKanbanMouseMove = (e) => {
           @drop="onColumnDrop(colIdx, $event)"
           class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 cursor-grab active:cursor-grabbing select-none"
         >
-          <div class="flex items-center space-x-2">
+          <div class="flex items-center space-x-2 flex-wrap gap-1">
             <!-- Drag handle icon -->
             <span class="text-slate-400 dark:text-slate-600 text-xs font-mono group-hover/column:text-violet-500 transition cursor-grab" title="اسحب لترتيب الحالات">⠿</span>
             <span class="text-xs font-extrabold text-slate-900 dark:text-slate-200">{{ status }}</span>
+            <span v-if="isStatusCompleted(status)" class="bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 text-[10px] font-black px-1.5 py-0.5 rounded-full border border-emerald-300/80 dark:border-emerald-700/80 flex items-center gap-0.5 shadow-2xs" title="هذه هي الحالة المحددة كـ مكتمل">
+              ✔ مكتمل
+            </span>
             <span class="bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-sans text-xs font-extrabold px-2 py-0.5 rounded-full">
               {{ getTasksByStatus(status).length }}
             </span>
@@ -982,8 +1126,15 @@ const onKanbanMouseMove = (e) => {
               title="تحديد كل مهام هذا العمود"
             />
             <button 
+              @click="openAddSeparator(status)"
+              class="min-h-[44px] min-w-[36px] flex items-center justify-center text-slate-500 hover:text-violet-600 dark:hover:text-violet-400 p-1 rounded-xl hover:bg-white dark:hover:bg-slate-900 transition cursor-pointer text-xs"
+              title="إضافة عنوان فاصل بين المهام" aria-label="إضافة عنوان فاصل بين المهام"
+            >
+              🔖
+            </button>
+            <button 
               @click="triggerQuickAdd(status)"
-              class="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:text-violet-600 dark:hover:text-violet-400 p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-900 transition cursor-pointer text-xs"
+              class="min-h-[44px] min-w-[36px] flex items-center justify-center text-slate-500 hover:text-violet-600 dark:hover:text-violet-400 p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-900 transition cursor-pointer text-xs"
               title="إضافة مهمة سريعة" aria-label="إضافة مهمة سريعة"
             >
               ➕
@@ -1002,9 +1153,23 @@ const onKanbanMouseMove = (e) => {
               <Transition name="fade">
                 <div 
                   v-if="activeColumnMenu === status" 
-                  class="absolute left-0 top-full mt-1 z-40 w-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1 text-right animate-fade-in"
+                  class="absolute left-0 top-full mt-1 z-40 w-44 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1 text-right animate-fade-in"
                   @click.stop
                 >
+                  <button 
+                    @click="closeColumnMenu(); openAddSeparator(status)"
+                    class="w-full text-right px-3 py-1.5 text-xs font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition cursor-pointer flex items-center gap-2"
+                  >
+                    <span>🔖</span>
+                    <span>إضافة عنوان فاصل</span>
+                  </button>
+                  <button 
+                    @click="closeColumnMenu(); setAsCompletedStatus(status)"
+                    class="w-full text-right px-3 py-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition cursor-pointer flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60"
+                  >
+                    <span>✔</span>
+                    <span>{{ isStatusCompleted(status) ? 'حالة الإنجاز المحددة ⭐' : 'تعيين كحالة "مكتمل"' }}</span>
+                  </button>
                   <button 
                     @click="closeColumnMenu(); promptRenameStatus(status)"
                     class="w-full text-right px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-2"
@@ -1041,133 +1206,249 @@ const onKanbanMouseMove = (e) => {
           </div>
         </div>
 
-        <!-- Cards List -->
+        <!-- Cards & Separators List -->
         <div class="space-y-3 flex-1 overflow-y-auto max-h-[560px] pr-0.5 scrollbar-hide">
-          <div 
-            v-for="task in getTasksByStatus(status)" 
-            :key="task.id"
-            draggable="true"
-            @dragstart="handleDragStart(task.id)"
-            @click="store.openTaskInspector(task.id)"
-            @dblclick="openEditTask(task.id)"
-            class="glass-card-hover rounded-2xl p-3.5 shadow-sm hover:-translate-y-1 hover:shadow-glass-glow transition-all duration-300 btn-touch-active cursor-grab active:cursor-grabbing select-none relative group space-y-2 bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80"
-            :title="task.title"
-          >
-            <!-- Card Header Row: Completion Checkbox + Title + Bulk Select + 3-Dots Menu -->
-            <div class="flex items-center justify-between gap-2 w-full min-w-0">
-              <!-- Left: Checkbox + Full Title -->
-              <div class="flex items-center gap-2 flex-1 min-w-0">
-                <div class="shrink-0 flex items-center justify-center min-h-[44px] min-w-[44px]" @click.stop>
-                  <input 
-                    type="checkbox"
-                    :checked="task.status === 'مكتمل'"
-                    @change="toggleTaskCompletion(task, $event)"
-                    class="rounded-full border-slate-300 dark:border-slate-800 text-emerald-500 focus:ring-emerald-500 cursor-pointer h-4.5 w-4.5 transition-all duration-200"
-                    title="تحديد المهمة كمكتملة"
-                  />
+          <template v-for="item in getColumnItems(status)" :key="item.data.id">
+            <!-- Section Separator Widget -->
+            <div 
+              v-if="item.isSeparator"
+              class="my-2.5 py-2 px-3 rounded-xl bg-violet-50/80 dark:bg-violet-950/40 border-r-4 border-r-violet-600 dark:border-r-violet-400 border border-violet-200/60 dark:border-violet-800/60 shadow-2xs select-none transition group/sep"
+              @click.stop
+            >
+              <!-- Display Mode -->
+              <div v-if="editingSeparatorId !== item.data.id" class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <span class="text-xs">🔖</span>
+                  <h5 class="text-xs font-black text-slate-800 dark:text-slate-100 truncate">
+                    {{ item.data.title }}
+                  </h5>
                 </div>
-                <div class="relative group/title flex-1 min-w-0">
-                  <h4 
-                    class="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition duration-150 whitespace-nowrap overflow-hidden text-ellipsis block leading-snug max-w-full"
-                    :class="[task.status === 'مكتمل' ? 'line-through text-slate-400 dark:text-slate-500' : '']"
-                    :title="task.title"
+
+                <div class="flex items-center gap-1 shrink-0 opacity-80 sm:opacity-0 group-hover/sep:opacity-100 transition-opacity">
+                  <button 
+                    @click.stop="moveSeparator(item.data, 'up')" 
+                    class="p-1 rounded hover:bg-violet-200/60 dark:hover:bg-violet-900/60 text-slate-600 dark:text-slate-300 text-[10px] font-bold"
+                    title="تحريك لأعلى"
                   >
-                    <MentionText :content="task.title" singleLine />
-                  </h4>
-                  <!-- Custom Floating Tooltip on Hover -->
-                  <div class="absolute bottom-full right-0 mb-1.5 hidden group-hover/title:block z-50 pointer-events-none max-w-xs sm:max-w-sm">
-                    <div class="bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-medium px-3 py-1.5 rounded-xl shadow-xl border border-slate-700/50 backdrop-blur-md whitespace-normal break-words text-right">
-                      {{ task.title }}
+                    ▲
+                  </button>
+                  <button 
+                    @click.stop="moveSeparator(item.data, 'down')" 
+                    class="p-1 rounded hover:bg-violet-200/60 dark:hover:bg-violet-900/60 text-slate-600 dark:text-slate-300 text-[10px] font-bold"
+                    title="تحريك لأسفل"
+                  >
+                    ▼
+                  </button>
+                  <button 
+                    @click.stop="startEditSeparator(item.data)" 
+                    class="p-1 rounded hover:bg-violet-200/60 dark:hover:bg-violet-900/60 text-slate-600 dark:text-slate-300 text-[10px]"
+                    title="تعديل العنوان"
+                  >
+                    ✏️
+                  </button>
+                  <button 
+                    @click.stop="deleteSeparator(item.data)" 
+                    class="p-1 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-rose-500 text-[10px]"
+                    title="حذف الفاصل"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+
+              <!-- Inline Edit Mode -->
+              <div v-else class="flex items-center gap-1.5" @click.stop>
+                <input 
+                  v-model="editSeparatorTitle" 
+                  @keyup.enter="saveEditSeparator(item.data)" 
+                  @keyup.esc="editingSeparatorId = null"
+                  class="flex-1 bg-white dark:bg-slate-900 border border-violet-400 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
+                  autofocus
+                />
+                <button @click="saveEditSeparator(item.data)" class="bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-bold px-2 py-1 rounded-lg cursor-pointer">حفظ</button>
+                <button @click="editingSeparatorId = null" class="text-slate-400 hover:text-slate-600 text-[10px] px-1 py-1 cursor-pointer">إلغاء</button>
+              </div>
+            </div>
+
+            <!-- Task Card -->
+            <div 
+              v-else
+              draggable="true"
+              @dragstart="handleDragStart(item.data.id)"
+              @click="store.openTaskInspector(item.data.id)"
+              @dblclick="openEditTask(item.data.id)"
+              class="glass-card-hover rounded-2xl p-3.5 shadow-sm hover:-translate-y-1 hover:shadow-glass-glow transition-all duration-300 btn-touch-active cursor-grab active:cursor-grabbing select-none relative group space-y-2 bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80"
+              :title="item.data.title"
+            >
+              <!-- Card Header Row: Completion Checkbox + Title + Next Button + Bulk Select + 3-Dots Menu -->
+              <div class="flex items-center justify-between gap-2 w-full min-w-0">
+                <!-- Left: Checkbox + Full Title -->
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                  <div class="shrink-0 flex items-center justify-center min-h-[44px] min-w-[44px]" @click.stop>
+                    <input 
+                      type="checkbox"
+                      :checked="isTaskDone(item.data)"
+                      @change="toggleTaskCompletion(item.data, $event)"
+                      class="rounded-full border-slate-300 dark:border-slate-800 text-emerald-500 focus:ring-emerald-500 cursor-pointer h-4.5 w-4.5 transition-all duration-200"
+                      title="تحديد المهمة كمكتملة"
+                    />
+                  </div>
+                  <div class="relative group/title flex-1 min-w-0">
+                    <h4 
+                      class="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition duration-150 whitespace-nowrap overflow-hidden text-ellipsis block leading-snug max-w-full"
+                      :class="[isTaskDone(item.data) ? 'line-through text-slate-400 dark:text-slate-500' : '']"
+                      :title="item.data.title"
+                    >
+                      <MentionText :content="item.data.title" singleLine />
+                    </h4>
+                    <!-- Custom Floating Tooltip on Hover -->
+                    <div class="absolute bottom-full right-0 mb-1.5 hidden group-hover/title:block z-50 pointer-events-none max-w-xs sm:max-w-sm">
+                      <div class="bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs font-medium px-3 py-1.5 rounded-xl shadow-xl border border-slate-700/50 backdrop-blur-md whitespace-normal break-words text-right">
+                        {{ item.data.title }}
+                      </div>
                     </div>
+                  </div>
+                </div>
+
+                <!-- Right: Small Next Button + Bulk Select Checkbox & 3-Dots Action Menu -->
+                <div class="flex items-center gap-1.5 shrink-0" @click.stop>
+                  <!-- Small visible button on task: Advance to next status -->
+                  <button 
+                    @click.stop="moveToNextStatus(item.data, $event)"
+                    class="px-2 py-1 rounded-lg text-[10px] font-black text-violet-700 dark:text-violet-300 bg-violet-50 hover:bg-violet-600 hover:text-white dark:bg-violet-950/50 dark:hover:bg-violet-600 dark:hover:text-white border border-violet-200/80 dark:border-violet-800/80 transition-all duration-150 min-h-[34px] flex items-center justify-center gap-1 cursor-pointer shadow-2xs shrink-0" 
+                    :title="'نقل تلقائي للحالة التالية: ' + getNextStatus(item.data.status)"
+                    aria-label="نقل للحالة التالية تلقائياً"
+                  >
+                    <span class="max-w-[70px] truncate hidden sm:inline">{{ getNextStatus(item.data.status) }}</span>
+                    <span class="text-xs">◀</span>
+                  </button>
+
+                  <!-- Bulk selection checkbox -->
+                  <input 
+                    type="checkbox" 
+                    v-model="selectedTaskIds" 
+                    :value="item.data.id" 
+                    class="rounded border-slate-300 dark:border-slate-900 text-violet-600 focus:ring-violet-500 cursor-pointer h-4.5 w-4.5 transition-opacity"
+                    :class="[selectedTaskIds.includes(item.data.id) ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100']"
+                    title="تحديد المهمة للعمليات الجماعية"
+                  />
+
+                  <!-- 3-Dots Action Menu Trigger -->
+                  <div class="relative">
+                    <button 
+                      @click="toggleTaskMenu(item.data.id, $event)"
+                      class="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center min-h-[44px] min-w-[44px]"
+                      title="خيارات المهمة" aria-label="خيارات المهمة"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                      </svg>
+                    </button>
+
+                    <!-- Floating Dropdown Popover Menu -->
+                    <Transition name="fade">
+                      <div 
+                        v-if="activeTaskMenuId === item.data.id" 
+                        class="absolute left-0 top-full mt-1 z-30 w-36 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1 text-right animate-fade-in"
+                        @click.stop
+                      >
+                        <button 
+                          @click="closeTaskMenu(); copyTaskTitle(item.data.title)"
+                          class="w-full text-right px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition cursor-pointer flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60"
+                        >
+                          <span>📋</span>
+                          <span>نسخ العنوان</span>
+                        </button>
+                        <button 
+                          @click="closeTaskMenu(); openEditTask(item.data.id)"
+                          class="w-full text-right px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-2"
+                        >
+                          <span>✏️</span>
+                          <span>تعديل المهمة</span>
+                        </button>
+                        <button 
+                          @click="closeTaskMenu(); quickDeleteTask(item.data)"
+                          class="w-full text-right px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer flex items-center gap-2"
+                        >
+                          <span>🗑️</span>
+                          <span>حذف المهمة</span>
+                        </button>
+                      </div>
+                    </Transition>
                   </div>
                 </div>
               </div>
 
-              <!-- Right: Bulk Select Checkbox & 3-Dots Action Menu -->
-              <div class="flex items-center gap-1 shrink-0" @click.stop>
-                <!-- Bulk selection checkbox -->
-                <input 
-                  type="checkbox" 
-                  v-model="selectedTaskIds" 
-                  :value="task.id" 
-                  class="rounded border-slate-300 dark:border-slate-900 text-violet-600 focus:ring-violet-500 cursor-pointer h-4.5 w-4.5 transition-opacity"
-                  :class="[selectedTaskIds.includes(task.id) ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100']"
-                  title="تحديد المهمة للعمليات الجماعية"
-                />
-
-                <!-- 3-Dots Action Menu Trigger -->
-                <div class="relative">
-                  <button 
-                    @click="toggleTaskMenu(task.id, $event)"
-                    class="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center min-h-[44px] min-w-[44px]"
-                    title="خيارات المهمة" aria-label="خيارات المهمة"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                    </svg>
-                  </button>
-
-                  <!-- Floating Dropdown Popover Menu -->
-                  <Transition name="fade">
-                    <div 
-                      v-if="activeTaskMenuId === task.id" 
-                      class="absolute left-0 top-full mt-1 z-30 w-36 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1 text-right animate-fade-in"
-                      @click.stop
-                    >
-                      <button 
-                        @click="closeTaskMenu(); copyTaskTitle(task.title)"
-                        class="w-full text-right px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition cursor-pointer flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60"
-                      >
-                        <span>📋</span>
-                        <span>نسخ العنوان</span>
-                      </button>
-                      <button 
-                        @click="closeTaskMenu(); openEditTask(task.id)"
-                        class="w-full text-right px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-2"
-                      >
-                        <span>✏️</span>
-                        <span>تعديل المهمة</span>
-                      </button>
-                      <button 
-                        @click="closeTaskMenu(); quickDeleteTask(task)"
-                        class="w-full text-right px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer flex items-center gap-2"
-                      >
-                        <span>🗑️</span>
-                        <span>حذف المهمة</span>
-                      </button>
-                    </div>
-                  </Transition>
-                </div>
+              <!-- Task Description Mention & Links Preview -->
+              <div v-if="item.data.description" class="pt-0.5 text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed pr-6" @click.stop>
+                <MentionText :content="item.data.description" />
               </div>
+
+              <!-- Touch Interactive Card Footer: Status Switcher & Date Tag -->
+              <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px] font-mono text-slate-400 gap-2 flex-wrap" @click.stop>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span
+                    class="px-2 py-0.5 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                  >
+                    {{ item.data.status }}
+                  </span>
+
+                  <!-- Visible Next Status Button in Card Footer -->
+                  <button
+                    @click.stop="moveToNextStatus(item.data, $event)"
+                    class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-violet-600 hover:bg-violet-700 active:scale-95 text-white transition-all duration-200 min-h-[34px] flex items-center gap-1 cursor-pointer shadow-xs"
+                    :title="'نقل تلقائي إلى ' + getNextStatus(item.data.status)"
+                  >
+                    <span>{{ isLastOrCompletedStatus(item.data.status) ? '↺ إعادة للبدء' : getNextStatus(item.data.status) }}</span>
+                    <span>{{ isLastOrCompletedStatus(item.data.status) ? '↺' : '◀' }}</span>
+                  </button>
+                </div>
+
+                <span v-if="item.data.deadline" class="text-[10px] font-sans font-bold text-slate-500 dark:text-slate-400">
+                  📅 {{ item.data.deadline }}
+                </span>
+              </div>
+
+              <!-- Soft hover overlay -->
+              <div class="absolute inset-0 bg-violet-500/[0.01] dark:bg-violet-400/[0.01] opacity-0 group-hover:opacity-100 rounded-xl pointer-events-none transition duration-200"></div>
             </div>
+          </template>
 
-            <!-- Task Description Mention & Links Preview -->
-            <div v-if="task.description" class="pt-0.5 text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed pr-6" @click.stop>
-              <MentionText :content="task.description" />
-            </div>
-
-            <!-- Touch Interactive Card Footer: Status Switcher & Date Tag -->
-            <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px] font-mono text-slate-400 gap-2 flex-wrap" @click.stop>
-              <button
-                @click="toggleTaskStatus(task, $event)"
-                class="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 hover:text-violet-600 transition min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
-                title="انقر للتنقل السريع بين الحالات" aria-label="انقر للتنقل السريع بين الحالات"
-              >
-                {{ task.status }}
-              </button>
-
-              <span v-if="task.deadline" class="text-[10px] font-sans font-bold text-slate-500 dark:text-slate-400">
-                📅 {{ task.deadline }}
-              </span>
-            </div>
-
-            <!-- Soft hover overlay -->
-            <div class="absolute inset-0 bg-violet-500/[0.01] dark:bg-violet-400/[0.01] opacity-0 group-hover:opacity-100 rounded-xl pointer-events-none transition duration-200"></div>
-          </div>
-
-          <div v-if="getTasksByStatus(status).length === 0 && activeQuickAddColumn !== status" class="text-center py-8 text-xs text-slate-400 dark:text-slate-600 border border-dashed border-slate-200 dark:border-slate-900 rounded-xl">
+          <div v-if="getColumnItems(status).length === 0 && activeQuickAddColumn !== status && activeSeparatorAddColumn !== status" class="text-center py-8 text-xs text-slate-400 dark:text-slate-600 border border-dashed border-slate-200 dark:border-slate-900 rounded-xl">
             أفلت المهام هنا
           </div>
+
+          <!-- Inline Section Separator Add Form -->
+          <div v-if="activeSeparatorAddColumn === status" class="bg-white dark:bg-slate-900 border border-violet-300 dark:border-violet-700 rounded-xl p-3 shadow-md space-y-2.5 text-right my-2" @click.stop>
+            <div class="flex items-center gap-1.5 text-xs font-extrabold text-violet-700 dark:text-violet-300">
+              <span>🔖</span>
+              <span>إضافة عنوان فاصل بين المهام</span>
+            </div>
+            <input 
+              v-model="newSeparatorTitle" 
+              @keyup.enter="submitAddSeparator(status)" 
+              @keydown.esc="cancelAddSeparator"
+              type="text" 
+              placeholder="اكتب عنوان الفاصل (مثال: عاجل، مهام الأسبوع، مراجعة)..."
+              class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              autofocus
+            />
+            <div class="flex items-center gap-2 justify-start flex-row-reverse">
+              <button @click="submitAddSeparator(status)" class="bg-violet-600 hover:bg-violet-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition cursor-pointer min-h-[36px]">إضافة الفاصل</button>
+              <button @click="cancelAddSeparator" class="text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold px-2 py-1.5 rounded-lg text-xs transition cursor-pointer min-h-[36px]">إلغاء</button>
+            </div>
+          </div>
+
+          <!-- Add Separator Secondary Trigger Button -->
+          <button 
+            v-if="activeSeparatorAddColumn !== status && activeQuickAddColumn !== status"
+            @click="openAddSeparator(status)"
+            class="w-full py-2 px-3 rounded-xl border border-dashed border-slate-300/80 dark:border-slate-700 text-[11px] font-bold text-slate-500 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-400 transition cursor-pointer flex items-center justify-center gap-1.5 min-h-[38px] mt-1 bg-slate-50/40 dark:bg-slate-900/30"
+            title="إضافة عنوان فاصل ما بين التاسكات"
+          >
+            <span>🔖</span>
+            <span>+ إضافة عنوان فاصل</span>
+          </button>
 
           <!-- Quick Add Trigger Button (min 44px height) -->
           <button 
@@ -1379,6 +1660,30 @@ const onKanbanMouseMove = (e) => {
               </button>
             </div>
 
+            <!-- Designated Completed Status Selector Card -->
+            <div class="p-3.5 bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/80 rounded-2xl space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                  <span>🏆</span>
+                  <span>الحالة المخصصة للإنجاز (مكتمل):</span>
+                </span>
+                <span class="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                  {{ drawerCompletedStatus || 'غير محددة' }}
+                </span>
+              </div>
+              <p class="text-[11px] text-emerald-800/80 dark:text-emerald-300/80 leading-snug">
+                المهام التي تصل لهذه الحالة ستعتبر مكتملة ويتم الاحتفال بإنجازها.
+              </p>
+              <select 
+                v-model="drawerCompletedStatus" 
+                class="w-full bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 rounded-xl px-3 py-2 text-xs font-black text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+              >
+                <option v-for="st in drawerStatuses" :key="'opt-' + st" :value="st">
+                  {{ st }} {{ st === 'مكتمل' ? '(الافتراضي)' : '' }}
+                </option>
+              </select>
+            </div>
+
             <div class="text-xs font-bold text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
               <span>حالات المشروع الحالية:</span>
               <span class="text-[10px] text-violet-600 dark:text-violet-400 font-normal">يمكنك السحب لإعادة الترتيب ⠿</span>
@@ -1393,9 +1698,9 @@ const onKanbanMouseMove = (e) => {
                 @dragstart="onDrawerDragStart(idx, $event)"
                 @dragover="onDrawerDragOver"
                 @drop="onDrawerDrop(idx, $event)"
-                class="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-violet-500/80 transition cursor-grab active:cursor-grabbing group/ditem shadow-xs"
+                class="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-violet-500/80 transition cursor-grab active:cursor-grabbing group/ditem shadow-xs gap-2"
               >
-                <div class="flex items-center gap-2.5 flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-1 min-w-0">
                   <span class="text-slate-400 dark:text-slate-500 text-sm font-mono cursor-grab group-hover/ditem:text-violet-500 transition">⠿</span>
                   <input 
                     v-model="drawerStatuses[idx]"
@@ -1404,7 +1709,22 @@ const onKanbanMouseMove = (e) => {
                   />
                 </div>
 
-                <div class="flex items-center gap-1 shrink-0">
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <!-- Button to designate this status as completed -->
+                  <button 
+                    type="button"
+                    @click="setDrawerCompletedStatus(drawerStatuses[idx])"
+                    :class="[
+                      drawerCompletedStatus === drawerStatuses[idx]
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 border-slate-200 dark:border-slate-700'
+                    ]"
+                    class="px-2 py-1 rounded-lg text-[10px] font-extrabold border transition flex items-center gap-1 shrink-0 cursor-pointer"
+                    :title="drawerCompletedStatus === drawerStatuses[idx] ? 'هذه هي الحالة المحددة كـ مكتمل' : 'تعيين هذه الحالة كحالة للمهام المكتملة'"
+                  >
+                    <span>{{ drawerCompletedStatus === drawerStatuses[idx] ? '✔ مكتمل' : 'تعيين كمكتمل' }}</span>
+                  </button>
+
                   <button 
                     v-if="idx > 0"
                     @click="moveDrawerItem(idx, 'up')"

@@ -11,10 +11,12 @@ class Project extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['user_id', 'name', 'description', 'statuses', 'is_deleted', 'category_id'];
+    protected $fillable = ['user_id', 'name', 'description', 'statuses', 'completed_status', 'separators', 'column_orders', 'is_deleted', 'category_id'];
 
     protected $casts = [
         'statuses' => 'array',
+        'separators' => 'array',
+        'column_orders' => 'array',
         'is_deleted' => 'boolean',
     ];
 
@@ -23,6 +25,15 @@ class Project extends Model
         static::creating(function ($project) {
             if (empty($project->statuses)) {
                 $project->statuses = ['بانتظار البدء', 'قيد العمل', 'تحت المراجعة', 'مكتمل'];
+            }
+            if (empty($project->completed_status)) {
+                $project->completed_status = 'مكتمل';
+            }
+            if (empty($project->separators)) {
+                $project->separators = [];
+            }
+            if (empty($project->column_orders)) {
+                $project->column_orders = [];
             }
             if (empty($project->user_id) && auth()->check()) {
                 $project->user_id = auth()->id();

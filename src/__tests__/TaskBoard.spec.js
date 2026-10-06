@@ -184,4 +184,63 @@ describe('TaskBoard.vue Component Tests', () => {
       wrapper.unmount()
     }
   }, 15000)
+
+  it('moves task to next status automatically when clicking the next status button', async () => {
+    store.currentUser = { role: { name: 'مدير' } }
+    const updateSpy = vi.spyOn(store, 'updateTask').mockResolvedValue()
+
+    const wrapper = mount(TaskBoard)
+    // Find next button with label or aria-label
+    const nextBtn = wrapper.find('button[aria-label="نقل للحالة التالية تلقائياً"]')
+    expect(nextBtn.exists()).toBe(true)
+
+    await nextBtn.trigger('click')
+    expect(updateSpy).toHaveBeenCalledWith(
+      101,
+      expect.objectContaining({
+        status: 'قيد العمل'
+      })
+    )
+  })
+
+  it('adds and renders a section separator between tasks inside a column', async () => {
+    store.currentUser = { role: { name: 'مدير' } }
+    const addSepSpy = vi.spyOn(store, 'addProjectSeparator').mockImplementation((projId, status, title) => {
+      const proj = store.projects.find(p => p.id === projId)
+      const sep = { id: 'sep-1', projectId: projId, status, title }
+      proj.separators = [sep]
+      proj.columnOrders = { [status]: [101, 'sep-1', 102] }
+      return Promise.resolve(sep)
+    })
+
+    const wrapper = mount(TaskBoard)
+    const addSepBtn = wrapper.find('button[title="إضافة عنوان فاصل بين المهام"]')
+    expect(addSepBtn.exists()).toBe(true)
+
+    await addSepBtn.trigger('click')
+    const sepInput = wrapper.find('input[placeholder*="اكتب عنوان الفاصل"]')
+    expect(sepInput.exists()).toBe(true)
+
+    await sepInput.setValue('مهام المرحلة الأولى')
+    const confirmBtn = wrapper.findAll('button').find(b => b.text().includes('إضافة الفاصل'))
+    await confirmBtn.trigger('click')
+
+    expect(addSepSpy).toHaveBeenCalledWith(1, 'بانتظار البدء', 'مهام المرحلة الأولى')
+  })
+
+  it('identifies and displays designated completed status with badge and celebration support', async () => {
+    store.projects[0].completedStatus = 'قيد العمل' // Custom completed status
+    store.tasks = [
+      { id: 105, projectId: 1, title: 'مهمة تم تسليمها', status: 'قيد العمل' }
+    ]
+
+    const wrapper = mount(TaskBoard)
+    // The designated column header should have the completed indicator
+    const completedBadge = wrapper.find('span[title="هذه هي الحالة المحددة كـ مكتمل"]')
+    expect(completedBadge.exists()).toBe(true)
+
+    // The task inside that status should have completed checkbox checked
+    const checkbox = wrapper.find('input[type="checkbox"][title="تحديد المهمة كمكتملة"]')
+    expect(checkbox.element.checked).toBe(true)
+  })
 })

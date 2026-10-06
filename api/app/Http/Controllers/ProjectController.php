@@ -27,8 +27,23 @@ class ProjectController extends Controller
                     $project->update(['user_id' => $firstMemberId]);
                 }
             }
+            if (!Schema::hasColumn('projects', 'completed_status')) {
+                Schema::table('projects', function (Blueprint $table) {
+                    $table->string('completed_status')->nullable()->after('statuses');
+                });
+            }
+            if (!Schema::hasColumn('projects', 'separators')) {
+                Schema::table('projects', function (Blueprint $table) {
+                    $table->json('separators')->nullable()->after('completed_status');
+                });
+            }
+            if (!Schema::hasColumn('projects', 'column_orders')) {
+                Schema::table('projects', function (Blueprint $table) {
+                    $table->json('column_orders')->nullable()->after('separators');
+                });
+            }
         } catch (\Throwable $e) {
-            Log::error("Failed to ensure user_id column in projects: " . $e->getMessage());
+            Log::error("Failed to ensure columns in projects: " . $e->getMessage());
         }
     }
 
@@ -67,6 +82,9 @@ class ProjectController extends Controller
             $pData['category_id'] = $p->category_id;
             $pData['category_name'] = $p->category?->name;
             $pData['is_deleted'] = (bool) $p->is_deleted;
+            $pData['completed_status'] = $p->completed_status ?? 'مكتمل';
+            $pData['separators'] = $p->separators ?? [];
+            $pData['column_orders'] = $p->column_orders ?? [];
 
             // Compute task status counts for this project
             $statusCounts = Task::where('project_id', $p->id)
@@ -94,6 +112,9 @@ class ProjectController extends Controller
             'project_template_id' => 'nullable|integer',
             'status_source' => 'nullable|string|in:global,custom,empty',
             'custom_statuses' => 'nullable|array',
+            'completed_status' => 'nullable|string',
+            'separators' => 'nullable|array',
+            'column_orders' => 'nullable|array',
             'category_id' => 'nullable|exists:project_categories,id'
         ]);
 
@@ -132,6 +153,9 @@ class ProjectController extends Controller
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
                 'statuses' => $statuses,
+                'completed_status' => $validated['completed_status'] ?? 'مكتمل',
+                'separators' => $validated['separators'] ?? [],
+                'column_orders' => $validated['column_orders'] ?? [],
                 'category_id' => $validated['category_id'] ?? null
             ]);
 
@@ -255,6 +279,9 @@ class ProjectController extends Controller
         $project = Project::with(['customFields', 'users'])->where('is_deleted', false)->findOrFail($id);
         $pData = $project->toArray();
         $pData['member_ids'] = $project->users->pluck('id')->all();
+        $pData['completed_status'] = $project->completed_status ?? 'مكتمل';
+        $pData['separators'] = $project->separators ?? [];
+        $pData['column_orders'] = $project->column_orders ?? [];
         return response()->json($pData);
     }
 
@@ -268,6 +295,9 @@ class ProjectController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'statuses' => 'nullable|array',
+            'completed_status' => 'nullable|string',
+            'separators' => 'nullable|array',
+            'column_orders' => 'nullable|array',
             'category_id' => 'nullable|exists:project_categories,id'
         ]);
 
@@ -281,6 +311,9 @@ class ProjectController extends Controller
 
         $pData = $project->load('users')->toArray();
         $pData['member_ids'] = $project->users->pluck('id')->all();
+        $pData['completed_status'] = $project->completed_status ?? 'مكتمل';
+        $pData['separators'] = $project->separators ?? [];
+        $pData['column_orders'] = $project->column_orders ?? [];
 
         try {
             broadcast(new DataChanged($request->user()->id, 'projects', (int)$id))->toOthers();

@@ -346,19 +346,25 @@ export const store = reactive({
       if (res.ok) {
         const rawProjects = await res.json()
         // Map backend custom fields, member relations, and category
-        this.projects = rawProjects.map(p => ({
-          id: p.id,
-          name: p.name,
-          description: p.description,
-          statuses: p.statuses,
-          customFields: p.custom_fields || [],
-          memberIds: p.member_ids || [],
-          categoryId: p.category_id || null,
-          categoryName: p.category_name || null,
-          task_counts: p.task_counts || {},
-          total_tasks_count: p.total_tasks_count || 0,
-          isDeleted: p.is_deleted
-        }))
+        this.projects = rawProjects.map(p => {
+          const localMeta = this.getProjectLocalMeta(p.id)
+          return {
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            statuses: p.statuses || this.globalStatuses,
+            completedStatus: p.completed_status || p.completedStatus || localMeta?.completedStatus || (p.statuses && p.statuses.includes('مكتمل') ? 'مكتمل' : (p.statuses && p.statuses.length > 0 ? p.statuses[p.statuses.length - 1] : 'مكتمل')),
+            separators: p.separators || localMeta?.separators || [],
+            columnOrders: p.column_orders || p.columnOrders || localMeta?.columnOrders || {},
+            customFields: p.custom_fields || [],
+            memberIds: p.member_ids || [],
+            categoryId: p.category_id || null,
+            categoryName: p.category_name || null,
+            task_counts: p.task_counts || {},
+            total_tasks_count: p.total_tasks_count || 0,
+            isDeleted: p.is_deleted
+          }
+        })
 
         // Sort projects by saved order if exists
         try {
@@ -734,32 +740,227 @@ export const store = reactive({
     }
   },
 
-  // Update Project Statuses (إعادة ترتيب أو تعديل حالات المشروع)
-  async updateProjectStatuses(projectId, newStatuses) {
-    const project = this.projects.find(p => p.id === projectId)
-    if (!project) return
-    project.statuses = [...newStatuses]
+    getProjectLocalMeta(projectId) {
+      try {
+        return JSON.parse(localStorage.getItem(`mymind_proj_meta_${projectId}`) || '{}')
+      } catch (e) {
+        return {}
+      }
+    },
 
-    try {
-      const res = await fetch(`${this.apiBase}/projects/${projectId}`, {
-        method: 'PUT',
-        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
-          name: project.name,
-          description: project.description,
-          member_ids: project.memberIds,
-          category_id: project.categoryId,
-          statuses: newStatuses
+    saveProjectLocalMeta(projectId, data) {
+      try {
+        const current = this.getProjectLocalMeta(projectId)
+        const merged = { ...current, ...data }
+        localStorage.setItem(`mymind_proj_meta_${projectId}`, JSON.stringify(merged))
+      } catch (e) {
+        console.error('Failed to save project local meta', e)
+      }
+    },
+
+    getProjectCompletedStatus(projectOrId) {
+      let project = (projectOrId && typeof projectOrId === 'object') ? projectOrId : this.projects.find(p => p.id === projectOrId)
+      if (!project && this.activeProjectId) {
+        project = this.projects.find(p => p.id === this.activeProjectId)
+      }
+      if (!project) return 'مكتمل'
+      if (project.completedStatus && (project.statuses || []).includes(project.completedStatus)) {
+        return project.completedStatus
+      }
+      if ((project.statuses || []).includes('مكتمل')) {
+        return 'مكتمل'
+      }
+      return (project.statuses && project.statuses.length > 0)
+        ? project.statuses[project.statuses.length - 1]
+        : 'مكتمل'
+    },
+
+    isTaskCompleted(task) {
+      if (!task) return false
+      const project = this.projects.find(p => p.id === (task.projectId || task.project_id))
+      const compStatus = this.getProjectCompletedStatus(project)
+      return task.status === compStatus || task.status === 'مكتمل'
+    },
+
+    async setProjectCompletedStatus(projectId, statusName) {
+      const project = this.projects.find(p => p.id === projectId)
+      if (!project || !statusName) return
+      project.completedStatus = statusName
+      this.saveProjectLocalMeta(projectId, { completedStatus: statusName })
+
+      try {
+        await fetch(`${this.apiBase}/projects/${projectId}`, {
+          method: 'PUT',
+          headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            name: project.name,
+            description: project.description,
+            member_ids: project.memberIds,
+            category_id: project.categoryId,
+            statuses: project.statuses,
+            completed_status: statusName,
+            separators: project.separators,
+            column_orders: project.columnOrders
+          })
         })
+      } catch (e) {
+        console.error('Error updating project completed status', e)
+      }
+      this.toastSuccess(`تم تعيين الحالة "${statusName}" كحالة للمهام المكتملة`)
+    },
+
+    // Save full project separators & column orders
+    async saveProjectSeparators(projectId, separators, columnOrders = null) {
+      const project = this.projects.find(p => p.id === projectId)
+      if (!project) return
+      project.separators = [...separators]
+      if (columnOrders) {
+        project.columnOrders = { ...columnOrders }
+      }
+      this.saveProjectLocalMeta(projectId, {
+        separators: project.separators,
+        columnOrders: project.columnOrders
       })
 
-      if (res.ok) {
-      } else {
+      try {
+        await fetch(`${this.apiBase}/projects/${projectId}`, {
+          method: 'PUT',
+          headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            name: project.name,
+            description: project.description,
+            member_ids: project.memberIds,
+            category_id: project.categoryId,
+            statuses: project.statuses,
+            completed_status: project.completedStatus,
+            separators: project.separators,
+            column_orders: project.columnOrders
+          })
+        })
+      } catch (e) {
+        console.error('Error saving separators', e)
       }
-    } catch (e) {
-      console.error("خطأ في تحديث حالات المشروع", e)
-    }
-  },
+    },
+
+    async addProjectSeparator(projectId, status, title) {
+      const project = this.projects.find(p => p.id === projectId)
+      if (!project || !status || !title || !title.trim()) return null
+      const trimmedTitle = title.trim()
+      const newSeparator = {
+        id: 'sep_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        projectId,
+        status,
+        title: trimmedTitle,
+        createdAt: new Date().toISOString()
+      }
+
+      if (!Array.isArray(project.separators)) {
+        project.separators = []
+      }
+      project.separators.push(newSeparator)
+
+      if (!project.columnOrders) project.columnOrders = {}
+      if (!Array.isArray(project.columnOrders[status])) {
+        const taskIds = this.tasks.filter(t => t.projectId === projectId && t.status === status).map(t => t.id)
+        project.columnOrders[status] = [...taskIds, newSeparator.id]
+      } else {
+        project.columnOrders[status].push(newSeparator.id)
+      }
+
+      await this.saveProjectSeparators(projectId, project.separators, project.columnOrders)
+      this.toastSuccess(`تمت إضافة العنوان الفاصل "${trimmedTitle}"`)
+      return newSeparator
+    },
+
+    async updateProjectSeparator(projectId, separatorId, newTitle) {
+      const project = this.projects.find(p => p.id === projectId)
+      if (!project || !Array.isArray(project.separators)) return
+      const sep = project.separators.find(s => s.id === separatorId)
+      if (!sep) return
+      sep.title = String(newTitle).trim()
+      await this.saveProjectSeparators(projectId, project.separators, project.columnOrders)
+      this.toastSuccess('تم تحديث العنوان الفاصل بنجاح')
+    },
+
+    async deleteProjectSeparator(projectId, separatorId) {
+      const project = this.projects.find(p => p.id === projectId)
+      if (!project || !Array.isArray(project.separators)) return
+      const sep = project.separators.find(s => s.id === separatorId)
+      const status = sep?.status
+      project.separators = project.separators.filter(s => s.id !== separatorId)
+
+      if (status && project.columnOrders && Array.isArray(project.columnOrders[status])) {
+        project.columnOrders[status] = project.columnOrders[status].filter(id => id !== separatorId)
+      }
+
+      await this.saveProjectSeparators(projectId, project.separators, project.columnOrders)
+      this.toastSuccess('تم حذف العنوان الفاصل')
+    },
+
+    async moveProjectSeparator(projectId, separatorId, direction) {
+      const project = this.projects.find(p => p.id === projectId)
+      if (!project || !Array.isArray(project.separators)) return
+      const sep = project.separators.find(s => s.id === separatorId)
+      if (!sep) return
+      const status = sep.status
+
+      if (!project.columnOrders || !Array.isArray(project.columnOrders[status])) {
+        const tasksInCol = this.tasks.filter(t => t.projectId === projectId && t.status === status).map(t => t.id)
+        const sepsInCol = project.separators.filter(s => s.status === status).map(s => s.id)
+        project.columnOrders = project.columnOrders || {}
+        project.columnOrders[status] = [...tasksInCol, ...sepsInCol]
+      }
+
+      const orderList = [...project.columnOrders[status]]
+      const currIdx = orderList.indexOf(separatorId)
+      if (currIdx === -1) return
+      const targetIdx = direction === 'up' ? currIdx - 1 : currIdx + 1
+      if (targetIdx < 0 || targetIdx >= orderList.length) return
+
+      const [item] = orderList.splice(currIdx, 1)
+      orderList.splice(targetIdx, 0, item)
+      project.columnOrders[status] = orderList
+
+      await this.saveProjectSeparators(projectId, project.separators, project.columnOrders)
+    },
+
+    // Update Project Statuses (إعادة ترتيب أو تعديل حالات المشروع وتعيين حالة الإكمال)
+    async updateProjectStatuses(projectId, newStatuses, newCompletedStatus = null) {
+      const project = this.projects.find(p => p.id === projectId)
+      if (!project) return
+      project.statuses = [...newStatuses]
+      if (newCompletedStatus) {
+        project.completedStatus = newCompletedStatus
+      } else if (project.completedStatus && !newStatuses.includes(project.completedStatus)) {
+        project.completedStatus = newStatuses.includes('مكتمل') ? 'مكتمل' : newStatuses[newStatuses.length - 1]
+      }
+      this.saveProjectLocalMeta(projectId, {
+        completedStatus: project.completedStatus
+      })
+
+      try {
+        const res = await fetch(`${this.apiBase}/projects/${projectId}`, {
+          method: 'PUT',
+          headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            name: project.name,
+            description: project.description,
+            member_ids: project.memberIds,
+            category_id: project.categoryId,
+            statuses: newStatuses,
+            completed_status: project.completedStatus,
+            separators: project.separators,
+            column_orders: project.columnOrders
+          })
+        })
+
+        if (res.ok) {
+        } else {
+        }
+      } catch (e) {
+        console.error("خطأ في تحديث حالات المشروع", e)
+      }
+    },
 
   async addProjectStatus(projectId, statusName) {
     const project = this.projects.find(p => p.id === projectId)
