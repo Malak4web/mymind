@@ -1056,6 +1056,24 @@ class SocialMediaController extends Controller
                             }
                         }
                     }
+
+                    // Direct single-node fallback for New Pages Experience / Business pages
+                    if (!$pageAccessToken && $account->platform === 'facebook') {
+                        $singlePageRes = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}", [
+                            'access_token' => $userToken,
+                            'fields' => 'id,name,access_token,fan_count,followers_count',
+                        ]);
+                        if ($singlePageRes->ok()) {
+                            $pageAccessToken = $singlePageRes->json('access_token') ?? null;
+                            $realFollowers = $singlePageRes->json('followers_count') ?? $singlePageRes->json('fan_count') ?? $account->followers_count;
+                            if ($pageAccessToken) {
+                                $account->update([
+                                    'access_token' => $pageAccessToken,
+                                    'followers_count' => $realFollowers,
+                                ]);
+                            }
+                        }
+                    }
                 } catch (\Throwable $e) {
                     Log::warning("Auto-healing token failed for {$account->account_id}: " . $e->getMessage());
                 }

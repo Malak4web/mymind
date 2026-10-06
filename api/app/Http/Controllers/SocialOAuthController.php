@@ -375,10 +375,10 @@ class SocialOAuthController extends Controller
     {
         switch ($platform) {
             case 'facebook':
-                return $this->fetchFacebookPages($accessToken);
+                return $this->fetchFacebookPages($accessToken, $user);
 
             case 'instagram':
-                return $this->fetchInstagramAccounts($accessToken);
+                return $this->fetchInstagramAccounts($accessToken, $user);
 
             case 'youtube':
                 return $this->fetchYouTubeChannels($accessToken);
@@ -391,83 +391,246 @@ class SocialOAuthController extends Controller
         }
     }
 
-    private function fetchFacebookPages(string $accessToken): array
+    private function fetchFacebookPages(string $accessToken, $user = null): array
     {
-        $response = Http::get('https://graph.facebook.com/v21.0/me/accounts', [
-            'access_token' => $accessToken,
-            'fields'       => 'id,name,username,picture{url},category,fan_count,access_token',
-        ]);
+        $pagesById = [];
 
-        if (!$response->ok()) {
-            throw new \RuntimeException('Facebook API error: ' . $response->body());
+        // 1. Fetch direct accounts from /me/accounts (with limit=100 and pagination)
+        try {
+            $url = 'https://graph.facebook.com/v21.0/me/accounts';
+            $params = [
+                'access_token' => $accessToken,
+                'fields'       => 'id,name,username,picture{url},category,fan_count,access_token',
+                'limit'        => 100,
+            ];
+
+            $maxPages = 5;
+            while ($url && $maxPages-- > 0) {
+                $response = Http::timeout(15)->get($url, $params);
+                if (!$response->ok()) {
+                    break;
+                }
+                $data = $response->json('data', []);
+                foreach ($data as $page) {
+                    $pid = (string)($page['id'] ?? '');
+                    if ($pid) {
+                        $pagesById[$pid] = $page;
+                    }
+                }
+                $url = $response->json('paging.next');
+                $params = [];
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Facebook /me/accounts fetch error: ' . $e->getMessage());
         }
 
-        $data = $response->json('data', []);
+        // 2. Discover ALL authorized pages from debug_token granular_scopes (covers New Pages Experience & Business Assets)
+        try {
+            $appId = null;
+            $appSecret = null;
+            if ($user) {
+                $setting = SocialSetting::where('user_id', $user->id)->where('platform', 'facebook')->first();
+                $appId = $setting->app_id ?? null;
+                $appSecret = $setting->app_secret ?? null;
+            }
+            $appId = $appId ?: config('services.facebook.client_id') ?: env('FACEBOOK_APP_ID') ?: env('FACEBOOK_CLIENT_ID');
+            $appSecret = $appSecret ?: config('services.facebook.client_secret') ?: env('FACEBOOK_APP_SECRET') ?: env('FACEBOOK_CLIENT_SECRET');
 
-        // Fallback: If personal accounts returned empty, check Meta Business accounts (owned or client pages)
-        if (empty($data)) {
-            try {
-                $bizRes = Http::get('https://graph.facebook.com/v21.0/me/businesses', [
-                    'access_token' => $accessToken,
-                    'fields'       => 'id,name,client_pages{id,name,username,picture{url},category,fan_count,access_token},owned_pages{id,name,username,picture{url},category,fan_count,access_token}',
+            if ($appId && $appSecret) {
+                $debugRes = Http::timeout(15)->get('https://graph.facebook.com/v21.0/debug_token', [
+                    'input_token'  => $accessToken,
+                    'access_token' => "{$appId}|{$appSecret}",
                 ]);
-                if ($bizRes->ok()) {
-                    foreach ($bizRes->json('data', []) as $biz) {
-                        $clientPages = $biz['client_pages']['data'] ?? [];
-                        $ownedPages  = $biz['owned_pages']['data'] ?? [];
-                        foreach (array_merge($clientPages, $ownedPages) as $bp) {
-                            $data[] = $bp;
+
+                if ($debugRes->ok()) {
+                    $granular = $debugRes->json('data.granular_scopes', []);
+                    $targetIds = [];
+                    foreach ($granular as $g) {
+                        if (in_array($g['scope'] ?? '', ['pages_show_list', 'pages_manage_posts', 'pages_read_engagement'])) {
+                            foreach ($g['target_ids'] ?? [] as $tid) {
+                                $targetIds[(string)$tid] = true;
+                            }
+                        }
+                    }
+
+                    $missingIds = array_diff(array_keys($targetIds), array_keys($pagesById));
+                    if (!empty($missingIds)) {
+                        foreach (array_chunk($missingIds, 50) as $chunk) {
+                            $multiRes = Http::timeout(20)->get('https://graph.facebook.com/v21.0/', [
+                                'ids'          => implode(',', $chunk),
+                                'fields'       => 'id,name,username,picture{url},category,fan_count,access_token',
+                                'access_token' => $accessToken,
+                            ]);
+
+                            if ($multiRes->ok()) {
+                                $multiData = $multiRes->json();
+                                foreach ($multiData as $id => $pageData) {
+                                    if (is_array($pageData) && !empty($pageData['id']) && empty($pageData['error'])) {
+                                        $pagesById[(string)$pageData['id']] = $pageData;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-            } catch (\Throwable $e) {
-                Log::info('Facebook businesses check: ' . $e->getMessage());
             }
+        } catch (\Throwable $e) {
+            Log::info('Facebook granular scopes inspection: ' . $e->getMessage());
         }
 
-        return array_map(function ($page) {
+        // 3. Check Meta Business accounts (owned or client pages)
+        try {
+            $bizRes = Http::timeout(15)->get('https://graph.facebook.com/v21.0/me/businesses', [
+                'access_token' => $accessToken,
+                'fields'       => 'id,name,client_pages{id,name,username,picture{url},category,fan_count,access_token},owned_pages{id,name,username,picture{url},category,fan_count,access_token}',
+            ]);
+            if ($bizRes->ok()) {
+                foreach ($bizRes->json('data', []) as $biz) {
+                    $clientPages = $biz['client_pages']['data'] ?? [];
+                    $ownedPages  = $biz['owned_pages']['data'] ?? [];
+                    foreach (array_merge($clientPages, $ownedPages) as $bp) {
+                        $bpid = (string)($bp['id'] ?? '');
+                        if ($bpid && !isset($pagesById[$bpid])) {
+                            $pagesById[$bpid] = $bp;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::info('Facebook businesses check: ' . $e->getMessage());
+        }
+
+        return array_values(array_map(function ($page) {
+            $avatarUrl = '';
+            if (isset($page['picture']['data']['url'])) {
+                $avatarUrl = $page['picture']['data']['url'];
+            } elseif (is_string($page['picture'] ?? null)) {
+                $avatarUrl = $page['picture'];
+            }
+
             return [
-                'account_id'       => (string)$page['id'],
-                'account_name'     => $page['name'],
-                'account_username' => $page['username'] ?? '',
-                'avatar_url'       => $page['picture']['data']['url'] ?? '',
-                'category'         => $page['category'] ?? 'صفحة فيسبوك',
-                'followers_count'  => $page['followers_count'] ?? $page['fan_count'] ?? 0,
+                'account_id'        => (string)$page['id'],
+                'account_name'      => $page['name'] ?? '',
+                'account_username'  => $page['username'] ?? '',
+                'avatar_url'        => $avatarUrl,
+                'category'          => $page['category'] ?? 'صفحة فيسبوك',
+                'followers_count'   => (int)($page['followers_count'] ?? $page['fan_count'] ?? 0),
                 'page_access_token' => $page['access_token'] ?? null,
             ];
-        }, $data);
+        }, $pagesById));
     }
 
-    private function fetchInstagramAccounts(string $accessToken): array
+    private function fetchInstagramAccounts(string $accessToken, $user = null): array
     {
-        $response = Http::get('https://graph.facebook.com/v21.0/me/accounts', [
-            'access_token' => $accessToken,
-            'fields'       => 'id,name,access_token,instagram_business_account{id,name,username,profile_picture_url,followers_count,biography}',
-        ]);
+        $accountsById = [];
 
-        if (!$response->ok()) {
-            throw new \RuntimeException('Instagram API error: ' . $response->body());
-        }
+        // 1. Fetch Facebook pages to find linked instagram_business_account
+        $fbPages = $this->fetchFacebookPages($accessToken, $user);
 
-        $data     = $response->json('data', []);
-        $accounts = [];
-
-        foreach ($data as $page) {
-            if (!empty($page['instagram_business_account'])) {
-                $ig = $page['instagram_business_account'];
-                $accounts[] = [
-                    'account_id'       => (string)$ig['id'],
-                    'account_name'     => $ig['name'] ?? $ig['username'] ?? $page['name'],
-                    'account_username' => $ig['username'] ?? '',
-                    'avatar_url'       => $ig['profile_picture_url'] ?? '',
-                    'category'         => 'حساب أعمال إنستجرام',
-                    'followers_count'  => $ig['followers_count'] ?? 0,
-                    'page_access_token' => $page['access_token'] ?? null,
-                ];
+        $pageIds = array_column($fbPages, 'account_id');
+        $pageTokensById = [];
+        foreach ($fbPages as $fp) {
+            if (!empty($fp['page_access_token'])) {
+                $pageTokensById[$fp['account_id']] = $fp['page_access_token'];
             }
         }
 
-        return $accounts;
+        if (!empty($pageIds)) {
+            foreach (array_chunk($pageIds, 50) as $chunk) {
+                try {
+                    $igRes = Http::timeout(20)->get('https://graph.facebook.com/v21.0/', [
+                        'ids'          => implode(',', $chunk),
+                        'fields'       => 'id,name,access_token,instagram_business_account{id,name,username,profile_picture_url,followers_count,biography}',
+                        'access_token' => $accessToken,
+                    ]);
+
+                    if ($igRes->ok()) {
+                        foreach ($igRes->json() as $pid => $pData) {
+                            if (!empty($pData['instagram_business_account']) && empty($pData['instagram_business_account']['error'])) {
+                                $ig = $pData['instagram_business_account'];
+                                $igId = (string)($ig['id'] ?? '');
+                                if ($igId && !isset($accountsById[$igId])) {
+                                    $accountsById[$igId] = [
+                                        'account_id'        => $igId,
+                                        'account_name'      => $ig['name'] ?? $ig['username'] ?? $pData['name'] ?? 'Instagram Account',
+                                        'account_username'  => $ig['username'] ?? '',
+                                        'avatar_url'        => $ig['profile_picture_url'] ?? '',
+                                        'category'          => 'حساب أعمال إنستجرام',
+                                        'followers_count'   => (int)($ig['followers_count'] ?? 0),
+                                        'page_access_token' => $pData['access_token'] ?? $pageTokensById[$pid] ?? $accessToken,
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('IG fetch via page IDs failed: ' . $e->getMessage());
+                }
+            }
+        }
+
+        // 2. Check debug_token granular scopes for direct instagram_basic target_ids
+        try {
+            $appId = null;
+            $appSecret = null;
+            if ($user) {
+                $setting = SocialSetting::where('user_id', $user->id)->where('platform', 'facebook')->first();
+                $appId = $setting->app_id ?? null;
+                $appSecret = $setting->app_secret ?? null;
+            }
+            $appId = $appId ?: config('services.facebook.client_id') ?: env('FACEBOOK_APP_ID') ?: env('FACEBOOK_CLIENT_ID');
+            $appSecret = $appSecret ?: config('services.facebook.client_secret') ?: env('FACEBOOK_APP_SECRET') ?: env('FACEBOOK_CLIENT_SECRET');
+
+            if ($appId && $appSecret) {
+                $debugRes = Http::timeout(15)->get('https://graph.facebook.com/v21.0/debug_token', [
+                    'input_token'  => $accessToken,
+                    'access_token' => "{$appId}|{$appSecret}",
+                ]);
+
+                if ($debugRes->ok()) {
+                    $granular = $debugRes->json('data.granular_scopes', []);
+                    $igTargetIds = [];
+                    foreach ($granular as $g) {
+                        if (($g['scope'] ?? '') === 'instagram_basic') {
+                            foreach ($g['target_ids'] ?? [] as $tid) {
+                                $igTargetIds[] = (string)$tid;
+                            }
+                        }
+                    }
+
+                    $missingIgIds = array_diff($igTargetIds, array_keys($accountsById));
+                    if (!empty($missingIgIds)) {
+                        foreach (array_chunk($missingIgIds, 50) as $chunk) {
+                            $multiIg = Http::timeout(20)->get('https://graph.facebook.com/v21.0/', [
+                                'ids'          => implode(',', $chunk),
+                                'fields'       => 'id,name,username,profile_picture_url,followers_count,biography',
+                                'access_token' => $accessToken,
+                            ]);
+
+                            if ($multiIg->ok()) {
+                                foreach ($multiIg->json() as $igId => $igData) {
+                                    if (is_array($igData) && !empty($igData['id']) && empty($igData['error']) && !isset($accountsById[(string)$igId])) {
+                                        $accountsById[(string)$igId] = [
+                                            'account_id'        => (string)$igId,
+                                            'account_name'      => $igData['name'] ?? $igData['username'] ?? 'Instagram Business',
+                                            'account_username'  => $igData['username'] ?? '',
+                                            'avatar_url'        => $igData['profile_picture_url'] ?? '',
+                                            'category'          => 'حساب أعمال إنستجرام',
+                                            'followers_count'   => (int)($igData['followers_count'] ?? 0),
+                                            'page_access_token' => $accessToken,
+                                        ];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::info('IG direct inspection failed: ' . $e->getMessage());
+        }
+
+        return array_values($accountsById);
     }
 
     private function fetchYouTubeChannels(string $accessToken): array
