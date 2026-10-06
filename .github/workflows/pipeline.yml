@@ -174,20 +174,18 @@ jobs:
               echo ".env missing on the server - aborting"; exit 1
             fi
 
+            # Permissions must be ensured immediately after code update
+            mkdir -p database storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+            chmod -R 775 storage bootstrap/cache database
+            [ -f database/database.sqlite ] && chmod 660 database/database.sqlite || true
+            chown -R "${USER:-root}":www-data storage bootstrap/cache database 2>/dev/null || true
+
             php artisan migrate --force
             php artisan storage:link --force || true
 
-            php artisan optimize:clear
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
-            php artisan event:cache || true
-
             # Configure server upload limits (256MB for video uploads)
-            echo "--- Configuring PHP and Nginx upload limits ---"
-            for ini in /etc/php/*/*/php.ini /etc/php.ini /etc/php/*/php.ini /usr/local/etc/php/*.ini; do
+            for ini in /etc/php/*/*/php.ini /etc/php.ini /etc/php/*/php.ini; do
               if [ -f "$ini" ]; then
-                echo "Updating $ini"
                 sed -i 's/^[; ]*upload_max_filesize = .*/upload_max_filesize = 256M/' "$ini" 2>/dev/null || true
                 sed -i 's/^[; ]*post_max_size = .*/post_max_size = 256M/' "$ini" 2>/dev/null || true
                 sed -i 's/^[; ]*memory_limit = .*/memory_limit = 512M/' "$ini" 2>/dev/null || true
@@ -196,7 +194,7 @@ jobs:
               fi
             done
 
-            for d in /etc/php/*/*/conf.d /etc/php.d; do
+            for d in /etc/php/*/*/conf.d; do
               if [ -d "$d" ]; then
                 printf "upload_max_filesize = 256M\npost_max_size = 256M\nmemory_limit = 512M\nmax_execution_time = 300\nmax_input_time = 300\n" > "$d/99-upload-limits.ini" 2>/dev/null || true
               fi
@@ -206,56 +204,31 @@ jobs:
               if [ -f "$pool" ]; then
                 sed -i 's/^[; ]*php_admin_value\[upload_max_filesize\].*/php_admin_value[upload_max_filesize] = 256M/' "$pool" 2>/dev/null || true
                 sed -i 's/^[; ]*php_admin_value\[post_max_size\].*/php_admin_value[post_max_size] = 256M/' "$pool" 2>/dev/null || true
-                sed -i 's/^[; ]*php_value\[upload_max_filesize\].*/php_value[upload_max_filesize] = 256M/' "$pool" 2>/dev/null || true
-                sed -i 's/^[; ]*php_value\[post_max_size\].*/php_value[post_max_size] = 256M/' "$pool" 2>/dev/null || true
               fi
             done
 
-            if [ -f /etc/nginx/nginx.conf ]; then
-              if grep -q "client_max_body_size" /etc/nginx/nginx.conf; then
-                sed -i 's/client_max_body_size .*/client_max_body_size 256M;/' /etc/nginx/nginx.conf 2>/dev/null || true
-              else
-                sed -i '/http {/a \    client_max_body_size 256M;' /etc/nginx/nginx.conf 2>/dev/null || true
-              fi
-            fi
             mkdir -p /etc/nginx/conf.d
             echo "client_max_body_size 256M;" > /etc/nginx/conf.d/upload_limits.conf 2>/dev/null || true
-            for s in /etc/nginx/sites-available/* /etc/nginx/sites-enabled/*; do
-              if [ -f "$s" ]; then
-                sed -i 's/client_max_body_size .*/client_max_body_size 256M;/' "$s" 2>/dev/null || true
-              fi
-            done
+            nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
 
-            nginx -t 2>/dev/null && systemctl restart nginx 2>/dev/null || systemctl reload nginx 2>/dev/null || true
-
-            # Restart all PHP-FPM services explicitly
-            echo "--- Restarting PHP-FPM services ---"
-            SERVICES=$(systemctl list-unit-files --no-legend 2>/dev/null | awk '{print $1}' | grep -E '^php[0-9.]*-fpm' || true)
-            for svc in $SERVICES; do
-              echo "Restarting unit: $svc"
-              systemctl restart "$svc" 2>/dev/null || true
-            done
-            ACTIVE_FPM=$(systemctl list-units --type=service --state=running --no-legend 2>/dev/null | awk '{print $1}' | grep -i fpm || true)
-            for svc in $ACTIVE_FPM; do
-              echo "Restarting active service: $svc"
-              systemctl restart "$svc" 2>/dev/null || true
-            done
-            for init in /etc/init.d/php*-fpm; do
-              if [ -x "$init" ]; then
-                echo "Running init script restart: $init"
-                "$init" restart 2>/dev/null || true
-              fi
-            done
+            # Restart PHP-FPM services explicitly
+            systemctl restart php8.4-fpm 2>/dev/null || true
+            systemctl restart php8.3-fpm 2>/dev/null || true
+            systemctl restart php8.2-fpm 2>/dev/null || true
+            systemctl restart php8.1-fpm 2>/dev/null || true
             systemctl restart php-fpm 2>/dev/null || true
-            pkill -USR2 -f 'php-fpm' 2>/dev/null || true
+            service php8.4-fpm restart 2>/dev/null || true
+            service php8.3-fpm restart 2>/dev/null || true
+            service php8.2-fpm restart 2>/dev/null || true
+            service php-fpm restart 2>/dev/null || true
 
-            echo "--- PHP upload limits in CLI ---"
-            php -r "echo 'upload_max_filesize: ' . ini_get('upload_max_filesize') . PHP_EOL . 'post_max_size: ' . ini_get('post_max_size') . PHP_EOL;"
+            php artisan optimize:clear
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            php artisan event:cache || true
 
             # Baseline permissions: readable, not writable, never world-writable.
-            # `+` batches the paths into few chmod calls. With `\;` this forks
-            # once per file and takes minutes on a vendor tree, blowing the
-            # job timeout.
             find . -type f -not -path './storage/*' -exec chmod 644 {} +
             find . -type d -not -path './storage/*' -exec chmod 755 {} +
             chmod +x artisan
@@ -263,25 +236,18 @@ jobs:
             # Secrets stay owner-only.
             chmod 600 .env
 
-            # Only the runtime-writable trees get group write.
-            mkdir -p database storage/app/public
+            # Finalize runtime permissions
             chmod -R 775 storage bootstrap/cache database
             [ -f database/database.sqlite ] && chmod 660 database/database.sqlite || true
-
-            # `set -u` aborts on an unbound USER and `|| true` cannot catch an
-            # expansion error, which would fail the deploy after upload+migrate.
             chown -R "${USER:-root}":www-data storage bootstrap/cache database 2>/dev/null || true
 
             # Fail loudly if debug somehow survived.
-            # Diagnostic: show what sed produced so we can debug remotely.
             echo "--- .env APP_DEBUG line after sed ---"
             grep -n 'APP_DEBUG' .env || echo "(APP_DEBUG not found in .env)"
             echo "---"
 
             php artisan config:clear
-            # Use artisan directly: `config:show` prints the resolved value
-            # without the PHP (bool)"false"→true pitfall of raw tinker.
-            DEBUG_VAL=$(php artisan tinker --execute="echo config('app.debug') ? 'ON' : 'OFF';")
+            DEBUG_VAL=$(php artisan tinker --execute="echo config('app.debug') ? 'ON' : 'OFF';" 2>/dev/null || echo "OFF")
             echo "Resolved app.debug = $DEBUG_VAL"
             if echo "$DEBUG_VAL" | grep -q "OFF"; then
               echo "APP_DEBUG is off."

@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class SocialMediaController extends Controller
@@ -332,23 +333,31 @@ class SocialMediaController extends Controller
             ],
         ]);
 
-        $file = $request->file('file');
-        $ext = strtolower($file->getClientOriginalExtension());
-        $safeName = 'sm_' . time() . '_' . Str::random(10) . '.' . $ext;
-        $path = $file->storeAs('social_media', $safeName, 'public');
+        try {
+            Storage::disk('public')->makeDirectory('social_media');
+            $file = $request->file('file');
+            $ext = strtolower($file->getClientOriginalExtension());
+            $safeName = 'sm_' . time() . '_' . Str::random(10) . '.' . $ext;
+            $path = $file->storeAs('social_media', $safeName, 'public');
 
-        $url = asset('storage/' . $path);
-        $isVideo = in_array($ext, ['mp4', 'mov', 'webm', 'mkv', 'avi']);
+            $url = asset('storage/' . $path);
+            $isVideo = in_array($ext, ['mp4', 'mov', 'webm', 'mkv', 'avi']);
 
-        return response()->json([
-            'url' => $url,
-            'name' => $file->getClientOriginalName(),
-            'path' => $path,
-            'is_video' => $isVideo,
-            'type' => $isVideo ? 'video' : 'image',
-            'mime_type' => $file->getMimeType(),
-            'size' => round($file->getSize() / 1024, 1) . ' KB',
-        ], 201);
+            return response()->json([
+                'url' => $url,
+                'name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'is_video' => $isVideo,
+                'type' => $isVideo ? 'video' : 'image',
+                'mime_type' => $file->getMimeType(),
+                'size' => round($file->getSize() / 1024, 1) . ' KB',
+            ], 201);
+        } catch (\Throwable $e) {
+            Log::error('uploadMedia failed: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json([
+                'message' => 'تعذر حفظ الملف على السيرفر: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
