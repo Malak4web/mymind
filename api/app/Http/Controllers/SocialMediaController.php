@@ -1529,6 +1529,54 @@ class SocialMediaController extends Controller
                     Log::warning("YouTube sync error for {$account->account_id}: " . $e->getMessage());
                 }
             }
+
+            // Fallback: If Google API v3 returned 0 or failed/expired, fetch videos from official YouTube Channel RSS Feed
+            if (empty($importedPosts) && $channelId) {
+                try {
+                    $feedRes = Http::timeout(20)->get("https://www.youtube.com/feeds/videos.xml?channel_id={$channelId}");
+                    if ($feedRes->ok() && !empty($feedRes->body())) {
+                        $xml = @simplexml_load_string($feedRes->body());
+                        if ($xml && isset($xml->entry)) {
+                            foreach ($xml->entry as $e) {
+                                $ytChild = $e->children('http://www.youtube.com/xml/schemas/2015');
+                                $vId = (string)($ytChild->videoId ?? '');
+                                if (!$vId) continue;
+
+                                $title = (string)($e->title ?? 'فيديو على يوتيوب');
+                                $publishedAt = !empty($e->published) ? Carbon::parse((string)$e->published) : now();
+
+                                $mediaGroup = $e->children('http://search.yahoo.com/mrss/')->group;
+                                $description = (string)($mediaGroup->description ?? '');
+                                $thumbnailUrl = (string)($mediaGroup->thumbnail->attributes()->url ?? "https://i.ytimg.com/vi/{$vId}/hqdefault.jpg");
+                                $views = (int)($mediaGroup->community->statistics->attributes()->views ?? 0);
+                                $likes = (int)($mediaGroup->community->starRating->attributes()->count ?? 0);
+
+                                $content = trim($title . ($description ? "\n\n" . $description : ''));
+                                $subs = max(1, (int)$account->followers_count);
+                                $engRate = $subs > 0 ? round(($likes / $subs) * 100, 2) : ($views > 0 ? round(($likes / $views) * 100, 2) : 0);
+
+                                $importedPosts[] = [
+                                    'external_id' => $vId,
+                                    'content' => $content ?: 'فيديو على يوتيوب',
+                                    'media_urls' => $thumbnailUrl ? [$thumbnailUrl] : [],
+                                    'published_at' => $publishedAt,
+                                    'permalink' => "https://www.youtube.com/watch?v={$vId}",
+                                    'metrics' => [
+                                        'likes' => $likes,
+                                        'comments' => 0,
+                                        'shares' => 0,
+                                        'views' => $views,
+                                        'impressions' => $views,
+                                        'engagement_rate' => $engRate,
+                                    ],
+                                ];
+                            }
+                        }
+                    }
+                } catch (\Throwable $fe) {
+                    Log::info("YouTube RSS fallback notice for {$channelId}: " . $fe->getMessage());
+                }
+            }
         }
 
         // STRICT REAL DATA: Never generate fake posts if Meta API returns 0 posts.
