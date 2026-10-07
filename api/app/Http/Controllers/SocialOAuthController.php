@@ -658,7 +658,7 @@ class SocialOAuthController extends Controller
         $response = Http::withHeaders([
             'Authorization' => "Bearer {$accessToken}",
         ])->get('https://www.googleapis.com/youtube/v3/channels', [
-            'part' => 'snippet,statistics',
+            'part' => 'snippet,contentDetails,statistics',
             'mine' => 'true',
         ]);
 
@@ -668,17 +668,20 @@ class SocialOAuthController extends Controller
 
         $items = $response->json('items', []);
 
-        return array_map(function ($channel) {
+        return array_map(function ($channel) use ($accessToken) {
             $snippet = $channel['snippet'] ?? [];
             $stats   = $channel['statistics'] ?? [];
+            $contentDetails = $channel['contentDetails'] ?? [];
 
             return [
-                'account_id'       => (string)$channel['id'],
-                'account_name'     => $snippet['title'] ?? '',
-                'account_username' => $snippet['customUrl'] ?? '',
-                'avatar_url'       => $snippet['thumbnails']['default']['url'] ?? '',
-                'category'         => 'قناة يوتيوب',
-                'followers_count'  => (int)($stats['subscriberCount'] ?? 0),
+                'account_id'          => (string)$channel['id'],
+                'account_name'        => $snippet['title'] ?? '',
+                'account_username'    => $snippet['customUrl'] ?? '',
+                'avatar_url'          => $snippet['thumbnails']['default']['url'] ?? '',
+                'category'            => 'قناة يوتيوب',
+                'followers_count'     => (int)($stats['subscriberCount'] ?? 0),
+                'page_access_token'   => $accessToken,
+                'uploads_playlist_id' => $contentDetails['relatedPlaylists']['uploads'] ?? null,
             ];
         }, $items);
     }

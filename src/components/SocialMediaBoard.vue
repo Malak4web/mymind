@@ -510,6 +510,9 @@ const handleDisconnectFromModal = async (page) => {
   )
   if (existing) {
     if (confirm(`هل أنت متأكد من إلغاء ربط "${page.account_name}"؟`)) {
+      if (String(selectedAccountId.value) === String(page.account_id)) {
+        selectedAccountId.value = 'all'
+      }
       await store.disconnectSocialAccount(existing.id)
       page.is_connected = false
     }
@@ -566,6 +569,9 @@ const handleConnectAccount = async () => {
 // Disconnect Account
 const handleDisconnect = async (account) => {
   if (confirm(`هل أنت متأكد من فصل الحساب "${account.account_name}"؟`)) {
+    if (String(selectedAccountId.value) === String(account.account_id)) {
+      selectedAccountId.value = 'all'
+    }
     await store.disconnectSocialAccount(account.id)
   }
 }

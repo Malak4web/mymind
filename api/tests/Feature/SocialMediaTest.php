@@ -388,5 +388,127 @@ class SocialMediaTest extends TestCase
 
         $res->assertStatus(422);
     }
+
+    public function test_user_can_sync_youtube_channel_videos_and_metrics()
+    {
+        Sanctum::actingAs($this->userA);
+
+        \Illuminate\Support\Facades\Http::fake([
+            'https://www.googleapis.com/youtube/v3/channels*' => \Illuminate\Support\Facades\Http::response([
+                'items' => [
+                    [
+                        'id' => 'UC_test_channel_123',
+                        'snippet' => ['title' => 'قناة يوتيوب تقنية'],
+                        'contentDetails' => [
+                            'relatedPlaylists' => ['uploads' => 'UU_test_channel_123']
+                        ],
+                        'statistics' => ['subscriberCount' => '25000']
+                    ]
+                ]
+            ], 200),
+            'https://www.googleapis.com/youtube/v3/playlistItems*' => \Illuminate\Support\Facades\Http::response([
+                'items' => [
+                    [
+                        'contentDetails' => ['videoId' => 'vid_yt_2001'],
+                        'snippet' => [
+                            'title' => 'فيديو شرح النظام الجديد 2026',
+                            'description' => 'شرح كامل ومفصل لجميع الميزات الجديدة',
+                            'publishedAt' => now()->subHours(5)->toIso8601String(),
+                            'thumbnails' => [
+                                'high' => ['url' => 'https://i.ytimg.com/vi/vid_yt_2001/hqdefault.jpg']
+                            ]
+                        ]
+                    ]
+                ]
+            ], 200),
+            'https://www.googleapis.com/youtube/v3/videos*' => \Illuminate\Support\Facades\Http::response([
+                'items' => [
+                    [
+                        'id' => 'vid_yt_2001',
+                        'snippet' => [
+                            'title' => 'فيديو شرح النظام الجديد 2026',
+                            'description' => 'شرح كامل ومفصل لجميع الميزات الجديدة',
+                            'publishedAt' => now()->subHours(5)->toIso8601String(),
+                            'thumbnails' => [
+                                'high' => ['url' => 'https://i.ytimg.com/vi/vid_yt_2001/hqdefault.jpg']
+                            ]
+                        ],
+                        'statistics' => [
+                            'viewCount' => '15400',
+                            'likeCount' => '850',
+                            'commentCount' => '95'
+                        ]
+                    ]
+                ]
+            ], 200),
+        ]);
+
+        SocialAccount::create([
+            'user_id' => $this->userA->id,
+            'platform' => 'youtube',
+            'account_id' => 'UC_test_channel_123',
+            'account_name' => 'قناة يوتيوب تقنية',
+            'followers_count' => 1000,
+            'access_token' => 'real_yt_access_token_xyz',
+        ]);
+
+        $res = $this->postJson('/api/social/sync-posts');
+        $res->assertStatus(200)
+            ->assertJsonPath('synced_accounts', 1)
+            ->assertJsonPath('synced_posts', 1);
+
+        $postsRes = $this->getJson('/api/social/posts?platform=youtube');
+        $postsRes->assertStatus(200);
+        $this->assertCount(1, $postsRes->json());
+
+        $ytPost = $postsRes->json('0');
+        $this->assertStringContainsString('فيديو شرح النظام الجديد 2026', $ytPost['content']);
+        $this->assertEquals(850, $ytPost['metrics']['likes']);
+        $this->assertEquals(95, $ytPost['metrics']['comments']);
+        $this->assertEquals(15400, $ytPost['metrics']['views']);
+        $this->assertEquals('https://www.youtube.com/watch?v=vid_yt_2001', $ytPost['platform_post_ids']['youtube']['url']);
+
+        // Check analytics for YouTube
+        $analRes = $this->getJson('/api/social/analytics?platform=youtube');
+        $analRes->assertStatus(200);
+        $this->assertEquals(1, $analRes->json('summary.total_pages'));
+        $this->assertEquals(1, $analRes->json('summary.total_posts'));
+        $this->assertEquals(850, $analRes->json('summary.total_likes'));
+    }
+
+    public function test_disconnecting_account_removes_its_posts_and_prevents_orphan_posts()
+    {
+        Sanctum::actingAs($this->userA);
+
+        $acc = SocialAccount::create([
+            'user_id' => $this->userA->id,
+            'platform' => 'facebook',
+            'account_id' => 'fb_page_to_delete',
+            'account_name' => 'صفحة ستُحذف',
+        ]);
+
+        SocialPost::create([
+            'user_id' => $this->userA->id,
+            'content' => 'منشور على صفحة ستُحذف',
+            'platforms' => ['facebook'],
+            'account_ids' => ['fb_page_to_delete'],
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+
+        // Post exists
+        $postsBefore = $this->getJson('/api/social/posts');
+        $postsBefore->assertStatus(200)
+            ->assertJsonCount(1);
+
+        // Delete the account
+        $delRes = $this->deleteJson("/api/social/accounts/{$acc->id}");
+        $delRes->assertStatus(200);
+
+        // Posts belonging to deleted account must be gone
+        $postsAfter = $this->getJson('/api/social/posts');
+        $postsAfter->assertStatus(200)
+            ->assertJsonCount(0);
+    }
 }
 

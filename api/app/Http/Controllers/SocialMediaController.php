@@ -104,11 +104,34 @@ class SocialMediaController extends Controller
         $user = $this->currentUser($request);
 
         $account = SocialAccount::where('user_id', $user->id)->findOrFail($id);
+        $accountId = (string) $account->account_id;
+
+        // Delete all posts imported for or exclusively linked to this account
+        $posts = SocialPost::where('user_id', $user->id)
+            ->whereNotNull('account_ids')
+            ->get();
+
+        foreach ($posts as $post) {
+            $postAccIds = array_map('strval', $post->account_ids ?? []);
+            if (in_array($accountId, $postAccIds)) {
+                $remaining = array_values(array_filter($postAccIds, fn($aid) => $aid !== $accountId));
+                if (empty($remaining)) {
+                    $post->delete();
+                } else {
+                    $post->update(['account_ids' => $remaining]);
+                }
+            }
+        }
+
         $account->delete();
 
-        $this->broadcastChange($user->id, 'social_accounts');
+        // Clean up any lingering orphan posts
+        $this->purgeOrphanPosts($user->id);
 
-        return response()->json(['message' => 'تم فصل الحساب بنجاح']);
+        $this->broadcastChange($user->id, 'social_accounts');
+        $this->broadcastChange($user->id, 'social_posts');
+
+        return response()->json(['message' => 'تم فصل الحساب وحذف منشوراته بنجاح']);
     }
 
     // ==========================================
@@ -123,9 +146,15 @@ class SocialMediaController extends Controller
     {
         $user = $this->currentUser($request);
         $this->purgeSamplePosts($user->id);
+        $this->purgeOrphanPosts($user->id);
 
         // Auto-publish any past-due scheduled posts for this user
         $this->processDueScheduledPosts($user->id);
+
+        $connectedAccountIds = SocialAccount::where('user_id', $user->id)
+            ->pluck('account_id')
+            ->map('strval')
+            ->toArray();
 
         $query = SocialPost::where('user_id', $user->id);
 
@@ -155,6 +184,15 @@ class SocialMediaController extends Controller
         $posts = $query->orderBy('scheduled_at', 'desc')
             ->orderBy('created_at', 'desc')
             ->get();
+
+        // Strict isolation: only return posts belonging to connected accounts, or user posts without specific account assignment
+        $posts = $posts->filter(function ($post) use ($connectedAccountIds) {
+            $postAccIds = array_filter(array_map('strval', $post->account_ids ?? []));
+            if (empty($postAccIds)) {
+                return true;
+            }
+            return !empty(array_intersect($postAccIds, $connectedAccountIds));
+        })->values();
 
         return response()->json($posts);
     }
@@ -591,19 +629,20 @@ class SocialMediaController extends Controller
     }
 
     /**
-     * Get comprehensive analytics and performance metrics for connected Facebook and Instagram pages.
+     * Get comprehensive analytics and performance metrics for connected pages and channels.
      */
     public function getAnalytics(Request $request)
     {
         $user = $this->currentUser($request);
         $this->purgeSamplePosts($user->id);
+        $this->purgeOrphanPosts($user->id);
 
-        $platformFilter = $request->query('platform', 'all'); // 'all', 'facebook', 'instagram'
+        $platformFilter = $request->query('platform', 'all'); // 'all', 'facebook', 'instagram', 'youtube', 'linkedin'
         $accountFilter  = $request->query('account_id');
 
-        // 1. Get connected accounts (Facebook and Instagram)
+        // 1. Get connected accounts
         $accountsQuery = SocialAccount::where('user_id', $user->id)
-            ->whereIn('platform', ['facebook', 'instagram']);
+            ->whereIn('platform', $this->supportedPlatforms);
 
         if ($platformFilter !== 'all') {
             $accountsQuery->where('platform', $platformFilter);
@@ -613,6 +652,7 @@ class SocialMediaController extends Controller
         }
 
         $accounts = $accountsQuery->get();
+        $connectedAccountIds = $accounts->pluck('account_id')->map('strval')->toArray();
 
         // Auto-sync accounts if they have no posts in DB or synced more than 10 mins ago
         foreach ($accounts as $acc) {
@@ -626,13 +666,9 @@ class SocialMediaController extends Controller
             }
         }
 
-        // 2. Fetch all published posts
+        // 2. Fetch all published posts tied to connected accounts
         $postsQuery = SocialPost::where('user_id', $user->id)
-            ->where('status', 'published')
-            ->where(function ($q) {
-                $q->whereJsonContains('platforms', 'facebook')
-                  ->orWhereJsonContains('platforms', 'instagram');
-            });
+            ->where('status', 'published');
 
         if ($platformFilter !== 'all') {
             $postsQuery->whereJsonContains('platforms', $platformFilter);
@@ -641,7 +677,11 @@ class SocialMediaController extends Controller
             $postsQuery->whereJsonContains('account_ids', $accountFilter);
         }
 
-        $allPosts = $postsQuery->orderBy('published_at', 'desc')->get();
+        $allPosts = $postsQuery->orderBy('published_at', 'desc')->get()->filter(function ($p) use ($connectedAccountIds) {
+            $accIds = array_map('strval', $p->account_ids ?? []);
+            if (empty($accIds)) return false;
+            return !empty(array_intersect($accIds, $connectedAccountIds));
+        })->values();
 
         // 3. Compute per-page breakdown
         $pagesAnalytics = [];
@@ -754,16 +794,23 @@ class SocialMediaController extends Controller
     }
 
     /**
-     * Synchronize and import real external posts from Facebook and Instagram APIs.
+     * Synchronize and import real external posts from connected platform APIs.
      */
     public function syncExternalPosts(Request $request)
     {
         $user = $this->currentUser($request);
         $this->purgeSamplePosts($user->id);
+        $this->purgeOrphanPosts($user->id);
 
-        $accounts = SocialAccount::where('user_id', $user->id)
-            ->whereIn('platform', ['facebook', 'instagram'])
-            ->get();
+        $platformFilter = $request->query('platform', 'all');
+        $accountsQuery = SocialAccount::where('user_id', $user->id);
+        if ($platformFilter !== 'all' && in_array($platformFilter, $this->supportedPlatforms)) {
+            $accountsQuery->where('platform', $platformFilter);
+        } else {
+            $accountsQuery->whereIn('platform', $this->supportedPlatforms);
+        }
+
+        $accounts = $accountsQuery->get();
 
         $syncedCount = 0;
         foreach ($accounts as $account) {
@@ -1013,11 +1060,45 @@ class SocialMediaController extends Controller
     }
 
     /**
-     * Sync/import real posts for a specific account from Facebook or Instagram API using Page Access Token.
+     * Purge posts that belonged exclusively to disconnected accounts.
+     */
+    protected function purgeOrphanPosts(int $userId): void
+    {
+        try {
+            $connectedAccountIds = SocialAccount::where('user_id', $userId)
+                ->pluck('account_id')
+                ->map('strval')
+                ->toArray();
+
+            $posts = SocialPost::where('user_id', $userId)
+                ->whereNotNull('account_ids')
+                ->get();
+
+            foreach ($posts as $post) {
+                $postAccIds = array_filter(array_map('strval', $post->account_ids ?? []));
+                if (!empty($postAccIds)) {
+                    $validAccIds = array_values(array_intersect($postAccIds, $connectedAccountIds));
+                    if (empty($validAccIds)) {
+                        // Orphan post from a disconnected account -> delete
+                        $post->delete();
+                    } elseif (count($validAccIds) !== count($postAccIds)) {
+                        // Update to retain only active connected account_ids
+                        $post->update(['account_ids' => $validAccIds]);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Purge orphan posts failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Sync/import real posts for a specific account from Facebook, Instagram, or YouTube API.
      */
     public function syncPostsForAccount(SocialAccount $account, $user): int
     {
         $this->purgeSamplePosts($user->id);
+        $this->purgeOrphanPosts($user->id);
 
         $pageAccessToken = $account->access_token;
 
@@ -1083,6 +1164,17 @@ class SocialMediaController extends Controller
                 } catch (\Throwable $e) {
                     Log::warning("Auto-healing token failed for {$account->account_id}: " . $e->getMessage());
                 }
+            }
+        }
+
+        // Auto-heal YouTube channel access token if missing
+        if (!$pageAccessToken && $account->platform === 'youtube') {
+            $ytSetting = SocialSetting::where('user_id', $user->id)
+                ->where('platform', 'youtube')
+                ->first();
+            $pageAccessToken = $ytSetting->access_token ?? null;
+            if ($pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) {
+                $account->update(['access_token' => $pageAccessToken]);
             }
         }
 
@@ -1276,6 +1368,166 @@ class SocialMediaController extends Controller
                 }
             } catch (\Throwable $e) {
                 Log::info("IG sync error for {$account->account_id}: " . $e->getMessage());
+            }
+        }
+
+        // 3. Try real YouTube Data API v3 (Channel Videos & Metrics)
+        if ($account->platform === 'youtube') {
+            $ytSetting = SocialSetting::where('user_id', $user->id)
+                ->where('platform', 'youtube')
+                ->first();
+            $apiKey = $ytSetting->api_key ?? config('services.youtube.api_key') ?? env('YOUTUBE_API_KEY');
+
+            $hasAuth = ($pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) || !empty($apiKey);
+
+            if ($hasAuth) {
+                try {
+                    $channelId = (string)$account->account_id;
+                    $uploadsPlaylistId = null;
+
+                    $ytRequest = function (string $url, array $params = []) use ($pageAccessToken, $apiKey) {
+                        $client = Http::timeout(25);
+                        if ($pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) {
+                            $client = $client->withHeaders(['Authorization' => "Bearer {$pageAccessToken}"]);
+                        }
+                        if (!empty($apiKey)) {
+                            $params['key'] = $apiKey;
+                        }
+                        return $client->get($url, $params);
+                    };
+
+                    // Step A: Fetch channel info to verify channel & get uploads playlist ID + real subscriber count
+                    $chanRes = $ytRequest('https://www.googleapis.com/youtube/v3/channels', [
+                        'part' => 'snippet,contentDetails,statistics',
+                        'id' => $channelId,
+                    ]);
+
+                    if ($chanRes->ok() && !empty($chanRes->json('items'))) {
+                        $chanItem = $chanRes->json('items.0');
+                        $uploadsPlaylistId = $chanItem['contentDetails']['relatedPlaylists']['uploads'] ?? null;
+                        $realSubs = (int)($chanItem['statistics']['subscriberCount'] ?? $account->followers_count);
+                        if ($realSubs > 0 && $realSubs !== (int)$account->followers_count) {
+                            $account->update(['followers_count' => $realSubs]);
+                        }
+                    }
+
+                    // Fallback playlist ID: If channelId starts with UC, uploads playlist is UU...
+                    if (!$uploadsPlaylistId && str_starts_with($channelId, 'UC')) {
+                        $uploadsPlaylistId = 'UU' . substr($channelId, 2);
+                    }
+
+                    $rawVideos = [];
+
+                    // Step B: Fetch videos from uploads playlist
+                    if ($uploadsPlaylistId) {
+                        $plRes = $ytRequest('https://www.googleapis.com/youtube/v3/playlistItems', [
+                            'part' => 'snippet,contentDetails',
+                            'playlistId' => $uploadsPlaylistId,
+                            'maxResults' => 50,
+                        ]);
+
+                        if ($plRes->ok() && !empty($plRes->json('items'))) {
+                            foreach ($plRes->json('items') as $item) {
+                                $vidId = $item['contentDetails']['videoId'] ?? $item['snippet']['resourceId']['videoId'] ?? null;
+                                if ($vidId) {
+                                    $rawVideos[$vidId] = $item['snippet'] ?? [];
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback: If playlistItems returned empty, try search endpoint
+                    if (empty($rawVideos)) {
+                        $searchRes = $ytRequest('https://www.googleapis.com/youtube/v3/search', [
+                            'part' => 'snippet',
+                            'channelId' => $channelId,
+                            'maxResults' => 50,
+                            'order' => 'date',
+                            'type' => 'video',
+                        ]);
+
+                        if ($searchRes->ok() && !empty($searchRes->json('items'))) {
+                            foreach ($searchRes->json('items') as $sItem) {
+                                $vidId = $sItem['id']['videoId'] ?? null;
+                                if ($vidId) {
+                                    $rawVideos[$vidId] = $sItem['snippet'] ?? [];
+                                }
+                            }
+                        }
+                    }
+
+                    // Step C: Fetch full statistics for all discovered videos in batches
+                    $videoIds = array_keys($rawVideos);
+                    $videoStats = [];
+
+                    if (!empty($videoIds)) {
+                        foreach (array_chunk($videoIds, 50) as $chunk) {
+                            $statsRes = $ytRequest('https://www.googleapis.com/youtube/v3/videos', [
+                                'part' => 'snippet,statistics',
+                                'id' => implode(',', $chunk),
+                            ]);
+
+                            if ($statsRes->ok() && !empty($statsRes->json('items'))) {
+                                foreach ($statsRes->json('items') as $vObj) {
+                                    $videoStats[$vObj['id']] = $vObj;
+                                }
+                            }
+                        }
+                    }
+
+                    // Step D: Map each video to imported post
+                    foreach ($rawVideos as $vidId => $snippet) {
+                        $vData = $videoStats[$vidId] ?? null;
+                        $stats = $vData['statistics'] ?? [];
+                        $snippetData = $vData['snippet'] ?? $snippet;
+
+                        $title = $snippetData['title'] ?? '';
+                        $description = $snippetData['description'] ?? '';
+                        $content = trim($title . ($description ? "\n\n" . $description : ''));
+                        if (empty($content)) {
+                            $content = 'فيديو على يوتيوب';
+                        }
+
+                        $views = (int)($stats['viewCount'] ?? 0);
+                        $likes = (int)($stats['likeCount'] ?? 0);
+                        $comments = (int)($stats['commentCount'] ?? 0);
+                        $totalInteractions = $likes + $comments;
+                        $subs = max(1, (int)$account->followers_count);
+                        $engRate = $subs > 0
+                            ? round(($totalInteractions / $subs) * 100, 2)
+                            : ($views > 0 ? round(($totalInteractions / $views) * 100, 2) : 0);
+
+                        $thumbs = $snippetData['thumbnails'] ?? [];
+                        $thumbnailUrl = $thumbs['maxres']['url']
+                            ?? $thumbs['standard']['url']
+                            ?? $thumbs['high']['url']
+                            ?? $thumbs['medium']['url']
+                            ?? $thumbs['default']['url']
+                            ?? null;
+
+                        $publishedAt = !empty($snippetData['publishedAt'])
+                            ? Carbon::parse($snippetData['publishedAt'])
+                            : now();
+
+                        $importedPosts[] = [
+                            'external_id' => (string)$vidId,
+                            'content' => $content,
+                            'media_urls' => $thumbnailUrl ? [$thumbnailUrl] : [],
+                            'published_at' => $publishedAt,
+                            'permalink' => "https://www.youtube.com/watch?v={$vidId}",
+                            'metrics' => [
+                                'likes' => $likes,
+                                'comments' => $comments,
+                                'shares' => 0,
+                                'views' => $views,
+                                'impressions' => $views,
+                                'engagement_rate' => $engRate,
+                            ],
+                        ];
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning("YouTube sync error for {$account->account_id}: " . $e->getMessage());
+                }
             }
         }
 

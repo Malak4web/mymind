@@ -3573,8 +3573,22 @@ export const store = reactive({
   },
 
   async disconnectSocialAccount(id) {
-    const prev = [...this.socialAccounts]
+    const prevAccounts = [...this.socialAccounts]
+    const prevPosts = [...this.socialPosts]
+    const targetAccount = this.socialAccounts.find(a => a.id === id)
+    const targetAccountId = targetAccount ? String(targetAccount.account_id) : null
+
     this.socialAccounts = this.socialAccounts.filter(a => a.id !== id)
+    if (targetAccountId) {
+      this.socialPosts = this.socialPosts.filter(p => {
+        const accIds = (p.account_ids || []).map(String)
+        if (accIds.includes(targetAccountId)) {
+          return accIds.length > 1
+        }
+        return true
+      })
+      this.saveSocialPostsLocal()
+    }
     this.saveSocialAccountsLocal()
     this._socialAccountsPending++
 
@@ -3584,14 +3598,20 @@ export const store = reactive({
         headers: this.getAuthHeaders()
       })
       if (!res.ok) {
-        this.socialAccounts = prev
+        this.socialAccounts = prevAccounts
+        this.socialPosts = prevPosts
         this.saveSocialAccountsLocal()
+        this.saveSocialPostsLocal()
       } else {
-        this.addNotification('فصل حساب', 'تم فصل الحساب بنجاح.')
+        this.addNotification('فصل حساب', 'تم فصل الحساب وحذف منشوراته بنجاح.')
+        this.loadSocialPosts()
+        this.loadSocialAnalytics()
       }
     } catch (e) {
-      this.socialAccounts = prev
+      this.socialAccounts = prevAccounts
+      this.socialPosts = prevPosts
       this.saveSocialAccountsLocal()
+      this.saveSocialPostsLocal()
       console.error('فشل فصل الحساب', e)
     } finally {
       this._socialAccountsPending = Math.max(0, this._socialAccountsPending - 1)
