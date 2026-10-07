@@ -29,12 +29,52 @@ const showMobileMoreSheet = ref(false)
 const isQuickSearchOpen = ref(false)
 const quickSearchQuery = ref('')
 
+// User Command Menu Popover state
+const isUserMenuOpen = ref(false)
+const userMenuRef = ref(null)
+
+const userInitials = computed(() => {
+  const name = store.currentUser?.name?.trim() || ''
+  if (!name) return '👤'
+  const parts = name.split(/\s+/).filter(Boolean)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[1][0]).toUpperCase()
+})
+
+const userFirstName = computed(() => {
+  const name = store.currentUser?.name?.trim() || ''
+  if (!name) return 'حسابي'
+  return name.split(/\s+/)[0]
+})
+
+const handleDocumentClick = (e) => {
+  if (userMenuRef.value && !userMenuRef.value.contains(e.target)) {
+    isUserMenuOpen.value = false
+  }
+}
+
+const handleOpenSettings = () => {
+  isUserMenuOpen.value = false
+  goToSettings()
+}
+
+const toggleZenFromMenu = () => {
+  store.isFocusMode = true
+  isUserMenuOpen.value = false
+}
+
+const handleUserMenuLogout = () => {
+  isUserMenuOpen.value = false
+  handleLogout()
+}
+
 const handleGlobalKeyDown = (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
     isQuickSearchOpen.value = !isQuickSearchOpen.value
-  } else if (e.key === 'Escape' && isQuickSearchOpen.value) {
-    isQuickSearchOpen.value = false
+  } else if (e.key === 'Escape') {
+    if (isQuickSearchOpen.value) isQuickSearchOpen.value = false
+    if (isUserMenuOpen.value) isUserMenuOpen.value = false
   }
 }
 
@@ -181,12 +221,14 @@ const handleHashChange = () => {
 onMounted(() => {
   window.addEventListener('hashchange', handleHashChange)
   window.addEventListener('keydown', handleGlobalKeyDown)
+  document.addEventListener('click', handleDocumentClick)
   handleHashChange()
 })
 
 onUnmounted(() => {
   window.removeEventListener('hashchange', handleHashChange)
   window.removeEventListener('keydown', handleGlobalKeyDown)
+  document.removeEventListener('click', handleDocumentClick)
 })
 
 // Watch when projects list finishes loading, to select the project based on hash
@@ -252,91 +294,84 @@ watch(() => store.projects.length, (newLen) => {
       class="glass-header shadow-md z-30 sticky top-0 md:relative"
     >
       <!-- Desktop Navigation Header (hidden on mobile) -->
-      <div class="hidden md:flex max-w-full w-full px-4 lg:px-8 py-2.5 lg:py-3 items-center justify-between gap-2 lg:gap-4 flex-nowrap">
+      <div class="hidden md:flex max-w-full w-full px-4 lg:px-6 py-2.5 items-center justify-between gap-3 flex-nowrap">
         
-        <!-- Left Brand info & Sidebar Collapse Toggle & Breadcrumbs -->
-        <div class="flex items-center gap-2 lg:gap-3 shrink-0">
+        <!-- Zone 1 (Left): Brand Identity, Sidebar Toggle & Context Breadcrumb -->
+        <div class="flex items-center gap-2.5 lg:gap-3 shrink-0 min-w-0">
           <!-- Sidebar Toggle Button (<< / >>) -->
           <button 
             @click="store.toggleSidebar()"
-            class="p-2 rounded-xl border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 hover:text-violet-600 dark:hover:text-violet-400 transition cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center font-bold text-xs shadow-sm btn-touch-active shrink-0"
-            :title="store.isSidebarCollapsed ? 'توسيع القائمة الجانبية (>>)' : 'طَي القائمة الجانبية (<<)'"
+            class="p-2 rounded-xl border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 hover:text-violet-600 dark:hover:text-violet-400 transition cursor-pointer min-h-[38px] min-w-[38px] flex items-center justify-center font-bold text-xs shadow-xs btn-touch-active shrink-0"
+            :title="store.isSidebarCollapsed ? 'توسيع القائمة الجانبية (>>)' : 'طي القائمة الجانبية (<<)'"
+            aria-label="تبديل القائمة الجانبية"
           >
-            <span>{{ store.isSidebarCollapsed ? '>>' : '<<' }}</span>
+            <svg v-if="store.isSidebarCollapsed" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
           </button>
 
-          <!-- Breadcrumb trail: (المشروع > [اسم مشروع] or view name) -->
-          <nav class="flex items-center gap-1.5 lg:gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 min-w-0">
-            <span class="text-slate-800 dark:text-slate-100 font-extrabold flex items-center gap-1.5 shrink-0">
-              <span class="w-6 h-6 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-600 text-white flex items-center justify-center text-[10px]">🧠</span>
-              <span class="hidden sm:inline">عقلي</span>
+          <!-- Brand Mark -->
+          <div class="flex items-center gap-2 shrink-0 select-none">
+            <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-600 text-white flex items-center justify-center text-xs shadow-xs shadow-violet-500/20 font-black">
+              🧠
+            </div>
+            <span class="font-black text-sm lg:text-base tracking-tight text-slate-900 dark:text-white">عقلي</span>
+          </div>
+
+          <!-- Subtle Divider -->
+          <span class="text-slate-300 dark:text-slate-700 shrink-0 font-light text-sm">/</span>
+
+          <!-- Spatial Context Pill -->
+          <div class="min-w-0 flex items-center">
+            <span v-if="store.activeView === 'settings'" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border border-violet-200/60 dark:border-violet-800/50 whitespace-nowrap">
+              <span>⚙️</span>
+              <span>إعدادات النظام</span>
             </span>
-            <span class="text-slate-300 dark:text-slate-700 shrink-0">></span>
-            <span v-if="store.activeView === 'settings'" class="text-violet-600 dark:text-violet-400 whitespace-nowrap">الإعدادات</span>
-            <span v-else-if="store.activeView === 'routines'" class="text-violet-600 dark:text-violet-400 whitespace-nowrap">يومياتي والعادات</span>
-            <span v-else-if="store.activeView === 'social'" class="text-violet-600 dark:text-violet-400 whitespace-nowrap">إدارة السوشيال ميديا</span>
-            <template v-else-if="activeProject">
-              <span class="hidden xl:inline shrink-0">المشروع</span>
-              <span class="hidden xl:inline text-slate-300 dark:text-slate-700 shrink-0">></span>
-              <span class="text-violet-600 dark:text-violet-400 truncate max-w-[120px] lg:max-w-[180px] xl:max-w-[220px]">{{ activeProject.name }}</span>
-            </template>
-          </nav>
+            <span v-else-if="store.activeView === 'routines'" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border border-violet-200/60 dark:border-violet-800/50 whitespace-nowrap">
+              <span>⏰</span>
+              <span>يومياتي والعادات</span>
+            </span>
+            <span v-else-if="store.activeView === 'social'" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border border-violet-200/60 dark:border-violet-800/50 whitespace-nowrap">
+              <span>🚀</span>
+              <span>السوشيال ميديا</span>
+            </span>
+            <div v-else-if="activeProject" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700/60 max-w-[140px] sm:max-w-[180px] lg:max-w-[220px]">
+              <span class="shrink-0 text-violet-500">📁</span>
+              <span class="truncate">{{ activeProject.name }}</span>
+            </div>
+          </div>
         </div>
 
-        <!-- Middle Action Bar: Quick Search, Quick Create & View Navigator -->
-        <div class="flex items-center gap-2 lg:gap-3 shrink min-w-0 justify-center">
-
-          <!-- Quick Search trigger input button (Ctrl+K) -->
-          <button 
-            @click="isQuickSearchOpen = true"
-            class="bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/80 dark:hover:bg-slate-700 border border-slate-200/70 dark:border-slate-700/60 rounded-2xl px-3 py-2 text-xs text-slate-400 dark:text-slate-400 flex items-center gap-2 lg:gap-3 transition cursor-pointer shadow-inner shrink-0 justify-between btn-touch-active min-h-[40px]"
-            title="بحث سريع (Ctrl+K)"
-          >
-            <div class="flex items-center gap-1.5 lg:gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <span class="hidden xl:inline whitespace-nowrap">بحث سريع...</span>
-              <span class="inline xl:hidden whitespace-nowrap">بحث...</span>
-            </div>
-            <kbd class="hidden lg:inline-flex px-1.5 py-0.5 text-[10px] font-mono font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500 shadow-sm shrink-0">Ctrl+K</kbd>
-          </button>
-
-          <!-- Quick Create Button (+ إضافة جديدة) -->
-          <button 
-            @click="triggerQuickCreate"
-            class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-extrabold text-xs px-3 lg:px-3.5 py-2 rounded-2xl shadow-md shadow-violet-500/20 hover:-translate-y-0.5 hover:shadow-glass-glow transition-all duration-300 cursor-pointer flex items-center gap-1.5 min-h-[40px] btn-touch-active shrink-0 whitespace-nowrap"
-            title="إضافة مهمة جديدة"
-          >
-            <span class="text-sm font-black">+</span>
-            <span class="hidden lg:inline">إضافة جديدة</span>
-            <span class="inline lg:hidden">إضافة</span>
-          </button>
-
-          <!-- View Tabs Navigator -->
-          <div class="bg-slate-100/60 dark:bg-slate-950/60 backdrop-blur-md border border-white/40 dark:border-slate-800/60 p-1 rounded-2xl flex items-center gap-0.5 lg:gap-1 shrink-0">
+        <!-- Zone 2 (Center): Focused Primary Workflow Segmented Tabs (5 Views) -->
+        <div class="flex items-center justify-center shrink min-w-0">
+          <div class="bg-slate-100/70 dark:bg-slate-900/70 backdrop-blur-md border border-slate-200/60 dark:border-slate-800/70 p-1 rounded-2xl flex items-center gap-0.5 lg:gap-1 shadow-inner">
+            <!-- Kanban Tab -->
             <button 
               @click="setView('kanban')" 
               :class="[
-                'px-2.5 lg:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1.5 min-h-[38px] btn-touch-active whitespace-nowrap',
+                'px-2.5 lg:px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 min-h-[36px] btn-touch-active whitespace-nowrap',
                 store.activeView === 'kanban' 
-                  ? 'glass-tab-active text-slate-900 dark:text-white shadow-sm' 
+                  ? 'glass-tab-active text-slate-900 dark:text-white shadow-xs font-extrabold' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
               ]"
-              title="لوحة المهام"
+              title="لوحة المهام (Kanban)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
               </svg>
-              <span class="hidden xl:inline">لوحة المهام</span>
-              <span class="inline xl:hidden">اللوحة</span>
+              <span>اللوحة</span>
             </button>
+
+            <!-- List Tab -->
             <button 
               @click="setView('list')" 
               :class="[
-                'px-2.5 lg:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1.5 min-h-[38px] btn-touch-active whitespace-nowrap',
+                'px-2.5 lg:px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 min-h-[36px] btn-touch-active whitespace-nowrap',
                 store.activeView === 'list' 
-                  ? 'glass-tab-active text-slate-900 dark:text-white shadow-sm' 
+                  ? 'glass-tab-active text-slate-900 dark:text-white shadow-xs font-extrabold' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
               ]"
               title="جدول المهام"
@@ -344,45 +379,50 @@ watch(() => store.projects.length, (newLen) => {
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
-              <span class="hidden xl:inline">جدول المهام</span>
-              <span class="inline xl:hidden">الجدول</span>
+              <span>الجدول</span>
             </button>
+
+            <!-- Calendar Tab -->
             <button 
               @click="setView('calendar')" 
               :class="[
-                'px-2.5 lg:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1.5 min-h-[38px] btn-touch-active whitespace-nowrap',
+                'px-2.5 lg:px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 min-h-[36px] btn-touch-active whitespace-nowrap',
                 store.activeView === 'calendar' 
-                  ? 'glass-tab-active text-slate-900 dark:text-white shadow-sm' 
+                  ? 'glass-tab-active text-slate-900 dark:text-white shadow-xs font-extrabold' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
               ]"
-              title="التقويم"
+              title="التقويم الزمني"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               <span>التقويم</span>
             </button>
+
+            <!-- Routines Tab -->
             <button 
               @click="setView('routines')" 
               :class="[
-                'px-2.5 lg:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1.5 min-h-[38px] btn-touch-active whitespace-nowrap',
+                'px-2.5 lg:px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 min-h-[36px] btn-touch-active whitespace-nowrap',
                 store.activeView === 'routines' 
-                  ? 'glass-tab-active text-violet-600 dark:text-violet-400 font-extrabold shadow-sm' 
+                  ? 'glass-tab-active text-violet-600 dark:text-violet-400 font-extrabold shadow-xs' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
               ]"
-              title="يومياتي"
+              title="يومياتي والعادات اليومية"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>يومياتي</span>
             </button>
+
+            <!-- Social Tab -->
             <button 
               @click="setView('social')" 
               :class="[
-                'px-2.5 lg:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1.5 min-h-[38px] btn-touch-active whitespace-nowrap',
+                'px-2.5 lg:px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 min-h-[36px] btn-touch-active whitespace-nowrap',
                 store.activeView === 'social' 
-                  ? 'glass-tab-active text-violet-600 dark:text-violet-400 font-extrabold shadow-sm' 
+                  ? 'glass-tab-active text-violet-600 dark:text-violet-400 font-extrabold shadow-xs' 
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
               ]"
               title="إدارة السوشيال ميديا"
@@ -390,86 +430,58 @@ watch(() => store.projects.length, (newLen) => {
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
               </svg>
-              <span>السوشيال ميديا</span>
-            </button>
-            <button 
-              @click="goToSettings" 
-              :class="[
-                'px-2.5 lg:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1.5 min-h-[38px] btn-touch-active whitespace-nowrap',
-                store.activeView === 'settings' 
-                  ? 'glass-tab-active text-slate-900 dark:text-white shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-              ]"
-              title="الإعدادات"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span>الإعدادات</span>
+              <span>السوشيال</span>
             </button>
           </div>
         </div>
 
-        <!-- Right Side actions (User Profile, Theme, Notifications) -->
+        <!-- Zone 3 (Right): Quick Actions & User Command Hub -->
         <div class="flex items-center gap-1.5 lg:gap-2 shrink-0">
-          <!-- Active User Badge -->
-          <div class="hidden xl:flex flex-col text-right justify-center pl-1">
-            <span class="text-xs font-extrabold text-slate-800 dark:text-slate-200 truncate max-w-[120px]">{{ store.currentUser?.name }}</span>
-            <span class="text-[10px] font-bold text-slate-400 block -mt-0.5">({{ store.currentUser?.role?.name || 'زائر' }})</span>
-          </div>
-
-          <!-- Zen Focus Mode Trigger -->
+          <!-- Quick Search button (Ctrl+K) -->
           <button 
-            @click="store.isFocusMode = true"
-            class="w-9 h-9 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-xl transition cursor-pointer hover:shadow-sm flex items-center justify-center btn-touch-active shrink-0"
-            title="تفعيل وضع التركيز (Zen Mode)" aria-label="تفعيل وضع التركيز (Zen Mode)"
+            @click="isQuickSearchOpen = true"
+            class="bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 border border-slate-200/70 dark:border-slate-700/60 rounded-xl px-2.5 lg:px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 transition cursor-pointer shadow-inner shrink-0 btn-touch-active min-h-[38px]"
+            title="بحث سريع (Ctrl+K)"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
+            <span class="hidden xl:inline whitespace-nowrap">بحث سريع...</span>
+            <kbd class="hidden lg:inline-flex px-1.5 py-0.5 text-[9px] font-mono font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-slate-500 shadow-xs shrink-0">Ctrl K</kbd>
           </button>
 
-          <!-- Logout Button -->
+          <!-- Quick Create Button (+ إضافة مهمة) -->
           <button 
-            @click="handleLogout"
-            class="w-9 h-9 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-rose-500 rounded-xl transition cursor-pointer hover:shadow-sm flex items-center justify-center btn-touch-active shrink-0"
-            title="تسجيل الخروج" aria-label="تسجيل الخروج"
+            @click="triggerQuickCreate"
+            class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-extrabold text-xs px-2.5 lg:px-3 py-1.5 rounded-xl shadow-xs shadow-violet-500/20 hover:-translate-y-0.5 hover:shadow-glass-glow transition-all duration-300 cursor-pointer flex items-center gap-1 min-h-[38px] btn-touch-active shrink-0 whitespace-nowrap"
+            title="إضافة مهمة جديدة"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
+            <span class="text-sm font-black leading-none">+</span>
+            <span class="hidden lg:inline">إضافة مهمة</span>
           </button>
 
-          <!-- Notification Bell Toggle -->
+          <div class="h-5 w-px bg-slate-200 dark:bg-slate-800 mx-0.5 shrink-0"></div>
+
+          <!-- Notification Bell -->
           <button 
             @click="store.toggleNotificationDrawer()"
-            class="w-9 h-9 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-xl transition cursor-pointer hover:shadow-sm relative flex items-center justify-center btn-touch-active shrink-0"
+            class="w-9 h-9 border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white/80 dark:bg-slate-900/80 text-slate-600 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 rounded-xl transition cursor-pointer hover:shadow-xs relative flex items-center justify-center btn-touch-active shrink-0"
             title="مركز الإشعارات" aria-label="مركز الإشعارات"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
-            <span v-if="unreadNotificationsCount > 0" class="absolute -top-1 -left-1 bg-violet-600 text-white rounded-full text-[9px] font-extrabold w-4 h-4 flex items-center justify-center border border-white dark:border-slate-900 shadow-sm">
+            <span v-if="unreadNotificationsCount > 0" class="absolute -top-1 -left-1 bg-violet-600 text-white rounded-full text-[9px] font-extrabold w-4 h-4 flex items-center justify-center border border-white dark:border-slate-900 shadow-xs">
               {{ unreadNotificationsCount }}
             </span>
           </button>
 
-          <!-- Theming Toggle -->
-          <button 
-            @click="store.toggleCelebrations()"
-            class="hidden lg:flex text-slate-500 hover:text-violet-600 dark:hover:text-violet-400 transition duration-300 cursor-pointer w-9 h-9 items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 btn-touch-active shrink-0"
-            :title="store.celebrationsEnabled ? 'كتم صوت الاحتفال بالإنجاز' : 'تفعيل الاحتفال بالإنجاز'"
-            :aria-label="store.celebrationsEnabled ? 'كتم صوت الاحتفال بالإنجاز' : 'تفعيل الاحتفال بالإنجاز'"
-            :aria-pressed="store.celebrationsEnabled"
-          >
-            <span class="text-sm" aria-hidden="true">{{ store.celebrationsEnabled ? '🎉' : '🔇' }}</span>
-          </button>
-
+          <!-- Theme Toggle -->
           <button 
             @click="store.toggleTheme()" 
-            class="w-9 h-9 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-xl transition cursor-pointer hover:shadow-sm flex items-center justify-center btn-touch-active shrink-0"
-            title="تبديل مظهر النظام" aria-label="تبديل مظهر النظام"
+            class="w-9 h-9 border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white/80 dark:bg-slate-900/80 text-slate-600 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 rounded-xl transition cursor-pointer hover:shadow-xs flex items-center justify-center btn-touch-active shrink-0"
+            :title="store.theme === 'light' ? 'التبديل إلى الوضع الداكن' : 'التبديل إلى الوضع الفاتح'" 
+            aria-label="تبديل مظهر النظام"
           >
             <svg v-if="store.theme === 'light'" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
@@ -478,6 +490,131 @@ watch(() => store.projects.length, (newLen) => {
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.828 9.9l-.707-.707M6.343 6.343l-.707-.707M14.25 12a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
             </svg>
           </button>
+
+          <!-- User Profile Command Hub (Popover Menu) -->
+          <div ref="userMenuRef" class="relative shrink-0">
+            <!-- Trigger Button -->
+            <button 
+              @click="isUserMenuOpen = !isUserMenuOpen"
+              :class="[
+                'flex items-center gap-2 p-1.5 pl-2.5 rounded-xl border transition cursor-pointer btn-touch-active min-h-[38px]',
+                isUserMenuOpen 
+                  ? 'bg-violet-50 dark:bg-violet-950/40 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300' 
+                  : 'bg-white/80 dark:bg-slate-900/80 border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+              ]"
+              title="قائمة المستخدم والإعدادات"
+              aria-haspopup="true"
+              :aria-expanded="isUserMenuOpen"
+            >
+              <!-- Avatar with initials -->
+              <div class="w-6 h-6 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-extrabold text-[10px] flex items-center justify-center shadow-xs shrink-0">
+                {{ userInitials }}
+              </div>
+              <!-- User First Name -->
+              <span class="text-xs font-bold truncate max-w-[80px] hidden xl:inline-block leading-none">
+                {{ userFirstName }}
+              </span>
+              <!-- Chevron icon -->
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                :class="['h-3 w-3 text-slate-400 transition-transform duration-200 shrink-0', isUserMenuOpen ? 'rotate-180 text-violet-600' : '']" 
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            <!-- Popover Card -->
+            <Transition name="fade">
+              <div 
+                v-if="isUserMenuOpen"
+                class="absolute top-full mt-2 left-0 w-64 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200/90 dark:border-slate-800 p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+              >
+                <!-- Header Info -->
+                <div class="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 mb-2 border border-slate-100 dark:border-slate-800">
+                  <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-black text-xs flex items-center justify-center shadow-xs shrink-0">
+                      {{ userInitials }}
+                    </div>
+                    <div class="min-w-0 flex-1 text-right">
+                      <div class="text-xs font-black text-slate-900 dark:text-white truncate">
+                        {{ store.currentUser?.name || 'مستخدم' }}
+                      </div>
+                      <div class="text-[10px] font-bold text-violet-600 dark:text-violet-400 truncate">
+                        {{ store.currentUser?.role?.name || 'عضو في مساحة العمل' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Section 1: Productivity Toggles -->
+                <div class="space-y-1 mb-2">
+                  <!-- Zen Mode -->
+                  <button 
+                    @click="toggleZenFromMenu"
+                    class="w-full px-3 py-2 rounded-xl text-right text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between transition cursor-pointer group"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm">🧘</span>
+                      <span>وضع التركيز (Zen Mode)</span>
+                    </div>
+                    <span class="text-[10px] px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 group-hover:bg-violet-100 group-hover:text-violet-700 dark:group-hover:bg-violet-950/60 dark:group-hover:text-violet-300 transition">تفعيل</span>
+                  </button>
+
+                  <!-- Celebration Audio -->
+                  <button 
+                    @click="store.toggleCelebrations()"
+                    class="w-full px-3 py-2 rounded-xl text-right text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between transition cursor-pointer"
+                    :aria-pressed="store.celebrationsEnabled"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm">{{ store.celebrationsEnabled ? '🎉' : '🔇' }}</span>
+                      <span>أصوات الاحتفال بالإنجاز</span>
+                    </div>
+                    <span :class="[
+                      'text-[10px] px-2 py-0.5 rounded-md font-extrabold transition',
+                      store.celebrationsEnabled 
+                        ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' 
+                        : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                    ]">
+                      {{ store.celebrationsEnabled ? 'مفعّل' : 'صامت' }}
+                    </span>
+                  </button>
+                </div>
+
+                <div class="border-t border-slate-100 dark:border-slate-800/80 my-1"></div>
+
+                <!-- Section 2: System Settings -->
+                <div class="space-y-1 mb-2">
+                  <button 
+                    @click="handleOpenSettings"
+                    class="w-full px-3 py-2 rounded-xl text-right text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between transition cursor-pointer"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm">⚙️</span>
+                      <span>الإعدادات والملف الشخصي</span>
+                    </div>
+                    <span class="text-slate-400 text-xs">←</span>
+                  </button>
+                </div>
+
+                <div class="border-t border-slate-100 dark:border-slate-800/80 my-1"></div>
+
+                <!-- Section 3: Logout -->
+                <div>
+                  <button 
+                    @click="handleUserMenuLogout"
+                    class="w-full px-3 py-2 rounded-xl text-right text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>تسجيل الخروج</span>
+                  </button>
+                </div>
+              </div>
+            </Transition>
+          </div>
         </div>
       </div>
 
