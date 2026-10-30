@@ -3741,6 +3741,22 @@ export const store = reactive({
         if (data?.summary?.last_synced_at) {
           this.socialLastSyncedAt = data.summary.last_synced_at
         }
+        if (Array.isArray(data.pages) && data.pages.length > 0 && Array.isArray(this.socialAccounts)) {
+          let accountsUpdated = false
+          this.socialAccounts = this.socialAccounts.map(acc => {
+            const matchedPage = data.pages.find(
+              pg => String(pg.account_id) === String(acc.account_id) && pg.platform === acc.platform
+            )
+            if (matchedPage && Number(matchedPage.followers_count) !== Number(acc.followers_count)) {
+              accountsUpdated = true
+              return { ...acc, followers_count: matchedPage.followers_count }
+            }
+            return acc
+          })
+          if (accountsUpdated) {
+            this.saveSocialAccountsLocal()
+          }
+        }
         if (Array.isArray(data.posts) && data.posts.length > 0) {
           // Merge updated analytics metrics into socialPosts without wiping scheduled/draft/other-platform posts
           const existingMap = new Map((this.socialPosts || []).map(p => [String(p.id), p]))
@@ -3790,6 +3806,10 @@ export const store = reactive({
       if (res.ok) {
         const result = await res.json()
         this.socialLastSyncedAt = result.last_synced_at || new Date().toISOString()
+        if (Array.isArray(result.accounts)) {
+          this.socialAccounts = result.accounts
+          this.saveSocialAccountsLocal()
+        }
         await this.loadSocialAccounts(true)
         await this.loadSocialPosts(true)
         await this.loadSocialAnalytics(platform || 'all', accountId !== 'all' ? accountId : null)

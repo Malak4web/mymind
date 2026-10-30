@@ -66,6 +66,21 @@ class SocialMediaController extends Controller
             'status' => 'nullable|string|in:connected,expired,disconnected',
         ]);
 
+        $metaData = $validated['metadata'] ?? [];
+        $accessToken = $validated['access_token'] ?? null;
+
+        if ($validated['platform'] === 'youtube') {
+            $ytSetting = SocialSetting::where('user_id', $user->id)->where('platform', 'youtube')->first();
+            if ($ytSetting) {
+                if (empty($accessToken) && !empty($ytSetting->access_token)) {
+                    $accessToken = $ytSetting->access_token;
+                }
+                if (!empty($ytSetting->webhook_verify_token) && str_starts_with($ytSetting->webhook_verify_token, 'rt:')) {
+                    $metaData['refresh_token'] = substr($ytSetting->webhook_verify_token, 3);
+                }
+            }
+        }
+
         $account = SocialAccount::updateOrCreate(
             [
                 'user_id' => $user->id,
@@ -76,9 +91,9 @@ class SocialMediaController extends Controller
                 'account_name' => $validated['account_name'],
                 'account_username' => $validated['account_username'] ?? null,
                 'avatar_url' => $validated['avatar_url'] ?? null,
-                'access_token' => $validated['access_token'] ?? null,
+                'access_token' => $accessToken,
                 'followers_count' => $validated['followers_count'] ?? 0,
-                'metadata' => $validated['metadata'] ?? [],
+                'metadata' => $metaData,
                 'status' => $validated['status'] ?? 'connected',
             ]
         );
@@ -841,11 +856,16 @@ class SocialMediaController extends Controller
             ? "تم تحديث الإحصائيات ومزامنة {$syncedCount} منشور من المنصة بنجاح 📊"
             : 'تم تحديث إحصائيات الحسابات المربوطة وفحص المنصة بنجاح ✅';
 
+        $freshAccounts = SocialAccount::where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
         return response()->json([
             'message' => $message,
             'synced_accounts' => $accounts->count(),
             'synced_posts' => $syncedCount,
             'last_synced_at' => $syncedAt,
+            'accounts' => $freshAccounts,
         ]);
     }
 
@@ -1186,13 +1206,14 @@ class SocialMediaController extends Controller
             }
         }
 
-        // Auto-heal YouTube channel access token if missing
-        if (!$pageAccessToken && $account->platform === 'youtube') {
+        // Auto-heal / sync YouTube channel access token from SocialSetting if missing or updated
+        if ($account->platform === 'youtube') {
             $ytSetting = SocialSetting::where('user_id', $user->id)
                 ->where('platform', 'youtube')
                 ->first();
-            $pageAccessToken = $ytSetting->access_token ?? null;
-            if ($pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) {
+            $settingToken = $ytSetting->access_token ?? null;
+            if ((!$pageAccessToken || str_starts_with($pageAccessToken, 'demo_token_')) && $settingToken && !str_starts_with($settingToken, 'demo_token_')) {
+                $pageAccessToken = $settingToken;
                 $account->update(['access_token' => $pageAccessToken]);
             }
         }
@@ -1421,13 +1442,41 @@ class SocialMediaController extends Controller
             }
         }
 
-        // 3. Try real YouTube Data API v3 (Channel Videos & Metrics)
+        // 3. Try real YouTube Data API v3 (Channel Videos & Metrics) + Live Public InnerTube/RSS Fallback
         if ($account->platform === 'youtube') {
-            $channelId = (string)$account->account_id;
+            $channelId = trim((string)$account->account_id);
+            if (preg_match('/youtube\.com\/channel\/(UC[\w-]+)/i', $channelId, $cm)) {
+                $channelId = $cm[1];
+            } elseif (preg_match('/youtube\.com\/(@[\w.-]+)/i', $channelId, $hm)) {
+                $channelId = $hm[1];
+            }
+
             $ytSetting = SocialSetting::where('user_id', $user->id)
                 ->where('platform', 'youtube')
                 ->first();
             $apiKey = $ytSetting->api_key ?? config('services.youtube.api_key') ?? env('YOUTUBE_API_KEY');
+
+            // Discover any existing published YouTube posts for this account so their live stats are always refreshed
+            $existingYtPostsById = [];
+            $existingAccountPosts = SocialPost::where('user_id', $user->id)
+                ->where('status', 'published')
+                ->get()
+                ->filter(function ($post) use ($account) {
+                    $accIds = array_map('strval', $post->account_ids ?? []);
+                    return in_array((string)$account->account_id, $accIds)
+                        || (empty($accIds) && in_array('youtube', $post->platforms ?? []));
+                });
+            foreach ($existingAccountPosts as $ep) {
+                $epId = $ep->platform_post_ids['youtube']['id'] ?? null;
+                if (!$epId && !empty($ep->platform_post_ids['youtube']['url'])) {
+                    if (preg_match('/(?:v=|youtu\.be\/|shorts\/)([A-Za-z0-9_-]{11})/', $ep->platform_post_ids['youtube']['url'], $vm)) {
+                        $epId = $vm[1];
+                    }
+                }
+                if ($epId && preg_match('/^[A-Za-z0-9_-]{11}$/', (string)$epId)) {
+                    $existingYtPostsById[(string)$epId] = $ep;
+                }
+            }
 
             $hasAuth = ($pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) || !empty($apiKey);
 
@@ -1435,29 +1484,85 @@ class SocialMediaController extends Controller
                 try {
                     $uploadsPlaylistId = null;
 
-                    $ytRequest = function (string $url, array $params = []) use ($pageAccessToken, $apiKey) {
-                        $client = Http::timeout(25);
-                        if ($pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) {
-                            $client = $client->withHeaders(['Authorization' => "Bearer {$pageAccessToken}"]);
+                    $ytRequest = function (string $url, array $params = []) use (&$pageAccessToken, $apiKey, $user, $ytSetting, $account) {
+                        $doGet = function (?string $token, ?string $key) use ($url, $params) {
+                            $reqParams = $params;
+                            $client = Http::timeout(25);
+                            if ($token && !str_starts_with($token, 'demo_token_')) {
+                                $client = $client->withHeaders(['Authorization' => "Bearer {$token}"]);
+                            }
+                            if (!empty($key)) {
+                                $reqParams['key'] = $key;
+                            }
+                            return $client->get($url, $reqParams);
+                        };
+
+                        $res = $doGet($pageAccessToken, $apiKey);
+
+                        // If token expired (401/403), try newer token in SocialSetting, then OAuth refresh_token, then API key without Bearer header
+                        if ($res->status() === 401 || $res->status() === 403) {
+                            $settingToken = $ytSetting->access_token ?? null;
+                            if ($settingToken && !str_starts_with($settingToken, 'demo_token_') && $settingToken !== $pageAccessToken) {
+                                $pageAccessToken = $settingToken;
+                                $account->update(['access_token' => $pageAccessToken]);
+                                $res = $doGet($pageAccessToken, $apiKey);
+                            }
+
+                            if ($res->status() === 401 || $res->status() === 403) {
+                                $refreshed = $this->refreshYouTubeAccessToken($user, $ytSetting, $account);
+                                if ($refreshed) {
+                                    $pageAccessToken = $refreshed;
+                                    $res = $doGet($pageAccessToken, $apiKey);
+                                }
+                            }
+
+                            if (($res->status() === 401 || $res->status() === 403) && !empty($apiKey)) {
+                                // Clear expired OAuth token for this sync cycle so API key works unobstructed
+                                $pageAccessToken = null;
+                                $res = $doGet(null, $apiKey);
+                            }
                         }
-                        if (!empty($apiKey)) {
-                            $params['key'] = $apiKey;
-                        }
-                        return $client->get($url, $params);
+
+                        return $res;
                     };
 
                     // Step A: Fetch channel info to verify channel & get uploads playlist ID + real subscriber count
-                    $chanRes = $ytRequest('https://www.googleapis.com/youtube/v3/channels', [
+                    $chanParams = [
                         'part' => 'snippet,contentDetails,statistics',
-                        'id' => $channelId,
-                    ]);
+                    ];
+                    if (str_starts_with($channelId, '@')) {
+                        $chanParams['forHandle'] = ltrim($channelId, '@');
+                    } else {
+                        $chanParams['id'] = $channelId;
+                    }
+                    $chanRes = $ytRequest('https://www.googleapis.com/youtube/v3/channels', $chanParams);
+
+                    if ((!$chanRes->ok() || empty($chanRes->json('items'))) && !str_starts_with($channelId, 'UC') && !empty($account->account_username)) {
+                        $chanRes = $ytRequest('https://www.googleapis.com/youtube/v3/channels', [
+                            'part' => 'snippet,contentDetails,statistics',
+                            'forHandle' => ltrim((string)$account->account_username, '@'),
+                        ]);
+                    }
+
+                    if ((!$chanRes->ok() || empty($chanRes->json('items'))) && $pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) {
+                        $chanRes = $ytRequest('https://www.googleapis.com/youtube/v3/channels', [
+                            'part' => 'snippet,contentDetails,statistics',
+                            'mine' => 'true',
+                        ]);
+                    }
 
                     if ($chanRes->ok() && !empty($chanRes->json('items'))) {
                         $chanItem = $chanRes->json('items.0');
+                        if (!empty($chanItem['id'])) {
+                            $channelId = (string)$chanItem['id'];
+                        }
                         $uploadsPlaylistId = $chanItem['contentDetails']['relatedPlaylists']['uploads'] ?? null;
-                        $realSubs = (int)($chanItem['statistics']['subscriberCount'] ?? $account->followers_count);
-                        if ($realSubs > 0 && $realSubs !== (int)$account->followers_count) {
-                            $account->update(['followers_count' => $realSubs]);
+                        if (isset($chanItem['statistics']['subscriberCount'])) {
+                            $realSubs = (int)$chanItem['statistics']['subscriberCount'];
+                            if ($realSubs !== (int)$account->followers_count) {
+                                $account->update(['followers_count' => $realSubs]);
+                                $account->followers_count = $realSubs;
+                            }
                         }
                     }
 
@@ -1506,6 +1611,16 @@ class SocialMediaController extends Controller
                         }
                     }
 
+                    // Also include any existing published YouTube videos in DB so their live metrics get updated too
+                    foreach ($existingYtPostsById as $existVidId => $existPost) {
+                        if (!isset($rawVideos[$existVidId])) {
+                            $rawVideos[$existVidId] = [
+                                'title' => $existPost->content,
+                                'publishedAt' => $existPost->published_at ? $existPost->published_at->toIso8601String() : null,
+                            ];
+                        }
+                    }
+
                     // Step C: Fetch full statistics for all discovered videos in batches
                     $videoIds = array_keys($rawVideos);
                     $videoStats = [];
@@ -1525,65 +1640,113 @@ class SocialMediaController extends Controller
                         }
                     }
 
-                    // Step D: Map each video to imported post
-                    foreach ($rawVideos as $vidId => $snippet) {
-                        $vData = $videoStats[$vidId] ?? null;
-                        $stats = $vData['statistics'] ?? [];
-                        $snippetData = $vData['snippet'] ?? $snippet;
+                    // Only map from Data API v3 if we actually received valid video statistics or snippet data from the API
+                    if (!empty($videoStats)) {
+                        // Step D: Map each video to imported post
+                        foreach ($rawVideos as $vidId => $snippet) {
+                            $vData = $videoStats[$vidId] ?? null;
+                            if (!$vData && isset($existingYtPostsById[$vidId]) && count($rawVideos) === count($existingYtPostsById)) {
+                                continue;
+                            }
+                            $stats = $vData['statistics'] ?? [];
+                            $snippetData = $vData['snippet'] ?? $snippet;
 
-                        $title = $snippetData['title'] ?? '';
-                        $description = $snippetData['description'] ?? '';
-                        $content = trim($title . ($description ? "\n\n" . $description : ''));
-                        if (empty($content)) {
-                            $content = 'فيديو على يوتيوب';
+                            $title = $snippetData['title'] ?? '';
+                            $description = $snippetData['description'] ?? '';
+                            $content = trim($title . ($description ? "\n\n" . $description : ''));
+                            if (empty($content)) {
+                                $content = 'فيديو على يوتيوب';
+                            }
+
+                            $views = (int)($stats['viewCount'] ?? 0);
+                            $likes = (int)($stats['likeCount'] ?? 0);
+                            $comments = (int)($stats['commentCount'] ?? 0);
+                            $totalInteractions = $likes + $comments;
+                            $subs = max(1, (int)$account->followers_count);
+                            $engRate = $subs > 0
+                                ? round(($totalInteractions / $subs) * 100, 2)
+                                : ($views > 0 ? round(($totalInteractions / $views) * 100, 2) : 0);
+
+                            $thumbs = $snippetData['thumbnails'] ?? [];
+                            $thumbnailUrl = $thumbs['maxres']['url']
+                                ?? $thumbs['standard']['url']
+                                ?? $thumbs['high']['url']
+                                ?? $thumbs['medium']['url']
+                                ?? $thumbs['default']['url']
+                                ?? ($existingYtPostsById[$vidId]->media_urls[0] ?? null);
+
+                            $publishedAt = !empty($snippetData['publishedAt'])
+                                ? Carbon::parse($snippetData['publishedAt'])
+                                : now();
+
+                            $importedPosts[] = [
+                                'external_id' => (string)$vidId,
+                                'content' => $content,
+                                'media_urls' => $thumbnailUrl ? [$thumbnailUrl] : [],
+                                'published_at' => $publishedAt,
+                                'permalink' => "https://www.youtube.com/watch?v={$vidId}",
+                                'metrics' => [
+                                    'likes' => $likes,
+                                    'comments' => $comments,
+                                    'shares' => 0,
+                                    'views' => $views,
+                                    'impressions' => $views,
+                                    'engagement_rate' => $engRate,
+                                ],
+                            ];
                         }
-
-                        $views = (int)($stats['viewCount'] ?? 0);
-                        $likes = (int)($stats['likeCount'] ?? 0);
-                        $comments = (int)($stats['commentCount'] ?? 0);
-                        $totalInteractions = $likes + $comments;
-                        $subs = max(1, (int)$account->followers_count);
-                        $engRate = $subs > 0
-                            ? round(($totalInteractions / $subs) * 100, 2)
-                            : ($views > 0 ? round(($totalInteractions / $views) * 100, 2) : 0);
-
-                        $thumbs = $snippetData['thumbnails'] ?? [];
-                        $thumbnailUrl = $thumbs['maxres']['url']
-                            ?? $thumbs['standard']['url']
-                            ?? $thumbs['high']['url']
-                            ?? $thumbs['medium']['url']
-                            ?? $thumbs['default']['url']
-                            ?? null;
-
-                        $publishedAt = !empty($snippetData['publishedAt'])
-                            ? Carbon::parse($snippetData['publishedAt'])
-                            : now();
-
-                        $importedPosts[] = [
-                            'external_id' => (string)$vidId,
-                            'content' => $content,
-                            'media_urls' => $thumbnailUrl ? [$thumbnailUrl] : [],
-                            'published_at' => $publishedAt,
-                            'permalink' => "https://www.youtube.com/watch?v={$vidId}",
-                            'metrics' => [
-                                'likes' => $likes,
-                                'comments' => $comments,
-                                'shares' => 0,
-                                'views' => $views,
-                                'impressions' => $views,
-                                'engagement_rate' => $engRate,
-                            ],
-                        ];
                     }
                 } catch (\Throwable $e) {
                     Log::warning("YouTube sync error for {$account->account_id}: " . $e->getMessage());
                 }
             }
 
-            // Fallback: If Google API v3 returned 0 or failed/expired, fetch videos from official YouTube Channel RSS Feed
+            // Fallback: If Google API v3 returned 0 or failed/expired, fetch live stats from YouTube InnerTube + Channel RSS Feed
             if (empty($importedPosts) && $channelId) {
                 try {
-                    $feedRes = Http::timeout(20)->get("https://www.youtube.com/feeds/videos.xml?channel_id={$channelId}");
+                    // 1. Refresh live channel subscriber count via YouTube InnerTube browse endpoint
+                    if (str_starts_with($channelId, 'UC')) {
+                        try {
+                            $browseRes = Http::timeout(8)->withHeaders([
+                                'User-Agent' => 'Mozilla/5.0',
+                                'Accept-Encoding' => 'gzip',
+                                'Content-Type' => 'application/json',
+                            ])->post('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false', [
+                                'context' => [
+                                    'client' => [
+                                        'hl' => 'en',
+                                        'gl' => 'US',
+                                        'clientName' => 'WEB',
+                                        'clientVersion' => '2.20240726.00.00',
+                                    ],
+                                ],
+                                'browseId' => $channelId,
+                            ]);
+                            if ($browseRes->ok()) {
+                                $browseBody = $browseRes->body();
+                                if (preg_match('/([\d.,]+\s*(?:K|M|B|thousand|million|billion)?)\s+subscribers/i', $browseBody, $subMatch)) {
+                                    $liveSubs = $this->parseYouTubeCompactNumber($subMatch[1]);
+                                    if ($liveSubs > 0 && $liveSubs !== (int)$account->followers_count) {
+                                        $account->update(['followers_count' => $liveSubs]);
+                                        $account->followers_count = $liveSubs;
+                                    }
+                                }
+                            }
+                        } catch (\Throwable $be) {
+                            Log::info("YouTube InnerTube browse notice for {$channelId}: " . $be->getMessage());
+                        }
+                    }
+
+                    // 2. Fetch channel videos from official YouTube RSS feed (with cache-busting)
+                    $candidateVideos = [];
+                    $feedRes = Http::timeout(15)->withHeaders([
+                        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+                        'Pragma' => 'no-cache',
+                    ])->get("https://www.youtube.com/feeds/videos.xml", [
+                        'channel_id' => $channelId,
+                        '_t' => time(),
+                    ]);
+
                     if ($feedRes->ok() && !empty($feedRes->body())) {
                         $xml = @simplexml_load_string($feedRes->body());
                         if ($xml && isset($xml->entry)) {
@@ -1598,29 +1761,116 @@ class SocialMediaController extends Controller
                                 $mediaGroup = $e->children('http://search.yahoo.com/mrss/')->group;
                                 $description = (string)($mediaGroup->description ?? '');
                                 $thumbnailUrl = (string)($mediaGroup->thumbnail->attributes()->url ?? "https://i.ytimg.com/vi/{$vId}/hqdefault.jpg");
-                                $views = (int)($mediaGroup->community->statistics->attributes()->views ?? 0);
-                                $likes = (int)($mediaGroup->community->starRating->attributes()->count ?? 0);
+                                $rssViews = (int)($mediaGroup->community->statistics->attributes()->views ?? 0);
+                                $rssLikes = (int)($mediaGroup->community->starRating->attributes()->count ?? 0);
 
                                 $content = trim($title . ($description ? "\n\n" . $description : ''));
-                                $subs = max(1, (int)$account->followers_count);
-                                $engRate = $subs > 0 ? round(($likes / $subs) * 100, 2) : ($views > 0 ? round(($likes / $views) * 100, 2) : 0);
+                                $existingComments = isset($existingYtPostsById[$vId])
+                                    ? (int)($existingYtPostsById[$vId]->metrics['comments'] ?? 0)
+                                    : 0;
 
-                                $importedPosts[] = [
+                                $candidateVideos[$vId] = [
                                     'external_id' => $vId,
                                     'content' => $content ?: 'فيديو على يوتيوب',
                                     'media_urls' => $thumbnailUrl ? [$thumbnailUrl] : [],
                                     'published_at' => $publishedAt,
                                     'permalink' => "https://www.youtube.com/watch?v={$vId}",
-                                    'metrics' => [
-                                        'likes' => $likes,
-                                        'comments' => 0,
-                                        'shares' => 0,
-                                        'views' => $views,
-                                        'impressions' => $views,
-                                        'engagement_rate' => $engRate,
-                                    ],
+                                    'views' => $rssViews,
+                                    'likes' => $rssLikes,
+                                    'comments' => $existingComments,
                                 ];
                             }
+                        }
+                    }
+
+                    // Also include any existing published YouTube posts in DB that weren't in the RSS feed
+                    foreach ($existingYtPostsById as $existVidId => $existPost) {
+                        if (!isset($candidateVideos[$existVidId])) {
+                            $candidateVideos[$existVidId] = [
+                                'external_id' => $existVidId,
+                                'content' => $existPost->content ?: 'فيديو على يوتيوب',
+                                'media_urls' => $existPost->media_urls ?? ["https://i.ytimg.com/vi/{$existVidId}/hqdefault.jpg"],
+                                'published_at' => $existPost->published_at ?? $existPost->created_at ?? now(),
+                                'permalink' => $existPost->platform_post_ids['youtube']['url'] ?? "https://www.youtube.com/watch?v={$existVidId}",
+                                'views' => (int)($existPost->metrics['views'] ?? 0),
+                                'likes' => (int)($existPost->metrics['likes'] ?? 0),
+                                'comments' => (int)($existPost->metrics['comments'] ?? 0),
+                            ];
+                        }
+                    }
+
+                    // 3. Enrich videos with real-time live stats (views, likes, comments, subscribers) via concurrent InnerTube next API
+                    if (!empty($candidateVideos)) {
+                        $targetVideoIds = array_slice(array_keys($candidateVideos), 0, 20);
+                        try {
+                            $poolResponses = Http::pool(function (\Illuminate\Http\Client\Pool $pool) use ($targetVideoIds) {
+                                foreach ($targetVideoIds as $vId) {
+                                    $pool->as($vId)->timeout(8)->withHeaders([
+                                        'User-Agent' => 'Mozilla/5.0',
+                                        'Accept-Encoding' => 'gzip',
+                                        'Content-Type' => 'application/json',
+                                    ])->post('https://www.youtube.com/youtubei/v1/next?prettyPrint=false', [
+                                        'context' => [
+                                            'client' => [
+                                                'hl' => 'en',
+                                                'gl' => 'US',
+                                                'clientName' => 'WEB',
+                                                'clientVersion' => '2.20240726.00.00',
+                                            ],
+                                        ],
+                                        'videoId' => $vId,
+                                    ]);
+                                }
+                            });
+
+                            foreach ($targetVideoIds as $vId) {
+                                $nextRes = $poolResponses[$vId] ?? null;
+                                if ($nextRes instanceof \Illuminate\Http\Client\Response && $nextRes->ok()) {
+                                    $liveMetrics = $this->extractLiveYouTubeMetrics($nextRes->body());
+                                    if ($liveMetrics['views'] !== null) {
+                                        $candidateVideos[$vId]['views'] = $liveMetrics['views'];
+                                    }
+                                    if ($liveMetrics['likes'] !== null) {
+                                        $candidateVideos[$vId]['likes'] = $liveMetrics['likes'];
+                                    }
+                                    if ($liveMetrics['comments'] !== null) {
+                                        $candidateVideos[$vId]['comments'] = $liveMetrics['comments'];
+                                    }
+                                    if ($liveMetrics['subs'] !== null && $liveMetrics['subs'] > 0 && $liveMetrics['subs'] !== (int)$account->followers_count) {
+                                        $account->update(['followers_count' => $liveMetrics['subs']]);
+                                        $account->followers_count = $liveMetrics['subs'];
+                                    }
+                                }
+                            }
+                        } catch (\Throwable $pe) {
+                            Log::info("YouTube InnerTube pool notice for {$channelId}: " . $pe->getMessage());
+                        }
+
+                        $subs = max(0, (int)$account->followers_count);
+                        foreach ($candidateVideos as $vId => $cv) {
+                            $views = (int)$cv['views'];
+                            $likes = (int)$cv['likes'];
+                            $comments = (int)$cv['comments'];
+                            $totalInteractions = $likes + $comments;
+                            $engRate = $subs > 0
+                                ? round(($totalInteractions / $subs) * 100, 2)
+                                : ($views > 0 ? round(($totalInteractions / $views) * 100, 2) : 0);
+
+                            $importedPosts[] = [
+                                'external_id' => (string)$vId,
+                                'content' => $cv['content'],
+                                'media_urls' => $cv['media_urls'],
+                                'published_at' => $cv['published_at'],
+                                'permalink' => $cv['permalink'],
+                                'metrics' => [
+                                    'likes' => $likes,
+                                    'comments' => $comments,
+                                    'shares' => 0,
+                                    'views' => $views,
+                                    'impressions' => $views,
+                                    'engagement_rate' => $engRate,
+                                ],
+                            ];
                         }
                     }
                 } catch (\Throwable $fe) {
@@ -1711,5 +1961,127 @@ class SocialMediaController extends Controller
         $account->update(['metadata' => $meta]);
 
         return $count;
+    }
+
+    /**
+     * Refresh an expired Google OAuth access token using stored refresh_token.
+     */
+    protected function refreshYouTubeAccessToken($user, ?SocialSetting $ytSetting = null, ?SocialAccount $account = null): ?string
+    {
+        try {
+            $refreshToken = null;
+            if ($account && !empty($account->metadata['refresh_token'])) {
+                $refreshToken = $account->metadata['refresh_token'];
+            }
+            if (!$refreshToken && $ytSetting && !empty($ytSetting->webhook_verify_token) && str_starts_with($ytSetting->webhook_verify_token, 'rt:')) {
+                $refreshToken = substr($ytSetting->webhook_verify_token, 3);
+            }
+            if (!$refreshToken) {
+                $otherAccounts = SocialAccount::where('user_id', $user->id)->where('platform', 'youtube')->get();
+                foreach ($otherAccounts as $oa) {
+                    if (!empty($oa->metadata['refresh_token'])) {
+                        $refreshToken = $oa->metadata['refresh_token'];
+                        break;
+                    }
+                }
+            }
+
+            if (!$refreshToken) {
+                return null;
+            }
+
+            $appId = ($ytSetting->app_id ?? null) ?: env('YOUTUBE_CLIENT_ID');
+            $appSecret = ($ytSetting->app_secret ?? null) ?: env('YOUTUBE_CLIENT_SECRET');
+            if (!$appId || !$appSecret) {
+                return null;
+            }
+
+            $tokenRes = Http::timeout(15)->asForm()->post('https://oauth2.googleapis.com/token', [
+                'client_id'     => $appId,
+                'client_secret' => $appSecret,
+                'refresh_token' => $refreshToken,
+                'grant_type'    => 'refresh_token',
+            ]);
+
+            if ($tokenRes->ok() && !empty($tokenRes->json('access_token'))) {
+                $newAccessToken = (string)$tokenRes->json('access_token');
+                if ($ytSetting) {
+                    $ytSetting->update(['access_token' => $newAccessToken]);
+                }
+                SocialAccount::where('user_id', $user->id)
+                    ->where('platform', 'youtube')
+                    ->update(['access_token' => $newAccessToken]);
+                if ($account) {
+                    $account->access_token = $newAccessToken;
+                }
+                return $newAccessToken;
+            }
+        } catch (\Throwable $e) {
+            Log::info('YouTube OAuth token refresh failed: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract live views, likes, comments, and channel subscriber count from YouTube InnerTube next response.
+     */
+    protected function extractLiveYouTubeMetrics(string $rawBody): array
+    {
+        $views = null;
+        $likes = null;
+        $comments = null;
+        $subs = null;
+
+        if (preg_match('/"viewCountNumber"\s*:\s*"(\d+)"/', $rawBody, $m)) {
+            $views = (int)$m[1];
+        } elseif (preg_match('/"viewCount"\s*:\s*\{"simpleText"\s*:\s*"([^"]+)"/', $rawBody, $m)) {
+            $views = $this->parseYouTubeCompactNumber($m[1]);
+        }
+
+        if (preg_match('/"likeCountIfIndifferentNumber"\s*:\s*"(\d+)"/', $rawBody, $m)) {
+            $likes = (int)$m[1];
+        } elseif (preg_match('/"likeCountIfIndifferent"\s*:\s*\{"content"\s*:\s*"([^"]+)"/', $rawBody, $m)) {
+            $likes = $this->parseYouTubeCompactNumber($m[1]);
+        }
+
+        if (preg_match('/"contextualInfo"\s*:\s*\{"runs"\s*:\s*\[\{"text"\s*:\s*"([^"]+)"/', $rawBody, $m)) {
+            $comments = $this->parseYouTubeCompactNumber($m[1]);
+        } elseif (preg_match('/"commentCount"\s*:\s*\{"simpleText"\s*:\s*"([^"]+)"/', $rawBody, $m)) {
+            $comments = $this->parseYouTubeCompactNumber($m[1]);
+        }
+
+        if (preg_match('/([\d.,]+\s*(?:K|M|B|thousand|million|billion)?)\s+subscribers/i', $rawBody, $m)) {
+            $subs = $this->parseYouTubeCompactNumber($m[1]);
+        }
+
+        return [
+            'views' => $views,
+            'likes' => $likes,
+            'comments' => $comments,
+            'subs' => $subs,
+        ];
+    }
+
+    /**
+     * Parse YouTube compact or formatted numbers (e.g. "7,105 views", "2.68M subscribers", "171K").
+     */
+    protected function parseYouTubeCompactNumber(string $raw): int
+    {
+        if (preg_match('/(\d[\d,.]*)\s*(K|M|B|thousand|million|billion)?(?:\b|\s|$)/i', $raw, $m)) {
+            $numStr = $m[1];
+            $suffix = strtolower($m[2] ?? '');
+            $mult = match ($suffix) {
+                'k', 'thousand' => 1000,
+                'm', 'million'  => 1000000,
+                'b', 'billion'  => 1000000000,
+                default         => 1,
+            };
+            if ($mult > 1) {
+                return (int)round((float)str_replace(',', '', $numStr) * $mult);
+            }
+            return (int)str_replace([',', '.'], '', $numStr);
+        }
+        return 0;
     }
 }

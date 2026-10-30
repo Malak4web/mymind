@@ -510,5 +510,82 @@ class SocialMediaTest extends TestCase
         $postsAfter->assertStatus(200)
             ->assertJsonCount(0);
     }
+
+    public function test_youtube_refresh_updates_current_numbers_even_when_oauth_token_expired()
+    {
+        Sanctum::actingAs($this->userA);
+
+        // Simulate expired OAuth token on YouTube account (no API key), falling back to live RSS + InnerTube
+        \Illuminate\Support\Facades\Http::fake([
+            'googleapis.com/youtube/v3/*' => \Illuminate\Support\Facades\Http::response(['error' => ['code' => 401, 'message' => 'Invalid Credentials']], 401),
+            'www.youtube.com/youtubei/v1/browse*' => \Illuminate\Support\Facades\Http::response('"subtitle":{"content":"@tech • 18.5K subscribers"}', 200),
+            'www.youtube.com/feeds/videos.xml*' => \Illuminate\Support\Facades\Http::response(<<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <yt:videoId>vid_yt_2001</yt:videoId>
+    <title>فيديو شرح النظام الجديد 2026</title>
+    <published>2026-10-30T10:00:00+00:00</published>
+    <media:group>
+      <media:description>وصف الفيديو</media:description>
+      <media:thumbnail url="https://i.ytimg.com/vi/vid_yt_2001/hqdefault.jpg"/>
+      <media:community>
+        <media:starRating count="900"/>
+        <media:statistics views="16000"/>
+      </media:community>
+    </media:group>
+  </entry>
+</feed>
+XML, 200),
+            'www.youtube.com/youtubei/v1/next*' => \Illuminate\Support\Facades\Http::response(
+                '{"viewCountNumber":"21500","likeCountIfIndifferentNumber":"1420","contextualInfo":{"runs":[{"text":"165"}]},"subtitle":{"content":"18.5K subscribers"}}',
+                200
+            ),
+        ]);
+
+        SocialAccount::create([
+            'user_id' => $this->userA->id,
+            'platform' => 'youtube',
+            'account_id' => 'UC_test_channel_123',
+            'account_name' => 'قناة يوتيوب تقنية',
+            'followers_count' => 1000,
+            'access_token' => 'expired_ya29_token',
+        ]);
+
+        SocialPost::create([
+            'user_id' => $this->userA->id,
+            'content' => 'فيديو شرح النظام الجديد 2026',
+            'platforms' => ['youtube'],
+            'account_ids' => ['UC_test_channel_123'],
+            'status' => 'published',
+            'published_at' => now()->subDay(),
+            'platform_post_ids' => [
+                'youtube' => [
+                    'id' => 'vid_yt_2001',
+                    'url' => 'https://www.youtube.com/watch?v=vid_yt_2001',
+                ],
+            ],
+            'metrics' => [
+                'likes' => 100,
+                'comments' => 10,
+                'shares' => 0,
+                'views' => 2000,
+                'impressions' => 2000,
+                'engagement_rate' => 11,
+            ],
+        ]);
+
+        $res = $this->postJson('/api/social/sync-posts?platform=youtube&account_id=UC_test_channel_123');
+        $res->assertStatus(200)
+            ->assertJsonPath('synced_accounts', 1)
+            ->assertJsonPath('accounts.0.followers_count', 18500);
+
+        $postsRes = $this->getJson('/api/social/posts?platform=youtube');
+        $postsRes->assertStatus(200);
+        $updatedPost = $postsRes->json('0');
+        $this->assertEquals(21500, $updatedPost['metrics']['views']);
+        $this->assertEquals(1420, $updatedPost['metrics']['likes']);
+        $this->assertEquals(165, $updatedPost['metrics']['comments']);
+    }
 }
 

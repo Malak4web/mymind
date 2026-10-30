@@ -44,6 +44,17 @@ class SocialOAuthController extends Controller
         // Build callback URL
         $callbackUrl = url("/api/social/oauth/{$platform}/callback");
 
+        // Preserve existing refresh token in connected accounts before overwriting webhook_verify_token with OAuth state
+        if (!empty($setting->webhook_verify_token) && str_starts_with($setting->webhook_verify_token, 'rt:')) {
+            $existingRefreshToken = substr($setting->webhook_verify_token, 3);
+            $existingAccounts = SocialAccount::where('user_id', $user->id)->where('platform', $platform)->get();
+            foreach ($existingAccounts as $acc) {
+                $meta = is_array($acc->metadata) ? $acc->metadata : [];
+                $meta['refresh_token'] = $existingRefreshToken;
+                $acc->update(['metadata' => $meta]);
+            }
+        }
+
         // Generate state token
         $stateToken = Str::random(40);
         $setting->update([
@@ -103,12 +114,29 @@ class SocialOAuthController extends Controller
         }
 
         $accessToken = $tokenData['access_token'] ?? null;
+        $refreshToken = $tokenData['refresh_token'] ?? null;
         if ($accessToken) {
             $setting->update([
                 'access_token' => $accessToken,
-                'webhook_verify_token' => null,
+                'webhook_verify_token' => $refreshToken ? ('rt:' . $refreshToken) : null,
                 'is_active' => true,
             ]);
+
+            // Immediately update all connected accounts for this user & platform with the fresh token
+            $existingAccounts = SocialAccount::where('user_id', $setting->user_id)
+                ->where('platform', $platform)
+                ->get();
+            foreach ($existingAccounts as $acc) {
+                $meta = is_array($acc->metadata) ? $acc->metadata : [];
+                if ($refreshToken) {
+                    $meta['refresh_token'] = $refreshToken;
+                }
+                $acc->update([
+                    'access_token' => $accessToken,
+                    'metadata' => $meta,
+                    'status' => 'connected',
+                ]);
+            }
         }
 
         return $this->renderCallbackPage(true, $platform);
@@ -401,7 +429,7 @@ class SocialOAuthController extends Controller
                 return $this->fetchInstagramAccounts($accessToken, $user);
 
             case 'youtube':
-                return $this->fetchYouTubeChannels($accessToken);
+                return $this->fetchYouTubeChannels($accessToken, $user);
 
             case 'linkedin':
                 return $this->fetchLinkedInOrganizations($accessToken);
@@ -653,7 +681,7 @@ class SocialOAuthController extends Controller
         return array_values($accountsById);
     }
 
-    private function fetchYouTubeChannels(string $accessToken): array
+    private function fetchYouTubeChannels(string $accessToken, $user = null): array
     {
         $response = Http::withHeaders([
             'Authorization' => "Bearer {$accessToken}",
@@ -661,6 +689,48 @@ class SocialOAuthController extends Controller
             'part' => 'snippet,contentDetails,statistics',
             'mine' => 'true',
         ]);
+
+        if (($response->status() === 401 || $response->status() === 403) && $user) {
+            $setting = SocialSetting::where('user_id', $user->id)->where('platform', 'youtube')->first();
+            $refreshToken = null;
+            if (!empty($setting->webhook_verify_token) && str_starts_with($setting->webhook_verify_token, 'rt:')) {
+                $refreshToken = substr($setting->webhook_verify_token, 3);
+            }
+            if (!$refreshToken) {
+                $accWithRt = SocialAccount::where('user_id', $user->id)->where('platform', 'youtube')->get();
+                foreach ($accWithRt as $acc) {
+                    if (!empty($acc->metadata['refresh_token'])) {
+                        $refreshToken = $acc->metadata['refresh_token'];
+                        break;
+                    }
+                }
+            }
+            $appId = ($setting->app_id ?? null) ?: env('YOUTUBE_CLIENT_ID');
+            $appSecret = ($setting->app_secret ?? null) ?: env('YOUTUBE_CLIENT_SECRET');
+            if ($refreshToken && $appId && $appSecret) {
+                $tokenRes = Http::asForm()->post('https://oauth2.googleapis.com/token', [
+                    'client_id'     => $appId,
+                    'client_secret' => $appSecret,
+                    'refresh_token' => $refreshToken,
+                    'grant_type'    => 'refresh_token',
+                ]);
+                if ($tokenRes->ok() && !empty($tokenRes->json('access_token'))) {
+                    $accessToken = $tokenRes->json('access_token');
+                    if ($setting) {
+                        $setting->update(['access_token' => $accessToken]);
+                    }
+                    SocialAccount::where('user_id', $user->id)
+                        ->where('platform', 'youtube')
+                        ->update(['access_token' => $accessToken]);
+                    $response = Http::withHeaders([
+                        'Authorization' => "Bearer {$accessToken}",
+                    ])->get('https://www.googleapis.com/youtube/v3/channels', [
+                        'part' => 'snippet,contentDetails,statistics',
+                        'mine' => 'true',
+                    ]);
+                }
+            }
+        }
 
         if (!$response->ok()) {
             throw new \RuntimeException('YouTube API error: ' . $response->body());

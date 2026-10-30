@@ -2413,10 +2413,11 @@ onUnmounted(() => {
               </p>
 
               <div class="flex items-center justify-between text-[10px] text-slate-400 pt-1">
-                <div class="flex items-center gap-3">
-                  <span>👍 {{ page.top_post.metrics?.likes || 0 }}</span>
-                  <span>💬 {{ page.top_post.metrics?.comments || 0 }}</span>
-                  <span>🔄 {{ page.top_post.metrics?.shares || 0 }}</span>
+                <div class="flex items-center gap-3 flex-wrap">
+                  <span>👍 {{ Number(page.top_post.metrics?.likes || 0).toLocaleString() }}</span>
+                  <span>💬 {{ Number(page.top_post.metrics?.comments || 0).toLocaleString() }}</span>
+                  <span>🔄 {{ Number(page.top_post.metrics?.shares || 0).toLocaleString() }}</span>
+                  <span>👁️ {{ Number(page.top_post.metrics?.views || page.top_post.metrics?.impressions || 0).toLocaleString() }}</span>
                 </div>
 
                 <a
@@ -2470,11 +2471,12 @@ onUnmounted(() => {
                   </div>
 
                   <div class="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100 dark:border-slate-700/60">
-                    <div class="flex items-center gap-2.5 text-slate-500 dark:text-slate-400 text-[10px]">
-                      <span>👍 {{ post.metrics?.likes || 0 }}</span>
-                      <span>💬 {{ post.metrics?.comments || 0 }}</span>
-                      <span>🔄 {{ post.metrics?.shares || 0 }}</span>
-                      <span v-if="post.metrics?.engagement_rate" class="text-emerald-600 dark:text-emerald-400 font-bold">
+                    <div class="flex items-center gap-2.5 text-slate-500 dark:text-slate-400 text-[10px] flex-wrap">
+                      <span>👍 {{ Number(post.metrics?.likes || 0).toLocaleString() }}</span>
+                      <span>💬 {{ Number(post.metrics?.comments || 0).toLocaleString() }}</span>
+                      <span>🔄 {{ Number(post.metrics?.shares || 0).toLocaleString() }}</span>
+                      <span>👁️ {{ Number(post.metrics?.views || post.metrics?.impressions || 0).toLocaleString() }}</span>
+                      <span v-if="post.metrics?.engagement_rate !== undefined" class="text-emerald-600 dark:text-emerald-400 font-bold">
                         {{ post.metrics.engagement_rate }}% تفاعل
                       </span>
                     </div>
