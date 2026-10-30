@@ -61,6 +61,7 @@ export const store = reactive({
   // Social Media Management State (إدارة السوشيال ميديا - خاص بكل مستخدم)
   socialAccounts: [],
   socialPosts: [],
+  socialLastSyncedAt: null,
   socialAnalytics: {
     summary: {
       total_pages: 0,
@@ -73,6 +74,7 @@ export const store = reactive({
       average_engagement_rate: 0,
       total_reach: 0,
       total_impressions: 0,
+      last_synced_at: null,
     },
     pages: [],
     posts: [],
@@ -3736,8 +3738,25 @@ export const store = reactive({
       if (res.ok) {
         const data = await res.json()
         this.socialAnalytics = data
-        if (Array.isArray(data.posts)) {
-          this.socialPosts = data.posts
+        if (data?.summary?.last_synced_at) {
+          this.socialLastSyncedAt = data.summary.last_synced_at
+        }
+        if (Array.isArray(data.posts) && data.posts.length > 0) {
+          // Merge updated analytics metrics into socialPosts without wiping scheduled/draft/other-platform posts
+          const existingMap = new Map((this.socialPosts || []).map(p => [String(p.id), p]))
+          for (const analyzedPost of data.posts) {
+            const key = String(analyzedPost.id)
+            if (existingMap.has(key)) {
+              existingMap.set(key, {
+                ...existingMap.get(key),
+                ...analyzedPost,
+                metrics: analyzedPost.metrics || existingMap.get(key).metrics
+              })
+            } else {
+              existingMap.set(key, analyzedPost)
+            }
+          }
+          this.socialPosts = Array.from(existingMap.values())
           this.saveSocialPostsLocal()
         }
         return data
@@ -3748,26 +3767,51 @@ export const store = reactive({
     return null
   },
 
-  async syncSocialPosts() {
+  async syncSocialPosts(options = {}) {
     if (!this.token) return false
+    const platform = typeof options === 'string' ? options : (options?.platform || 'all')
+    const accountId = typeof options === 'object' && options !== null ? (options.accountId || 'all') : 'all'
+    const silentToast = typeof options === 'object' && options !== null ? Boolean(options.silentToast) : false
+
     try {
-      const res = await fetch(`${this.apiBase}/social/sync-posts`, {
+      const params = new URLSearchParams()
+      if (platform && platform !== 'all') params.append('platform', platform)
+      if (accountId && accountId !== 'all') params.append('account_id', accountId)
+      const queryStr = params.toString() ? `?${params.toString()}` : ''
+
+      const res = await fetch(`${this.apiBase}/social/sync-posts${queryStr}`, {
         method: 'POST',
-        headers: this.getAuthHeaders()
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          platform: platform || 'all',
+          account_id: accountId || 'all'
+        })
       })
       if (res.ok) {
         const result = await res.json()
-        await this.loadSocialAnalytics()
+        this.socialLastSyncedAt = result.last_synced_at || new Date().toISOString()
+        await this.loadSocialAccounts(true)
         await this.loadSocialPosts(true)
+        await this.loadSocialAnalytics(platform || 'all', accountId !== 'all' ? accountId : null)
         if (result.message) {
-          this.addNotification('مزامنة المنشورات', result.message)
+          this.addNotification('تحديث إحصائيات السوشيال ميديا', result.message)
+          if (!silentToast && typeof this.toastSuccess === 'function') {
+            this.toastSuccess(result.message)
+          }
         }
-        return true
+        return result || true
       }
     } catch (e) {
       console.error('فشل مزامنة المنشورات الخارجية', e)
+      if (!silentToast && typeof this.toastError === 'function') {
+        this.toastError('تعذر تحديث الإحصائيات من المنصة حالياً')
+      }
     }
     return false
+  },
+
+  async refreshSocialStats(options = {}) {
+    return await this.syncSocialPosts(options)
   },
 
   async uploadSocialMedia(file, onProgress = null) {

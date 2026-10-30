@@ -103,6 +103,10 @@ const selectSearchResult = (item, type) => {
 }
 
 const triggerQuickCreate = () => {
+  if (store.activeView === 'social') {
+    window.dispatchEvent(new CustomEvent('open-social-composer'))
+    return
+  }
   store.selectedTaskIdForModal = null
   store.isTaskModalOpen = true
 }
@@ -630,30 +634,34 @@ watch(() => store.projects.length, (newLen) => {
           <span class="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-slate-50 leading-tight">عقلي</span>
         </div>
 
-        <!-- Center: Active Project Picker Button -->
+        <!-- Center: Active Context / Project Picker Button -->
         <button 
           @click="showMobileProjectsSheet = true"
           class="flex-1 min-w-0 max-w-[170px] sm:max-w-[220px] flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-violet-50/80 dark:bg-slate-800/80 hover:bg-violet-100 dark:hover:bg-slate-700 text-violet-700 dark:text-violet-300 text-xs font-bold border border-violet-200/70 dark:border-slate-700/80 transition-all min-h-[38px] shadow-sm cursor-pointer mx-1"
           title="تبديل المشروع النشط" aria-label="تبديل المشروع النشط"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-violet-500 dark:text-violet-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <span v-if="store.activeView === 'social'" class="text-xs shrink-0">🚀</span>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-violet-500 dark:text-violet-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
           </svg>
-          <span class="truncate min-w-0 text-center">{{ activeProject?.name || store.activeProject?.name || 'جميع المشاريع' }}</span>
+          <span class="truncate min-w-0 text-center">
+            {{ store.activeView === 'social' ? 'السوشيال ميديا' : (activeProject?.name || store.activeProject?.name || 'جميع المشاريع') }}
+          </span>
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-violet-400 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
         </button>
 
-        <!-- Left: Quick Actions (Create Task, Notifications & Settings) -->
+        <!-- Left: Quick Actions (Create Task/Post, Notifications & Settings) -->
         <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
           <button 
             @click="triggerQuickCreate"
             class="h-8.5 px-2 sm:px-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-violet-500/20 active:scale-95 transition cursor-pointer flex items-center justify-center gap-1 shrink-0"
-            title="إضافة مهمة جديدة" aria-label="إضافة مهمة جديدة"
+            :title="store.activeView === 'social' ? 'إنشاء منشور جديد' : 'إضافة مهمة جديدة'"
+            :aria-label="store.activeView === 'social' ? 'إنشاء منشور جديد' : 'إضافة مهمة جديدة'"
           >
             <span class="text-base font-black leading-none">+</span>
-            <span class="text-[11px] font-bold hidden sm:inline">مهمة</span>
+            <span class="text-[11px] font-bold hidden sm:inline">{{ store.activeView === 'social' ? 'منشور' : 'مهمة' }}</span>
           </button>
 
           <button 

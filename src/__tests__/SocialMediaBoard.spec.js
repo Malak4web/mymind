@@ -507,5 +507,132 @@ describe('SocialMediaBoard.vue and Social Media Management Features', () => {
     expect(wrapper.text()).toContain('إنشاء وجدولة منشور جديد')
     expect(wrapper.text()).toContain('1 صفحة محددة')
   })
+
+  it('triggers refresh statistics globally and per-account when refresh stats button is clicked', async () => {
+    store.syncSocialPosts = vi.fn().mockResolvedValue({
+      message: 'تم تحديث الإحصائيات بنجاح',
+      last_synced_at: new Date().toISOString()
+    })
+    store.loadSocialAnalytics = vi.fn().mockResolvedValue({})
+
+    const wrapper = mount(SocialMediaBoard)
+
+    const refreshBtn = wrapper.findAll('button').find(b => b.text().includes('تحديث الإحصائيات'))
+    expect(refreshBtn).toBeDefined()
+    await refreshBtn.trigger('click')
+
+    expect(store.syncSocialPosts).toHaveBeenCalled()
+    expect(store.loadSocialAnalytics).toHaveBeenCalledWith('all')
+    expect(wrapper.text()).toContain('آخر تحديث:')
+  })
+
+  it('filters posts by platform pills, media type, and sorting, and resets all filters with one click', async () => {
+    store.socialPosts = [
+      {
+        id: 201,
+        content: 'فيديو ريلز على انستجرام',
+        media_urls: ['https://example.com/reel.mp4'],
+        platforms: ['instagram'],
+        account_ids: ['ig_acc_202'],
+        status: 'published',
+        metrics: { likes: 50, comments: 10, shares: 5, views: 500, engagement_rate: 3.2 }
+      },
+      {
+        id: 202,
+        content: 'صورة عرض جديد على فيسبوك',
+        media_urls: ['https://example.com/banner.jpg'],
+        platforms: ['facebook'],
+        account_ids: ['fb_page_101'],
+        status: 'published',
+        metrics: { likes: 300, comments: 40, shares: 25, views: 2500, engagement_rate: 9.5 }
+      }
+    ]
+
+    const wrapper = mount(SocialMediaBoard)
+    expect(wrapper.text()).toContain('فيديو ريلز على انستجرام')
+    expect(wrapper.text()).toContain('صورة عرض جديد على فيسبوك')
+
+    // Filter by video media chip
+    const videoBtn = wrapper.findAll('button').find(b => b.text().includes('🎬 فيديو'))
+    expect(videoBtn).toBeDefined()
+    await videoBtn.trigger('click')
+
+    expect(wrapper.text()).toContain('فيديو ريلز على انستجرام')
+    expect(wrapper.text()).not.toContain('صورة عرض جديد على فيسبوك')
+
+    // Clear all filters button should appear and restore all posts
+    const clearFiltersBtn = wrapper.findAll('button').find(b => b.text().includes('مسح الفلاتر'))
+    expect(clearFiltersBtn).toBeDefined()
+    await clearFiltersBtn.trigger('click')
+
+    expect(wrapper.text()).toContain('فيديو ريلز على انستجرام')
+    expect(wrapper.text()).toContain('صورة عرض جديد على فيسبوك')
+  })
+
+  it('supports filtering analytics by YouTube and LinkedIn and dynamically recalculates KPI summary', async () => {
+    store.loadSocialAnalytics = vi.fn().mockResolvedValue({})
+    store.socialAnalytics = {
+      summary: {
+        total_pages: 2,
+        total_posts: 5,
+        total_followers: 25000,
+        total_likes: 500,
+        total_comments: 100,
+        total_shares: 50,
+        total_interactions: 650,
+        average_engagement_rate: 4.5,
+        total_reach: 12000,
+        total_impressions: 16200,
+      },
+      pages: [
+        {
+          id: 1,
+          account_id: 'fb_page_101',
+          account_name: 'صفحة فيسبوك التحليلية',
+          platform: 'facebook',
+          followers_count: 10000,
+          posts_count: 2,
+          total_likes: 200,
+          total_comments: 40,
+          total_shares: 20,
+          total_interactions: 260,
+          engagement_rate: 2.6,
+          total_views: 4000,
+        },
+        {
+          id: 2,
+          account_id: 'yt_chan_303',
+          account_name: 'قناة اليوتيوب التقنية',
+          platform: 'youtube',
+          followers_count: 15000,
+          posts_count: 3,
+          total_likes: 300,
+          total_comments: 60,
+          total_shares: 30,
+          total_interactions: 390,
+          engagement_rate: 6.4,
+          total_views: 8000,
+        }
+      ]
+    }
+
+    const wrapper = mount(SocialMediaBoard)
+
+    // Switch to Analytics tab
+    const analyticsTabBtn = wrapper.findAll('button').find(b => b.text().includes('نسب التحليلات والصفحات'))
+    await analyticsTabBtn.trigger('click')
+
+    expect(wrapper.text()).toContain('صفحة فيسبوك التحليلية')
+    expect(wrapper.text()).toContain('قناة اليوتيوب التقنية')
+
+    // Click YouTube filter in analytics sub-bar
+    const ytButtons = wrapper.findAll('button').filter(b => b.text().trim() === 'يوتيوب')
+    expect(ytButtons.length).toBeGreaterThan(0)
+    await ytButtons[0].trigger('click')
+
+    expect(wrapper.text()).toContain('قناة اليوتيوب التقنية')
+    expect(wrapper.text()).not.toContain('صفحة فيسبوك التحليلية')
+    expect(wrapper.text()).toContain('15,000')
+  })
 })
 

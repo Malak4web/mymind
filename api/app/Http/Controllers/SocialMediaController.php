@@ -739,6 +739,9 @@ class SocialMediaController extends Controller
             $commentsPct = $totalPageInteractions > 0 ? round(($comments / $totalPageInteractions) * 100, 1) : 0;
             $sharesPct = $totalPageInteractions > 0 ? round(($shares / $totalPageInteractions) * 100, 1) : 0;
 
+            $meta = is_array($account->metadata) ? $account->metadata : [];
+            $lastSyncedAt = $meta['last_synced_at'] ?? ($account->updated_at ? $account->updated_at->toIso8601String() : null);
+
             $pagesAnalytics[] = [
                 'id' => $account->id,
                 'platform' => $account->platform,
@@ -759,6 +762,7 @@ class SocialMediaController extends Controller
                 'comments_percentage' => $commentsPct,
                 'shares_percentage' => $sharesPct,
                 'interactions_per_post' => $pagePosts->count() > 0 ? round($totalPageInteractions / $pagePosts->count(), 1) : 0,
+                'last_synced_at' => $lastSyncedAt,
                 'top_post' => $topPost,
                 'posts' => $pagePosts->values(),
             ];
@@ -775,6 +779,8 @@ class SocialMediaController extends Controller
             ? round(collect($pagesAnalytics)->avg('engagement_rate'), 2)
             : 0;
 
+        $latestSync = collect($pagesAnalytics)->pluck('last_synced_at')->filter()->sortDesc()->first();
+
         return response()->json([
             'summary' => [
                 'total_pages' => count($pagesAnalytics),
@@ -787,6 +793,7 @@ class SocialMediaController extends Controller
                 'average_engagement_rate' => $avgEngagementRate,
                 'total_reach' => $totalViewsOverall,
                 'total_impressions' => (int)($totalViewsOverall * 1.35),
+                'last_synced_at' => $latestSync,
             ],
             'pages' => $pagesAnalytics,
             'posts' => $allPosts,
@@ -794,7 +801,7 @@ class SocialMediaController extends Controller
     }
 
     /**
-     * Synchronize and import real external posts from connected platform APIs.
+     * Synchronize and import real external posts & live statistics from connected platform APIs.
      */
     public function syncExternalPosts(Request $request)
     {
@@ -802,12 +809,21 @@ class SocialMediaController extends Controller
         $this->purgeSamplePosts($user->id);
         $this->purgeOrphanPosts($user->id);
 
-        $platformFilter = $request->query('platform', 'all');
+        $platformFilter = $request->input('platform', $request->query('platform', 'all'));
+        $accountIdFilter = $request->input('account_id', $request->query('account_id', 'all'));
+
         $accountsQuery = SocialAccount::where('user_id', $user->id);
-        if ($platformFilter !== 'all' && in_array($platformFilter, $this->supportedPlatforms)) {
+        if ($platformFilter && $platformFilter !== 'all' && in_array($platformFilter, $this->supportedPlatforms)) {
             $accountsQuery->where('platform', $platformFilter);
         } else {
             $accountsQuery->whereIn('platform', $this->supportedPlatforms);
+        }
+
+        if ($accountIdFilter && $accountIdFilter !== 'all') {
+            $accountsQuery->where(function ($q) use ($accountIdFilter) {
+                $q->where('account_id', (string)$accountIdFilter)
+                  ->orWhere('id', $accountIdFilter);
+            });
         }
 
         $accounts = $accountsQuery->get();
@@ -818,15 +834,18 @@ class SocialMediaController extends Controller
         }
 
         $this->broadcastChange($user->id, 'social_posts');
+        $this->broadcastChange($user->id, 'social_accounts');
 
+        $syncedAt = now()->toIso8601String();
         $message = $syncedCount > 0
-            ? "تمت مزامنة {$syncedCount} منشور حقيقي وتحديث نسب التحليلات بنجاح"
-            : 'تم فحص الحسابات بنجاح. لم يتم العثور على منشورات جديدة على المنصات المربوطة.';
+            ? "تم تحديث الإحصائيات ومزامنة {$syncedCount} منشور من المنصة بنجاح 📊"
+            : 'تم تحديث إحصائيات الحسابات المربوطة وفحص المنصة بنجاح ✅';
 
         return response()->json([
             'message' => $message,
             'synced_accounts' => $accounts->count(),
             'synced_posts' => $syncedCount,
+            'last_synced_at' => $syncedAt,
         ]);
     }
 
@@ -1183,6 +1202,22 @@ class SocialMediaController extends Controller
         // 1. Try real Facebook Graph API (Page Access Token required)
         if ($account->platform === 'facebook' && $pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) {
             try {
+                // Refresh live page follower / fan count from Meta Graph API
+                try {
+                    $pageInfoRes = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}", [
+                        'access_token' => $pageAccessToken,
+                        'fields' => 'id,name,followers_count,fan_count',
+                    ]);
+                    if ($pageInfoRes->ok()) {
+                        $freshFollowers = $pageInfoRes->json('followers_count') ?? $pageInfoRes->json('fan_count');
+                        if ($freshFollowers !== null && (int)$freshFollowers > 0) {
+                            $account->update(['followers_count' => (int)$freshFollowers]);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::info("FB page stats refresh notice for {$account->account_id}: " . $e->getMessage());
+                }
+
                 // Fetch videos first (videos/reels have exact views, likes, and comments without needing pages_read_user_content)
                 $videosMap = [];
                 try {
@@ -1330,6 +1365,21 @@ class SocialMediaController extends Controller
         // 2. Try real Instagram Graph API
         if ($account->platform === 'instagram' && $pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) {
             try {
+                try {
+                    $igInfoRes = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}", [
+                        'access_token' => $pageAccessToken,
+                        'fields' => 'id,username,followers_count,media_count',
+                    ]);
+                    if ($igInfoRes->ok()) {
+                        $freshIgFollowers = $igInfoRes->json('followers_count');
+                        if ($freshIgFollowers !== null && (int)$freshIgFollowers > 0) {
+                            $account->update(['followers_count' => (int)$freshIgFollowers]);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::info("IG stats refresh notice for {$account->account_id}: " . $e->getMessage());
+                }
+
                 $res = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/media", [
                     'access_token' => $pageAccessToken,
                     'fields' => 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count',
@@ -1373,6 +1423,7 @@ class SocialMediaController extends Controller
 
         // 3. Try real YouTube Data API v3 (Channel Videos & Metrics)
         if ($account->platform === 'youtube') {
+            $channelId = (string)$account->account_id;
             $ytSetting = SocialSetting::where('user_id', $user->id)
                 ->where('platform', 'youtube')
                 ->first();
@@ -1382,7 +1433,6 @@ class SocialMediaController extends Controller
 
             if ($hasAuth) {
                 try {
-                    $channelId = (string)$account->account_id;
                     $uploadsPlaylistId = null;
 
                     $ytRequest = function (string $url, array $params = []) use ($pageAccessToken, $apiKey) {
@@ -1581,30 +1631,32 @@ class SocialMediaController extends Controller
 
         // STRICT REAL DATA: Never generate fake posts if Meta API returns 0 posts.
         $count = 0;
+        $userPosts = SocialPost::where('user_id', $user->id)->get();
+
         foreach ($importedPosts as $p) {
-            $existing = SocialPost::where('user_id', $user->id)
-                ->whereJsonContains('account_ids', (string)$account->account_id)
-                ->get()
-                ->first(function ($item) use ($account, $p) {
-                    $postIds = $item->platform_post_ids ?? [];
-                    $pData = $postIds[$account->platform] ?? null;
-                    return is_array($pData) && ($pData['id'] ?? null) === (string)$p['external_id'];
-                });
+            $existing = $userPosts->first(function ($item) use ($account, $p) {
+                $postIds = $item->platform_post_ids ?? [];
+                $pData = $postIds[$account->platform] ?? null;
+                return is_array($pData) && ($pData['id'] ?? null) === (string)$p['external_id'];
+            });
 
             if ($existing) {
+                $mergedPlatforms = array_values(array_unique(array_merge($existing->platforms ?? [], [$account->platform])));
+                $mergedAccounts = array_values(array_unique(array_merge(array_map('strval', $existing->account_ids ?? []), [(string)$account->account_id])));
+                $mergedPostIds = is_array($existing->platform_post_ids) ? $existing->platform_post_ids : [];
+                $mergedPostIds[$account->platform] = [
+                    'id' => $p['external_id'],
+                    'url' => $p['permalink'],
+                ];
+
                 $existing->update([
                     'content' => $p['content'],
                     'media_urls' => $p['media_urls'],
-                    'platforms' => [$account->platform],
-                    'account_ids' => [(string)$account->account_id],
+                    'platforms' => $mergedPlatforms,
+                    'account_ids' => $mergedAccounts,
                     'status' => 'published',
                     'published_at' => $p['published_at'],
-                    'platform_post_ids' => [
-                        $account->platform => [
-                            'id' => $p['external_id'],
-                            'url' => $p['permalink'],
-                        ],
-                    ],
+                    'platform_post_ids' => $mergedPostIds,
                     'metrics' => $p['metrics'],
                 ]);
             } else {
@@ -1627,6 +1679,30 @@ class SocialMediaController extends Controller
                 ]);
             }
             $count++;
+        }
+
+        // Recalculate engagement_rate on any existing published posts for this account using latest followers_count
+        $followers = max(0, (int)$account->followers_count);
+        foreach ($userPosts as $post) {
+            if ($post->status !== 'published') continue;
+            $accIds = array_map('strval', $post->account_ids ?? []);
+            $belongs = in_array((string)$account->account_id, $accIds)
+                || (empty($accIds) && in_array($account->platform, $post->platforms ?? []));
+            if ($belongs && is_array($post->metrics)) {
+                $m = $post->metrics;
+                $likes = (int)($m['likes'] ?? 0);
+                $comments = (int)($m['comments'] ?? 0);
+                $shares = (int)($m['shares'] ?? 0);
+                $views = (int)($m['views'] ?? $m['impressions'] ?? 0);
+                $interactions = $likes + $comments + $shares;
+                $newEngRate = $followers > 0
+                    ? round(($interactions / $followers) * 100, 2)
+                    : ($views > 0 ? round(($interactions / $views) * 100, 2) : 0);
+                if (($m['engagement_rate'] ?? null) !== $newEngRate) {
+                    $m['engagement_rate'] = $newEngRate;
+                    $post->update(['metrics' => $m]);
+                }
+            }
         }
 
         // Record last synced timestamp on account

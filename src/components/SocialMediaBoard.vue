@@ -6,9 +6,14 @@ import { store } from '../store'
 const currentTab = ref('all') // 'all' | 'scheduled' | 'published' | 'draft' | 'analytics'
 const selectedPlatformFilter = ref('all') // 'all' | 'facebook' | 'instagram' | 'youtube' | 'linkedin'
 const selectedAccountId = ref('all') // 'all' | string account_id (e.g. '1266443159896214')
+const mediaFilter = ref('all') // 'all' | 'video' | 'image' | 'text'
+const sortBy = ref('newest') // 'newest' | 'oldest' | 'engagement' | 'likes' | 'views'
 const searchQuery = ref('')
 const isSyncingPosts = ref(false)
-const selectedAnalyticsPlatform = ref('all') // 'all' | 'facebook' | 'instagram'
+const syncingAccountId = ref(null)
+const lastRefreshedTimestamp = ref(null)
+const showMobileAccountCards = ref(false)
+const selectedAnalyticsPlatform = ref('all') // 'all' | 'facebook' | 'instagram' | 'youtube' | 'linkedin'
 
 // Modals
 const isComposerOpen = ref(false)
@@ -126,6 +131,11 @@ const handleFileUpload = async (event) => {
   }
 }
 
+const onDrop = (event) => {
+  isDraggingFile.value = false
+  handleFileUpload(event)
+}
+
 const handleEditFileUpload = async (event) => {
   const files = event.target?.files || event.dataTransfer?.files
   if (!files || !files.length || !editingPost.value) return
@@ -226,11 +236,50 @@ const handleSelectAccount = (acc) => {
     selectedAccountId.value = 'all'
   } else {
     selectedAccountId.value = idStr
+    if (selectedPlatformFilter.value !== 'all' && selectedPlatformFilter.value !== acc.platform) {
+      selectedPlatformFilter.value = 'all'
+    }
+    if (selectedAnalyticsPlatform.value !== 'all' && selectedAnalyticsPlatform.value !== acc.platform) {
+      selectedAnalyticsPlatform.value = 'all'
+    }
   }
 }
 
 const handleClearAccountFilter = () => {
   selectedAccountId.value = 'all'
+}
+
+const selectPlatformFilter = async (platform) => {
+  selectedPlatformFilter.value = platform
+  if (selectedAccount.value && platform !== 'all' && selectedAccount.value.platform !== platform) {
+    selectedAccountId.value = 'all'
+  }
+  if (currentTab.value === 'analytics') {
+    await handleFilterAnalyticsPlatform(platform)
+  }
+}
+
+const hasActiveFilters = computed(() => {
+  const activePlat = currentTab.value === 'analytics' ? selectedAnalyticsPlatform.value : selectedPlatformFilter.value
+  return (
+    selectedAccountId.value !== 'all' ||
+    activePlat !== 'all' ||
+    mediaFilter.value !== 'all' ||
+    sortBy.value !== 'newest' ||
+    Boolean(searchQuery.value.trim())
+  )
+})
+
+const resetAllFilters = async () => {
+  selectedAccountId.value = 'all'
+  selectedPlatformFilter.value = 'all'
+  selectedAnalyticsPlatform.value = 'all'
+  mediaFilter.value = 'all'
+  sortBy.value = 'newest'
+  searchQuery.value = ''
+  if (currentTab.value === 'analytics' && typeof store.loadSocialAnalytics === 'function') {
+    await store.loadSocialAnalytics('all')
+  }
 }
 
 const getAccountForPost = (post) => {
@@ -631,6 +680,7 @@ const openEditModal = (post) => {
     content: post.content,
     media_urls: Array.isArray(post.media_urls) ? [...post.media_urls] : [],
     platforms: Array.isArray(post.platforms) ? [...post.platforms] : ['facebook'],
+    account_ids: Array.isArray(post.account_ids) ? [...post.account_ids] : [],
     status: post.status,
     scheduled_at: post.scheduled_at ? formatForDateTimeInput(new Date(post.scheduled_at)) : '',
   }
@@ -647,6 +697,7 @@ const handleUpdatePost = async () => {
       content: editingPost.value.content,
       media_urls: editingPost.value.media_urls,
       platforms: editingPost.value.platforms,
+      account_ids: editingPost.value.account_ids,
       status: editingPost.value.status,
       scheduled_at: editingPost.value.scheduled_at || null,
     })
@@ -678,24 +729,58 @@ const goToSocialSettings = () => {
 }
 
 // Analytics Data & Computed Helpers
-const analyticsSummary = computed(() => {
+const analyticsPages = computed(() => {
+  let pages = store.socialAnalytics?.pages || []
   if (selectedAccountId.value && selectedAccountId.value !== 'all') {
-    const page = (store.socialAnalytics?.pages || []).find(p => String(p.account_id) === String(selectedAccountId.value))
-    if (page) {
-      return {
-        total_pages: 1,
-        total_posts: page.posts_count || 0,
-        total_followers: page.followers_count || 0,
-        total_likes: page.total_likes || 0,
-        total_comments: page.total_comments || 0,
-        total_shares: page.total_shares || 0,
-        total_interactions: page.total_interactions || 0,
-        average_engagement_rate: page.engagement_rate || 0,
-        total_reach: page.total_views || 0,
-        total_impressions: page.total_views || 0,
-      }
+    pages = pages.filter(p => String(p.account_id) === String(selectedAccountId.value))
+  } else if (selectedAnalyticsPlatform.value !== 'all') {
+    pages = pages.filter(p => p.platform === selectedAnalyticsPlatform.value)
+  }
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.trim().toLowerCase()
+    pages = pages.filter(p =>
+      (p.account_name && p.account_name.toLowerCase().includes(q)) ||
+      (p.account_username && p.account_username.toLowerCase().includes(q)) ||
+      (p.platform && p.platform.toLowerCase().includes(q)) ||
+      (Array.isArray(p.posts) && p.posts.some(post => post.content && post.content.toLowerCase().includes(q)))
+    )
+  }
+  return pages
+})
+
+const analyticsSummary = computed(() => {
+  const isFiltered =
+    (selectedAccountId.value && selectedAccountId.value !== 'all') ||
+    selectedAnalyticsPlatform.value !== 'all' ||
+    Boolean(searchQuery.value.trim())
+
+  if (isFiltered) {
+    const pages = analyticsPages.value
+    const totalFollowers = pages.reduce((sum, p) => sum + Number(p.followers_count || 0), 0)
+    const totalPosts = pages.reduce((sum, p) => sum + Number(p.posts_count || 0), 0)
+    const totalLikes = pages.reduce((sum, p) => sum + Number(p.total_likes || 0), 0)
+    const totalComments = pages.reduce((sum, p) => sum + Number(p.total_comments || 0), 0)
+    const totalShares = pages.reduce((sum, p) => sum + Number(p.total_shares || 0), 0)
+    const totalInteractions = pages.reduce((sum, p) => sum + Number(p.total_interactions || 0), 0)
+    const totalReach = pages.reduce((sum, p) => sum + Number(p.total_views || 0), 0)
+    const avgEng = pages.length > 0
+      ? Number((pages.reduce((sum, p) => sum + Number(p.engagement_rate || 0), 0) / pages.length).toFixed(2))
+      : 0
+
+    return {
+      total_pages: pages.length,
+      total_posts: totalPosts,
+      total_followers: totalFollowers,
+      total_likes: totalLikes,
+      total_comments: totalComments,
+      total_shares: totalShares,
+      total_interactions: totalInteractions,
+      average_engagement_rate: avgEng,
+      total_reach: totalReach,
+      total_impressions: Math.round(totalReach * 1.35),
     }
   }
+
   return store.socialAnalytics?.summary || {
     total_pages: 0,
     total_posts: 0,
@@ -710,21 +795,46 @@ const analyticsSummary = computed(() => {
   }
 })
 
-const analyticsPages = computed(() => {
-  let pages = store.socialAnalytics?.pages || []
-  if (selectedAccountId.value && selectedAccountId.value !== 'all') {
-    pages = pages.filter(p => String(p.account_id) === String(selectedAccountId.value))
-  } else if (selectedAnalyticsPlatform.value !== 'all') {
-    pages = pages.filter(p => p.platform === selectedAnalyticsPlatform.value)
+const lastSyncedLabel = computed(() => {
+  let raw = lastRefreshedTimestamp.value || store.socialLastSyncedAt || store.socialAnalytics?.summary?.last_synced_at
+  if (!raw && Array.isArray(store.socialAccounts)) {
+    const timestamps = store.socialAccounts
+      .map(a => a.metadata?.last_synced_at || a.updated_at)
+      .filter(Boolean)
+      .sort()
+      .reverse()
+    raw = timestamps[0] || null
   }
-  return pages
+  if (!raw) return ''
+  try {
+    const d = new Date(raw)
+    if (isNaN(d.getTime())) return ''
+    const diffSec = Math.floor((Date.now() - d.getTime()) / 1000)
+    if (diffSec < 60) return 'منذ لحظات'
+    if (diffSec < 3600) return `منذ ${Math.floor(diffSec / 60)} د`
+    return new Intl.DateTimeFormat('ar-EG', {
+      hour: '2-digit',
+      minute: '2-digit',
+      month: 'short',
+      day: 'numeric'
+    }).format(d)
+  } catch (e) {
+    return ''
+  }
 })
 
-const handleSyncExternalPosts = async () => {
+const handleSyncExternalPosts = async (customOptions = null) => {
   isSyncingPosts.value = true
+  const hasCustom = customOptions && typeof customOptions === 'object' && !(customOptions instanceof Event) && (customOptions.platform || customOptions.accountId)
+  if (hasCustom && customOptions.accountId) {
+    syncingAccountId.value = String(customOptions.accountId)
+  }
   try {
-    const ok = await store.syncSocialPosts()
+    const ok = hasCustom
+      ? await store.syncSocialPosts(customOptions)
+      : await store.syncSocialPosts()
     if (ok) {
+      lastRefreshedTimestamp.value = new Date().toISOString()
       if (selectedAccountId.value && selectedAccountId.value !== 'all') {
         await store.loadSocialAnalytics(selectedAnalyticsPlatform.value, selectedAccountId.value)
       } else {
@@ -735,11 +845,20 @@ const handleSyncExternalPosts = async () => {
     console.error('فشل مزامنة المنشورات', e)
   } finally {
     isSyncingPosts.value = false
+    syncingAccountId.value = null
   }
+}
+
+const handleRefreshStats = async (options = null) => {
+  await handleSyncExternalPosts(options)
 }
 
 const handleFilterAnalyticsPlatform = async (p) => {
   selectedAnalyticsPlatform.value = p
+  selectedPlatformFilter.value = p
+  if (selectedAccount.value && p !== 'all' && selectedAccount.value.platform !== p) {
+    selectedAccountId.value = 'all'
+  }
   if (selectedAccountId.value && selectedAccountId.value !== 'all') {
     await store.loadSocialAnalytics(p, selectedAccountId.value)
   } else {
@@ -765,13 +884,63 @@ const accountFilteredBasePosts = computed(() => {
   return list
 })
 
-// Computed Posts List with Filters
+// Platform counts for filter pills
+const platformCounts = computed(() => {
+  const base = accountFilteredBasePosts.value
+  return {
+    all: base.length,
+    facebook: base.filter(p => Array.isArray(p.platforms) && p.platforms.includes('facebook')).length,
+    instagram: base.filter(p => Array.isArray(p.platforms) && p.platforms.includes('instagram')).length,
+    youtube: base.filter(p => Array.isArray(p.platforms) && p.platforms.includes('youtube')).length,
+    linkedin: base.filter(p => Array.isArray(p.platforms) && p.platforms.includes('linkedin')).length,
+  }
+})
+
+// Posts filtered by account + platform + media type + search (used for accurate status tab counts)
+const platformFilteredBasePosts = computed(() => {
+  let list = accountFilteredBasePosts.value
+
+  // Platform filter
+  if (selectedPlatformFilter.value !== 'all') {
+    list = list.filter(p => Array.isArray(p.platforms) && p.platforms.includes(selectedPlatformFilter.value))
+  }
+
+  // Media filter
+  if (mediaFilter.value === 'video') {
+    list = list.filter(p => Array.isArray(p.media_urls) && p.media_urls.some(u => isVideoUrl(u)))
+  } else if (mediaFilter.value === 'image') {
+    list = list.filter(p => Array.isArray(p.media_urls) && p.media_urls.length > 0 && p.media_urls.some(u => !isVideoUrl(u)))
+  } else if (mediaFilter.value === 'text') {
+    list = list.filter(p => !p.media_urls || p.media_urls.length === 0)
+  }
+
+  // Search filter (content, account name, platform)
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.trim().toLowerCase()
+    list = list.filter(p => {
+      const contentMatch = p.content && p.content.toLowerCase().includes(q)
+      const acc = getAccountForPost(p)
+      const accMatch = acc && (
+        (acc.account_name && acc.account_name.toLowerCase().includes(q)) ||
+        (acc.account_username && acc.account_username.toLowerCase().includes(q))
+      )
+      const platMatch = Array.isArray(p.platforms) && p.platforms.some(pl =>
+        pl.toLowerCase().includes(q) || getPlatformMeta(pl).name.includes(q)
+      )
+      return contentMatch || accMatch || platMatch
+    })
+  }
+
+  return list
+})
+
+// Computed Posts List with Tab & Sorting Filters
 const filteredPosts = computed(() => {
   if (currentTab.value === 'analytics') {
     return []
   }
 
-  let list = accountFilteredBasePosts.value
+  let list = platformFilteredBasePosts.value
 
   // Tab filter
   if (currentTab.value === 'scheduled') {
@@ -782,15 +951,27 @@ const filteredPosts = computed(() => {
     list = list.filter(p => p.status === 'draft')
   }
 
-  // Platform filter
-  if (selectedPlatformFilter.value !== 'all') {
-    list = list.filter(p => Array.isArray(p.platforms) && p.platforms.includes(selectedPlatformFilter.value))
-  }
-
-  // Search filter
-  if (searchQuery.value.trim()) {
-    const q = searchQuery.value.trim().toLowerCase()
-    list = list.filter(p => p.content && p.content.toLowerCase().includes(q))
+  // Sorting
+  if (sortBy.value !== 'newest') {
+    list = [...list].sort((a, b) => {
+      if (sortBy.value === 'oldest') {
+        const da = new Date(a.published_at || a.scheduled_at || a.created_at || 0).getTime()
+        const db = new Date(b.published_at || b.scheduled_at || b.created_at || 0).getTime()
+        return da - db
+      }
+      if (sortBy.value === 'engagement') {
+        return Number(b.metrics?.engagement_rate || 0) - Number(a.metrics?.engagement_rate || 0)
+      }
+      if (sortBy.value === 'likes') {
+        return Number(b.metrics?.likes || 0) - Number(a.metrics?.likes || 0)
+      }
+      if (sortBy.value === 'views') {
+        const va = Number(a.metrics?.views || a.metrics?.impressions || 0)
+        const vb = Number(b.metrics?.views || b.metrics?.impressions || 0)
+        return vb - va
+      }
+      return 0
+    })
   }
 
   return list
@@ -798,7 +979,7 @@ const filteredPosts = computed(() => {
 
 // Counts
 const counts = computed(() => {
-  const posts = accountFilteredBasePosts.value
+  const posts = platformFilteredBasePosts.value
   return {
     all: posts.length,
     scheduled: posts.filter(p => p.status === 'scheduled').length,
@@ -877,8 +1058,13 @@ const formatDate = (dateStr) => {
   }
 }
 
+const handleExternalOpenComposer = () => {
+  openComposer()
+}
+
 onMounted(() => {
   window.addEventListener('message', handleOAuthWindowMessage)
+  window.addEventListener('open-social-composer', handleExternalOpenComposer)
   if (store.token) {
     if (!store.socialAccounts || !store.socialAccounts.length) {
       store.loadSocialAccounts(true)
@@ -894,40 +1080,62 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('message', handleOAuthWindowMessage)
+  window.removeEventListener('open-social-composer', handleExternalOpenComposer)
 })
 </script>
 
 <template>
-  <div class="space-y-6 text-right" dir="rtl">
+  <div class="space-y-4 sm:space-y-6 text-right pb-20 sm:pb-6" dir="rtl">
     
     <!-- Top Bar: Title & Global Actions -->
-    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-slate-800">
-      <div>
-        <div class="flex items-center gap-2">
-          <span class="text-2xl">🚀</span>
-          <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100">
-            إدارة السوشيال ميديا
-          </h2>
-          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
-            خاص بك 🔒
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-slate-200/80 dark:border-slate-800">
+      <div class="w-full sm:w-auto">
+        <div class="flex items-center justify-between sm:justify-start gap-2 flex-wrap">
+          <div class="flex items-center gap-2">
+            <span class="text-xl sm:text-2xl">🚀</span>
+            <h2 class="text-lg sm:text-2xl font-black text-slate-900 dark:text-slate-100">
+              إدارة السوشيال ميديا
+            </h2>
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
+              خاص بك 🔒
+            </span>
+          </div>
+
+          <span
+            v-if="lastSyncedLabel"
+            class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+            title="وقت آخر تحديث للإحصائيات من المنصات"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>آخر تحديث: {{ lastSyncedLabel }}</span>
           </span>
         </div>
-        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+        <p class="text-[11px] sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
           ربط صفحات وحسابات التواصل الاجتماعي، ونشر وجدولة المحتوى بسهولة مع عزل تام للبيانات
         </p>
       </div>
 
-      <div class="flex items-center gap-2.5 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap w-full sm:w-auto">
         <button
           @click="openComposer()"
-          class="px-4 py-2.5 rounded-2xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-extrabold text-xs shadow-md shadow-violet-500/20 hover:opacity-95 active:scale-95 transition cursor-pointer flex items-center gap-1.5"
+          class="flex-1 sm:flex-initial justify-center px-4 py-2.5 rounded-2xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-extrabold text-xs shadow-md shadow-violet-500/20 hover:opacity-95 active:scale-95 transition cursor-pointer flex items-center gap-1.5"
         >
           <span>✍️</span>
           <span>منشور جديد</span>
         </button>
 
         <button
-          @click="handleSyncExternalPosts"
+          @click="handleRefreshStats()"
+          :disabled="isSyncingPosts"
+          class="flex-1 sm:flex-initial justify-center px-3.5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-sm shadow-emerald-500/20 active:scale-95 transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+          title="تحديث الإحصائيات الحية (المتابعين، الإعجابات، المشاهدات، ونسب التفاعل) من المنصة"
+        >
+          <span :class="{'animate-spin inline-block': isSyncingPosts}">🔄</span>
+          <span>{{ isSyncingPosts ? 'جارِ التحديث...' : 'تحديث الإحصائيات' }}</span>
+        </button>
+
+        <button
+          @click="handleSyncExternalPosts()"
           :disabled="isSyncingPosts"
           class="px-3.5 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
           title="مزامنة منشورات فيسبوك وإنستجرام وتحديث نسب الأداء"
@@ -954,53 +1162,74 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Quick Stats Cards -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm flex items-center gap-3">
-        <div class="w-11 h-11 rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center text-xl shrink-0">
+    <!-- Quick Stats Cards (Interactive App Shortcuts) -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      <div
+        @click="currentTab = 'all'; showMobileAccountCards = !showMobileAccountCards"
+        class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-violet-500/40 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-3 cursor-pointer active:scale-[0.98] transition"
+      >
+        <div class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center text-base sm:text-xl shrink-0">
           🔗
         </div>
-        <div>
-          <span class="block text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100">
+        <div class="min-w-0">
+          <span class="block text-lg sm:text-2xl font-black text-slate-900 dark:text-slate-100 leading-tight">
             {{ counts.accounts }}
           </span>
-          <span class="text-xs text-slate-400 font-bold">الحسابات المتصلة</span>
+          <span class="text-[11px] sm:text-xs text-slate-400 font-bold truncate block">الحسابات المتصلة</span>
         </div>
       </div>
 
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm flex items-center gap-3">
-        <div class="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl shrink-0">
+      <div
+        @click="currentTab = currentTab === 'scheduled' ? 'all' : 'scheduled'"
+        :class="[
+          'bg-white dark:bg-slate-900 border rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-3 cursor-pointer active:scale-[0.98] transition',
+          currentTab === 'scheduled' ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-slate-200 dark:border-slate-800 hover:border-amber-500/40'
+        ]"
+      >
+        <div class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center text-base sm:text-xl shrink-0">
           ⏰
         </div>
-        <div>
-          <span class="block text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100">
+        <div class="min-w-0">
+          <span class="block text-lg sm:text-2xl font-black text-slate-900 dark:text-slate-100 leading-tight">
             {{ counts.scheduled }}
           </span>
-          <span class="text-xs text-slate-400 font-bold">منشورات مجدولة</span>
+          <span class="text-[11px] sm:text-xs text-slate-400 font-bold truncate block">منشورات مجدولة</span>
         </div>
       </div>
 
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm flex items-center gap-3">
-        <div class="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl shrink-0">
+      <div
+        @click="currentTab = currentTab === 'published' ? 'all' : 'published'"
+        :class="[
+          'bg-white dark:bg-slate-900 border rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-3 cursor-pointer active:scale-[0.98] transition',
+          currentTab === 'published' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 hover:border-emerald-500/40'
+        ]"
+      >
+        <div class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-base sm:text-xl shrink-0">
           ✅
         </div>
-        <div>
-          <span class="block text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100">
+        <div class="min-w-0">
+          <span class="block text-lg sm:text-2xl font-black text-slate-900 dark:text-slate-100 leading-tight">
             {{ counts.published }}
           </span>
-          <span class="text-xs text-slate-400 font-bold">منشورات تم نشرها</span>
+          <span class="text-[11px] sm:text-xs text-slate-400 font-bold truncate block">منشورات تم نشرها</span>
         </div>
       </div>
 
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm flex items-center gap-3">
-        <div class="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl shrink-0">
+      <div
+        @click="currentTab = currentTab === 'draft' ? 'all' : 'draft'"
+        :class="[
+          'bg-white dark:bg-slate-900 border rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-sm flex items-center gap-2.5 sm:gap-3 cursor-pointer active:scale-[0.98] transition',
+          currentTab === 'draft' ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-slate-200 dark:border-slate-800 hover:border-blue-500/40'
+        ]"
+      >
+        <div class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center text-base sm:text-xl shrink-0">
           📝
         </div>
-        <div>
-          <span class="block text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100">
+        <div class="min-w-0">
+          <span class="block text-lg sm:text-2xl font-black text-slate-900 dark:text-slate-100 leading-tight">
             {{ counts.draft }}
           </span>
-          <span class="text-xs text-slate-400 font-bold">مسودات المنشورات</span>
+          <span class="text-[11px] sm:text-xs text-slate-400 font-bold truncate block">مسودات المنشورات</span>
         </div>
       </div>
     </div>
@@ -1022,6 +1251,14 @@ onUnmounted(() => {
 
         <div class="flex items-center gap-2">
           <button
+            type="button"
+            @click="showMobileAccountCards = !showMobileAccountCards"
+            class="sm:hidden px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-[11px] cursor-pointer"
+          >
+            {{ showMobileAccountCards ? 'إخفاء البطاقات ▲' : 'إدارة البطاقات ▼' }}
+          </button>
+
+          <button
             v-if="selectedAccountId !== 'all'"
             @click="handleClearAccountFilter"
             class="px-3 py-1 rounded-xl bg-violet-100 dark:bg-violet-950/60 hover:bg-violet-200 dark:hover:bg-violet-900/60 text-violet-700 dark:text-violet-300 font-extrabold text-xs transition cursor-pointer flex items-center gap-1.5"
@@ -1036,8 +1273,99 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Accounts Grid -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <!-- Mobile Native App Stories-Style Horizontal Account Strip -->
+      <div class="sm:hidden flex items-start gap-3 overflow-x-auto scrollbar-hide py-1.5 px-0.5 -mx-1">
+        <!-- "All Pages" Story Circle -->
+        <button
+          type="button"
+          @click="handleClearAccountFilter"
+          class="flex flex-col items-center gap-1.5 shrink-0 w-16 cursor-pointer group"
+        >
+          <div
+            :class="[
+              'w-14 h-14 rounded-2xl flex items-center justify-center text-base font-black transition shadow-sm',
+              selectedAccountId === 'all'
+                ? 'bg-gradient-to-tr from-violet-600 to-indigo-600 text-white ring-2 ring-violet-500 ring-offset-2 dark:ring-offset-slate-950'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
+            ]"
+          >
+            الكل
+          </div>
+          <span class="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate w-full text-center">
+            كل الصفحات
+          </span>
+        </button>
+
+        <!-- Connected Accounts Story Circles -->
+        <button
+          v-for="acc in store.socialAccounts"
+          :key="'story-' + acc.id"
+          type="button"
+          @click="handleSelectAccount(acc)"
+          class="flex flex-col items-center gap-1.5 shrink-0 w-16 cursor-pointer group relative"
+        >
+          <div
+            :class="[
+              'relative w-14 h-14 rounded-2xl p-0.5 transition',
+              String(selectedAccountId) === String(acc.account_id)
+                ? 'bg-gradient-to-tr from-violet-600 via-pink-500 to-amber-500 ring-2 ring-violet-500/40 shadow-md'
+                : 'bg-slate-200 dark:bg-slate-800'
+            ]"
+          >
+            <div
+              v-if="acc.avatar_url"
+              class="w-full h-full rounded-[14px] bg-cover bg-center bg-white dark:bg-slate-900"
+              :style="{ backgroundImage: `url(${acc.avatar_url})` }"
+            ></div>
+            <div
+              v-else
+              :class="[
+                'w-full h-full rounded-[14px] flex items-center justify-center font-black text-white text-base',
+                getPlatformMeta(acc.platform).color
+              ]"
+            >
+              {{ getPlatformMeta(acc.platform).icon }}
+            </div>
+
+            <!-- Platform Mini Badge -->
+            <span
+              :class="[
+                'absolute -bottom-1 -left-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white ring-2 ring-white dark:ring-slate-950 shadow',
+                getPlatformMeta(acc.platform).color
+              ]"
+            >
+              {{ getPlatformMeta(acc.platform).icon }}
+            </span>
+          </div>
+          <span
+            :class="[
+              'text-[10px] truncate w-full text-center',
+              String(selectedAccountId) === String(acc.account_id)
+                ? 'font-black text-violet-600 dark:text-violet-400'
+                : 'font-bold text-slate-600 dark:text-slate-400'
+            ]"
+          >
+            {{ acc.account_name }}
+          </span>
+        </button>
+
+        <!-- Add Account Story Circle -->
+        <button
+          type="button"
+          @click="openConnectModal('facebook')"
+          class="flex flex-col items-center gap-1.5 shrink-0 w-16 cursor-pointer"
+        >
+          <div class="w-14 h-14 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-violet-500 flex items-center justify-center text-violet-600 dark:text-violet-400 font-black text-xl bg-slate-50/60 dark:bg-slate-900/40">
+            +
+          </div>
+          <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate w-full text-center">
+            ربط جديد
+          </span>
+        </button>
+      </div>
+
+      <!-- Accounts Grid (Always visible on sm+, expandable on mobile) -->
+      <div :class="[showMobileAccountCards ? 'grid' : 'hidden sm:grid', 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3']">
         
         <!-- Connected Accounts Cards -->
         <div
@@ -1048,11 +1376,13 @@ onUnmounted(() => {
             'rounded-3xl p-4 shadow-sm relative group transition cursor-pointer select-none',
             String(selectedAccountId) === String(acc.account_id)
               ? 'border-2 border-violet-600 bg-violet-50/80 dark:bg-violet-950/50 ring-4 ring-violet-500/20 shadow-md shadow-violet-500/10'
-              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-violet-500/50 hover:shadow-md'
+              : (selectedPlatformFilter !== 'all' && acc.platform !== selectedPlatformFilter
+                  ? 'bg-white/60 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60 opacity-60 hover:opacity-100'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-violet-500/50 hover:shadow-md')
           ]"
         >
           <div class="flex items-start justify-between gap-2">
-            <div class="flex items-center gap-2.5">
+            <div class="flex items-center gap-2.5 min-w-0">
               <div
                 v-if="acc.avatar_url"
                 class="w-10 h-10 rounded-2xl bg-cover bg-center border border-slate-200 dark:border-slate-700 shrink-0"
@@ -1078,13 +1408,26 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <button
-              @click.stop="handleDisconnect(acc)"
-              class="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-700 p-1.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/30 transition text-xs cursor-pointer"
-              title="فصل الحساب"
-            >
-              ✕
-            </button>
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                @click.stop="handleRefreshStats({ accountId: acc.account_id, platform: acc.platform })"
+                :disabled="isSyncingPosts"
+                class="text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 p-1.5 rounded-xl transition text-xs cursor-pointer disabled:opacity-50"
+                title="تحديث إحصائيات هذه الصفحة من المنصة"
+              >
+                <span :class="{'animate-spin inline-block': isSyncingPosts && (syncingAccountId === String(acc.account_id) || !syncingAccountId)}">🔄</span>
+              </button>
+
+              <button
+                type="button"
+                @click.stop="handleDisconnect(acc)"
+                class="sm:opacity-0 sm:group-hover:opacity-100 text-rose-500 hover:text-rose-700 p-1.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/30 transition text-xs cursor-pointer"
+                title="فصل الحساب"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
@@ -1103,7 +1446,7 @@ onUnmounted(() => {
               <span>←</span>
             </span>
 
-            <span v-if="acc.followers_count" class="text-slate-400 font-medium">
+            <span v-if="acc.followers_count" class="text-slate-500 dark:text-slate-400 font-bold">
               {{ Number(acc.followers_count).toLocaleString() }} متابع
             </span>
           </div>
@@ -1193,107 +1536,207 @@ onUnmounted(() => {
     <!-- Posts Management & Feed Section -->
     <div class="space-y-4">
       
-      <!-- Filter Bar -->
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+      <!-- Filter Bar (Sticky App Bar on Mobile) -->
+      <div class="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-sm space-y-3">
         
-        <!-- Status Tabs -->
-        <div class="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
-          <button
-            @click="currentTab = 'all'"
-            :class="[
-              'px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap',
-              currentTab === 'all'
-                ? 'bg-violet-600 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-            ]"
-          >
-            الكل ({{ counts.all }})
-          </button>
+        <!-- Row 1: Status Tabs + Quick Actions -->
+        <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
+          <!-- Status Tabs -->
+          <div class="flex items-center gap-1 overflow-x-auto scrollbar-hide pb-0.5 md:pb-0">
+            <button
+              @click="currentTab = 'all'"
+              :class="[
+                'px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap',
+                currentTab === 'all'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+              ]"
+            >
+              الكل ({{ counts.all }})
+            </button>
 
-          <button
-            @click="currentTab = 'scheduled'"
-            :class="[
-              'px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap',
-              currentTab === 'scheduled'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-            ]"
-          >
-            ⏰ المجدولة ({{ counts.scheduled }})
-          </button>
+            <button
+              @click="currentTab = 'scheduled'"
+              :class="[
+                'px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap',
+                currentTab === 'scheduled'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+              ]"
+            >
+              ⏰ المجدولة ({{ counts.scheduled }})
+            </button>
 
-          <button
-            @click="currentTab = 'published'"
-            :class="[
-              'px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap',
-              currentTab === 'published'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-            ]"
-          >
-            ✅ المنشورة ({{ counts.published }})
-          </button>
+            <button
+              @click="currentTab = 'published'"
+              :class="[
+                'px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap',
+                currentTab === 'published'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+              ]"
+            >
+              ✅ المنشورة ({{ counts.published }})
+            </button>
 
-          <button
-            @click="currentTab = 'draft'"
-            :class="[
-              'px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap',
-              currentTab === 'draft'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-            ]"
-          >
-            📝 المسودات ({{ counts.draft }})
-          </button>
+            <button
+              @click="currentTab = 'draft'"
+              :class="[
+                'px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap',
+                currentTab === 'draft'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+              ]"
+            >
+              📝 المسودات ({{ counts.draft }})
+            </button>
 
-          <button
-            @click="currentTab = 'analytics'"
-            :class="[
-              'px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5',
-              currentTab === 'analytics'
-                ? 'bg-gradient-to-l from-violet-600 to-indigo-600 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-            ]"
-          >
-            <span>📊</span>
-            <span>نسب التحليلات والصفحات ({{ counts.analytics }})</span>
-          </button>
+            <button
+              @click="currentTab = 'analytics'"
+              :class="[
+                'px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5',
+                currentTab === 'analytics'
+                  ? 'bg-gradient-to-l from-violet-600 to-indigo-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+              ]"
+            >
+              <span>📊</span>
+              <span>نسب التحليلات والصفحات ({{ counts.analytics }})</span>
+            </button>
+          </div>
+
+          <!-- Search, Select & Refresh Stats Controls -->
+          <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <!-- Platform Filter Select (kept synced for quick dropdown access) -->
+            <select
+              v-if="currentTab !== 'analytics'"
+              v-model="selectedPlatformFilter"
+              @change="selectPlatformFilter(selectedPlatformFilter)"
+              class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-300 focus:outline-none"
+            >
+              <option value="all">جميع المنصات</option>
+              <option value="facebook">فيسبوك</option>
+              <option value="instagram">انستجرام</option>
+              <option value="youtube">يوتيوب</option>
+              <option value="linkedin">لينكد إن</option>
+            </select>
+
+            <!-- Sort Select -->
+            <select
+              v-if="currentTab !== 'analytics'"
+              v-model="sortBy"
+              class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-300 focus:outline-none"
+              title="ترتيب المنشورات"
+            >
+              <option value="newest">الأحدث أولاً</option>
+              <option value="oldest">الأقدم أولاً</option>
+              <option value="engagement">الأعلى تفاعلاً 🔥</option>
+              <option value="likes">الأكثر إعجاباً 👍</option>
+              <option value="views">الأكثر مشاهدة 👁️</option>
+            </select>
+
+            <!-- Search Input (works across Posts & Analytics) -->
+            <div class="relative flex-1 sm:w-48 min-w-[140px]">
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="بحث في المحتوى أو الصفحة..."
+                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:border-violet-500"
+              />
+              <button
+                v-if="searchQuery"
+                type="button"
+                @click="searchQuery = ''"
+                class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <!-- Refresh Stats Button in Filter Bar -->
+            <button
+              @click="handleRefreshStats()"
+              :disabled="isSyncingPosts"
+              class="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 font-bold text-xs hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+              title="تحديث الإحصائيات ومزامنة الصفحات من المنصة"
+            >
+              <span :class="{'animate-spin inline-block': isSyncingPosts}">🔄</span>
+              <span class="hidden sm:inline">{{ isSyncingPosts ? 'جارِ التحديث...' : 'تحديث الإحصائيات' }}</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Platform & Search Filters -->
-        <div class="flex items-center gap-2">
-          <!-- Platform Filter Select -->
-          <select
-            v-if="currentTab !== 'analytics'"
-            v-model="selectedPlatformFilter"
-            class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 focus:outline-none"
-          >
-            <option value="all">جميع المنصات</option>
-            <option value="facebook">فيسبوك</option>
-            <option value="instagram">انستجرام</option>
-            <option value="youtube">يوتيوب</option>
-            <option value="linkedin">لينكد إن</option>
-          </select>
+        <!-- Row 2: Interactive Platform Pills + Media Type Chips + Clear Filters -->
+        <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 overflow-x-auto scrollbar-hide">
+          <!-- Platform Pills -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              @click="selectPlatformFilter('all')"
+              :class="[
+                'px-2.5 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer flex items-center gap-1 whitespace-nowrap',
+                (currentTab === 'analytics' ? selectedAnalyticsPlatform : selectedPlatformFilter) === 'all'
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-xs'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              ]"
+            >
+              <span>🌐 كل المنصات</span>
+              <span class="opacity-75">({{ platformCounts.all }})</span>
+            </button>
 
-          <!-- Search Input -->
-          <input
-            v-if="currentTab !== 'analytics'"
-            v-model="searchQuery"
-            type="text"
-            placeholder="بحث في المحتوى..."
-            class="w-full sm:w-48 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 focus:outline-none"
-          />
+            <button
+              v-for="p in ['facebook', 'instagram', 'youtube', 'linkedin']"
+              :key="'pill-' + p"
+              type="button"
+              @click="selectPlatformFilter(p)"
+              :class="[
+                'px-2.5 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer flex items-center gap-1 whitespace-nowrap',
+                (currentTab === 'analytics' ? selectedAnalyticsPlatform : selectedPlatformFilter) === p
+                  ? `${getPlatformMeta(p).color} text-white shadow-xs`
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              ]"
+            >
+              <span>{{ getPlatformMeta(p).icon }}</span>
+              <span>{{ getPlatformMeta(p).name }}</span>
+              <span class="opacity-80">({{ platformCounts[p] || 0 }})</span>
+            </button>
+          </div>
 
-          <!-- Sync Button in Filter Bar -->
-          <button
-            @click="handleSyncExternalPosts"
-            :disabled="isSyncingPosts"
-            class="px-3 py-1.5 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/60 text-violet-700 dark:text-violet-300 font-bold text-xs hover:bg-violet-100 dark:hover:bg-violet-900/60 transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50 shrink-0"
-            title="مزامنة منشورات فيسبوك وإنستجرام وتحديث نسب الأداء"
-          >
-            <span :class="{'animate-spin inline-block': isSyncingPosts}">🔄</span>
-            <span class="hidden sm:inline">{{ isSyncingPosts ? 'جارِ المزامنة...' : 'مزامنة الصفحات' }}</span>
-          </button>
+          <!-- Media Type Filter Chips & Clear All Filters -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <template v-if="currentTab !== 'analytics'">
+              <button
+                v-for="m in [
+                  { id: 'all', label: 'كل الوسائط' },
+                  { id: 'video', label: '🎬 فيديو' },
+                  { id: 'image', label: '🖼️ صور' },
+                  { id: 'text', label: '📝 نص' }
+                ]"
+                :key="'media-' + m.id"
+                type="button"
+                @click="mediaFilter = m.id"
+                :class="[
+                  'px-2.5 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer whitespace-nowrap',
+                  mediaFilter === m.id
+                    ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30'
+                    : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                ]"
+              >
+                {{ m.label }}
+              </button>
+            </template>
+
+            <button
+              v-if="hasActiveFilters"
+              type="button"
+              @click="resetAllFilters"
+              class="px-2.5 py-1 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap flex items-center gap-1"
+              title="إلغاء جميع الفلاتر النشطة"
+            >
+              <span>✕</span>
+              <span>مسح الفلاتر</span>
+            </button>
+          </div>
         </div>
 
       </div>
@@ -1303,22 +1746,32 @@ onUnmounted(() => {
         <!-- Empty State -->
         <div
           v-if="!filteredPosts.length"
-        class="text-center py-12 bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl p-6"
-      >
-        <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center text-2xl">
-          📱
-        </div>
-        <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">لا توجد منشورات في هذا القسم</h4>
-        <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-          يمكنك البدء بكتابة محتوى جديد وجدولته أو نشره فوراً إلى جميع صفحاتك وحساباتك بضغطة واحدة.
-        </p>
-        <button
-          @click="openComposer()"
-          class="mt-4 px-4 py-2 rounded-xl bg-violet-600 text-white font-bold text-xs shadow-sm hover:bg-violet-700 transition cursor-pointer"
+          class="text-center py-12 bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl p-6"
         >
-          إنشاء أول منشور الآن
-        </button>
-      </div>
+          <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center text-2xl">
+            📱
+          </div>
+          <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">لا توجد منشورات في هذا القسم</h4>
+          <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            {{ hasActiveFilters ? 'لا توجد منشورات تطابق الفلاتر المحددة حالياً. يمكنك مسح الفلاتر أو إنشاء منشور جديد.' : 'يمكنك البدء بكتابة محتوى جديد وجدولته أو نشره فوراً إلى جميع صفحاتك وحساباتك بضغطة واحدة.' }}
+          </p>
+          <div class="mt-4 flex items-center justify-center gap-2 flex-wrap">
+            <button
+              v-if="hasActiveFilters"
+              type="button"
+              @click="resetAllFilters"
+              class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
+            >
+              ✕ مسح كل الفلاتر
+            </button>
+            <button
+              @click="openComposer()"
+              class="px-4 py-2 rounded-xl bg-violet-600 text-white font-bold text-xs shadow-sm hover:bg-violet-700 transition cursor-pointer"
+            >
+              إنشاء أول منشور الآن
+            </button>
+          </div>
+        </div>
 
       <!-- Posts Cards Grid -->
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1425,17 +1878,28 @@ onUnmounted(() => {
               v-if="post.metrics"
               class="mt-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-2.5 border border-slate-100 dark:border-slate-800 text-[11px] space-y-1.5"
             >
-              <div class="flex items-center justify-between text-slate-500 dark:text-slate-400">
+              <div class="flex items-center justify-between text-slate-500 dark:text-slate-400 gap-1">
                 <span class="font-bold flex items-center gap-1 text-[10px]">
                   <span>📊</span>
                   <span>تحليلات أداء المنشور</span>
                 </span>
-                <span
-                  v-if="post.metrics.engagement_rate !== undefined"
-                  class="px-2 py-0.5 rounded-full font-black text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                >
-                  معدل التفاعل: {{ post.metrics.engagement_rate }}%
-                </span>
+                <div class="flex items-center gap-1">
+                  <span
+                    v-if="post.metrics.engagement_rate !== undefined"
+                    class="px-2 py-0.5 rounded-full font-black text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                  >
+                    معدل التفاعل: {{ post.metrics.engagement_rate }}%
+                  </span>
+                  <button
+                    type="button"
+                    @click.stop="handleRefreshStats({ accountId: (post.account_ids && post.account_ids[0]) || 'all', platform: (post.platforms && post.platforms[0]) || 'all' })"
+                    :disabled="isSyncingPosts"
+                    class="px-1.5 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-50 transition cursor-pointer disabled:opacity-50"
+                    title="تحديث إحصائيات هذا المنشور من المنصة"
+                  >
+                    <span :class="{'animate-spin inline-block': isSyncingPosts}">🔄</span>
+                  </button>
+                </div>
               </div>
 
               <div class="grid grid-cols-4 gap-1 text-center pt-0.5">
@@ -1542,30 +2006,35 @@ onUnmounted(() => {
       <div v-else class="space-y-6">
         
         <!-- Analytics Header & Sync Banner -->
-        <div class="bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-700 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+        <div class="bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-700 rounded-3xl p-5 sm:p-6 text-white shadow-lg relative overflow-hidden">
           <div class="absolute -left-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
           <div class="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
-              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-white/20 text-white backdrop-blur-md mb-2">
-                <span>📊</span>
-                <span>تحليلات وإحصائيات دقيقة</span>
-              </span>
+              <div class="flex items-center gap-2 flex-wrap mb-2">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-white/20 text-white backdrop-blur-md">
+                  <span>📊</span>
+                  <span>تحليلات وإحصائيات دقيقة</span>
+                </span>
+                <span v-if="lastSyncedLabel" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-400/20 text-emerald-100 backdrop-blur-md">
+                  <span>✓ آخر تحديث: {{ lastSyncedLabel }}</span>
+                </span>
+              </div>
               <h3 class="text-xl sm:text-2xl font-black">
-                نسب أداء وتفاعل صفحات فيسبوك وإنستجرام
+                نسب أداء وتفاعل صفحات فيسبوك وإنستجرام ويوتيوب
               </h3>
               <p class="text-xs sm:text-sm text-violet-100 mt-1 max-w-xl">
                 رصد شامل لنسب التفاعل، توزيع الإعجابات والمشاركات والتعليقات، مع تحليل تفصيلي ومقارنة لأداء كل صفحة وحساب مربوط.
               </p>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap w-full md:w-auto">
               <button
-                @click="handleSyncExternalPosts"
+                @click="handleRefreshStats()"
                 :disabled="isSyncingPosts"
-                class="px-4 py-2.5 rounded-2xl bg-white text-violet-900 font-extrabold text-xs shadow-md hover:bg-violet-50 transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                class="flex-1 md:flex-initial justify-center px-4 py-2.5 rounded-2xl bg-white text-violet-900 font-extrabold text-xs shadow-md hover:bg-violet-50 active:scale-95 transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
               >
                 <span :class="{'animate-spin inline-block': isSyncingPosts}">🔄</span>
-                <span>{{ isSyncingPosts ? 'جارِ المزامنة...' : 'مزامنة وتحديث البيانات الآن' }}</span>
+                <span>{{ isSyncingPosts ? 'جارِ تحديث الإحصائيات...' : 'مزامنة وتحديث البيانات الآن' }}</span>
               </button>
             </div>
           </div>
@@ -1625,14 +2094,14 @@ onUnmounted(() => {
         </div>
 
         <!-- Filter Sub-bar for Analytics Pages -->
-        <div class="flex items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-          <div class="flex items-center gap-2">
+        <div class="flex items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto scrollbar-hide">
+          <div class="flex items-center gap-2 shrink-0">
             <span class="text-xs font-black text-slate-700 dark:text-slate-300">عرض تحليلات:</span>
             <div class="flex items-center gap-1">
               <button
                 @click="handleFilterAnalyticsPlatform('all')"
                 :class="[
-                  'px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer',
+                  'px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap',
                   selectedAnalyticsPlatform === 'all'
                     ? 'bg-violet-600 text-white'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -1643,7 +2112,7 @@ onUnmounted(() => {
               <button
                 @click="handleFilterAnalyticsPlatform('facebook')"
                 :class="[
-                  'px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1',
+                  'px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 whitespace-nowrap',
                   selectedAnalyticsPlatform === 'facebook'
                     ? 'bg-blue-600 text-white'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -1654,7 +2123,7 @@ onUnmounted(() => {
               <button
                 @click="handleFilterAnalyticsPlatform('instagram')"
                 :class="[
-                  'px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1',
+                  'px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 whitespace-nowrap',
                   selectedAnalyticsPlatform === 'instagram'
                     ? 'bg-rose-600 text-white'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -1662,10 +2131,32 @@ onUnmounted(() => {
               >
                 <span>إنستجرام</span>
               </button>
+              <button
+                @click="handleFilterAnalyticsPlatform('youtube')"
+                :class="[
+                  'px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 whitespace-nowrap',
+                  selectedAnalyticsPlatform === 'youtube'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                ]"
+              >
+                <span>يوتيوب</span>
+              </button>
+              <button
+                @click="handleFilterAnalyticsPlatform('linkedin')"
+                :class="[
+                  'px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 whitespace-nowrap',
+                  selectedAnalyticsPlatform === 'linkedin'
+                    ? 'bg-sky-700 text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                ]"
+              >
+                <span>لينكد إن</span>
+              </button>
             </div>
           </div>
 
-          <span class="text-xs text-slate-400">
+          <span class="text-xs text-slate-400 shrink-0">
             {{ analyticsPages.length }} صفحة وحساب
           </span>
         </div>
@@ -1682,7 +2173,15 @@ onUnmounted(() => {
           <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
             قم بربط صفحة فيسبوك أو حساب أعمال إنستجرام لمشاهدة جميع منشوراتها ونسب التفاعل ومعدلات الوصول بشكل فوري.
           </p>
-          <div class="mt-4 flex items-center justify-center gap-2">
+          <div class="mt-4 flex items-center justify-center gap-2 flex-wrap">
+            <button
+              v-if="hasActiveFilters"
+              type="button"
+              @click="resetAllFilters"
+              class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
+            >
+              ✕ مسح الفلاتر
+            </button>
             <button
               @click="openConnectModal('facebook')"
               class="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 transition cursor-pointer"
@@ -1708,7 +2207,7 @@ onUnmounted(() => {
             <!-- Page Header -->
             <div>
               <div class="flex items-start justify-between gap-3">
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 min-w-0">
                   <div
                     v-if="page.avatar_url"
                     class="w-12 h-12 rounded-2xl bg-cover bg-center border border-slate-200 dark:border-slate-700 shrink-0"
@@ -1724,9 +2223,9 @@ onUnmounted(() => {
                     {{ getPlatformMeta(page.platform).icon }}
                   </div>
 
-                  <div>
-                    <div class="flex items-center gap-2">
-                      <h4 class="text-sm font-black text-slate-900 dark:text-slate-100">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <h4 class="text-sm font-black text-slate-900 dark:text-slate-100 truncate">
                         {{ page.account_name }}
                       </h4>
                       <span
@@ -1738,19 +2237,32 @@ onUnmounted(() => {
                         {{ getPlatformMeta(page.platform).name }}
                       </span>
                     </div>
-                    <p class="text-xs text-slate-400 mt-0.5">
+                    <p class="text-xs text-slate-400 mt-0.5 truncate">
                       {{ page.account_username ? '@' + page.account_username : page.account_id }}
                     </p>
                   </div>
                 </div>
 
-                <div class="text-left">
-                  <span class="block text-sm font-black text-slate-900 dark:text-slate-100">
-                    {{ Number(page.followers_count || 0).toLocaleString() }}
-                  </span>
-                  <div class="flex items-center gap-1 justify-end text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                    <span>{{ page.growth_rate || '+3.4%' }}</span>
-                    <span>📈</span>
+                <div class="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    @click="handleRefreshStats({ accountId: page.account_id, platform: page.platform })"
+                    :disabled="isSyncingPosts"
+                    class="px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 font-bold text-[11px] hover:bg-emerald-100 transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                    title="تحديث إحصائيات هذه الصفحة من المنصة"
+                  >
+                    <span :class="{'animate-spin inline-block': isSyncingPosts && (syncingAccountId === String(page.account_id) || !syncingAccountId)}">🔄</span>
+                    <span class="hidden sm:inline">تحديث</span>
+                  </button>
+
+                  <div class="text-left">
+                    <span class="block text-sm font-black text-slate-900 dark:text-slate-100">
+                      {{ Number(page.followers_count || 0).toLocaleString() }}
+                    </span>
+                    <div class="flex items-center gap-1 justify-end text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                      <span>{{ page.growth_rate || '+3.4%' }}</span>
+                      <span>📈</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1988,14 +2500,16 @@ onUnmounted(() => {
     </div>
 
     <!-- ========================================== -->
-    <!-- MODAL 1: Create / Schedule Post Composer -->
+    <!-- MODAL 1: Create / Schedule Post Composer (Bottom Sheet on Mobile) -->
     <!-- ========================================== -->
     <div
       v-if="isComposerOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
       @click.self="isComposerOpen = false"
     >
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-5 sm:p-6 space-y-5 shadow-2xl text-right">
+      <div class="bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-2xl max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6 pb-8 sm:pb-6 space-y-5 shadow-2xl text-right">
+        <!-- Mobile Drag Handle -->
+        <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto -mt-1 mb-1 sm:hidden"></div>
         
         <!-- Composer Header -->
         <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
@@ -2394,14 +2908,16 @@ onUnmounted(() => {
     </div>
 
     <!-- ========================================== -->
-    <!-- MODAL 2: Connect Social Account Modal (Interactive Discovery & 1-Click Connect) -->
+    <!-- MODAL 2: Connect Social Account Modal (Bottom Sheet on Mobile) -->
     <!-- ========================================== -->
     <div
       v-if="isConnectModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
       @click.self="isConnectModalOpen = false"
     >
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-xl p-5 sm:p-6 space-y-4 shadow-2xl text-right max-h-[90vh] overflow-y-auto">
+      <div class="bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-xl p-4 sm:p-6 pb-8 sm:pb-6 space-y-4 shadow-2xl text-right max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto">
+        <!-- Mobile Drag Handle -->
+        <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto -mt-1 mb-1 sm:hidden"></div>
         
         <!-- Modal Header -->
         <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
@@ -2892,14 +3408,16 @@ onUnmounted(() => {
     </div>
 
     <!-- ========================================== -->
-    <!-- MODAL 3: Edit Post Modal -->
+    <!-- MODAL 3: Edit Post Modal (Bottom Sheet on Mobile) -->
     <!-- ========================================== -->
     <div
       v-if="isEditModalOpen && editingPost"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
       @click.self="isEditModalOpen = false"
     >
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg p-5 sm:p-6 space-y-4 shadow-2xl text-right">
+      <div class="bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-lg max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6 pb-8 sm:pb-6 space-y-4 shadow-2xl text-right">
+        <!-- Mobile Drag Handle -->
+        <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto -mt-1 mb-1 sm:hidden"></div>
         
         <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
           <h3 class="text-sm font-black text-slate-900 dark:text-slate-100">
@@ -3006,6 +3524,29 @@ onUnmounted(() => {
         </div>
 
       </div>
+    </div>
+
+    <!-- Mobile App Floating Action Bar (Thumb-accessible on Mobile) -->
+    <div class="sm:hidden fixed above-nav left-4 z-30 flex items-center gap-2">
+      <button
+        type="button"
+        @click="openComposer()"
+        class="h-12 px-4 rounded-2xl bg-gradient-to-l from-violet-600 to-indigo-600 text-white font-black text-xs shadow-xl shadow-violet-600/35 flex items-center gap-2 active:scale-95 transition cursor-pointer"
+        aria-label="إنشاء منشور جديد"
+      >
+        <span class="text-base">✍️</span>
+        <span>منشور جديد</span>
+      </button>
+
+      <button
+        type="button"
+        @click="handleRefreshStats()"
+        :disabled="isSyncingPosts"
+        class="w-12 h-12 rounded-2xl bg-emerald-600 text-white font-black text-sm shadow-xl shadow-emerald-600/30 flex items-center justify-center active:scale-95 transition cursor-pointer disabled:opacity-50"
+        title="تحديث الإحصائيات من المنصة"
+      >
+        <span :class="{'animate-spin inline-block': isSyncingPosts}">🔄</span>
+      </button>
     </div>
 
   </div>
