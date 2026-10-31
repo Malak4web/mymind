@@ -78,6 +78,17 @@ const isVideoUrl = (url) => {
   return /\.(mp4|mov|webm|mkv|avi)(\?.*)?$/i.test(url) || url.includes('/videos/') || url.includes('/reel/')
 }
 
+const isVideoPost = (post) => {
+  if (!post) return false
+  if (Array.isArray(post.media_urls) && post.media_urls.some(u => isVideoUrl(u))) return true
+  if (Array.isArray(post.platforms) && post.platforms.includes('youtube')) return true
+  const postIds = post.platform_post_ids || {}
+  return Object.values(postIds).some(info => {
+    const u = info?.url || ''
+    return u.includes('/reel/') || u.includes('/videos/') || u.includes('youtube.com/watch') || u.includes('youtu.be/')
+  })
+}
+
 const triggerFileInput = () => {
   if (fileInputRef.value) {
     fileInputRef.value.click()
@@ -534,7 +545,10 @@ const handleConnectDiscoveredPage = async (page) => {
       avatar_url: page.avatar_url || null,
       followers_count: Number(page.followers_count) || 0,
       access_token: page.page_access_token || null,
-      metadata: { category: page.category || '' }
+      metadata: {
+        category: page.category || '',
+        ...(page.page_id ? { page_id: page.page_id } : {})
+      }
     })
     page.is_connected = true
     connectSuccessPageName.value = page.account_name
@@ -777,7 +791,7 @@ const analyticsSummary = computed(() => {
       total_interactions: totalInteractions,
       average_engagement_rate: avgEng,
       total_reach: totalReach,
-      total_impressions: Math.round(totalReach * 1.35),
+      total_impressions: totalReach,
     }
   }
 
@@ -907,9 +921,9 @@ const platformFilteredBasePosts = computed(() => {
 
   // Media filter
   if (mediaFilter.value === 'video') {
-    list = list.filter(p => Array.isArray(p.media_urls) && p.media_urls.some(u => isVideoUrl(u)))
+    list = list.filter(p => isVideoPost(p))
   } else if (mediaFilter.value === 'image') {
-    list = list.filter(p => Array.isArray(p.media_urls) && p.media_urls.length > 0 && p.media_urls.some(u => !isVideoUrl(u)))
+    list = list.filter(p => Array.isArray(p.media_urls) && p.media_urls.length > 0 && !isVideoPost(p))
   } else if (mediaFilter.value === 'text') {
     list = list.filter(p => !p.media_urls || p.media_urls.length === 0)
   }
@@ -952,27 +966,30 @@ const filteredPosts = computed(() => {
   }
 
   // Sorting
-  if (sortBy.value !== 'newest') {
-    list = [...list].sort((a, b) => {
-      if (sortBy.value === 'oldest') {
-        const da = new Date(a.published_at || a.scheduled_at || a.created_at || 0).getTime()
-        const db = new Date(b.published_at || b.scheduled_at || b.created_at || 0).getTime()
-        return da - db
-      }
-      if (sortBy.value === 'engagement') {
-        return Number(b.metrics?.engagement_rate || 0) - Number(a.metrics?.engagement_rate || 0)
-      }
-      if (sortBy.value === 'likes') {
-        return Number(b.metrics?.likes || 0) - Number(a.metrics?.likes || 0)
-      }
-      if (sortBy.value === 'views') {
-        const va = Number(a.metrics?.views || a.metrics?.impressions || 0)
-        const vb = Number(b.metrics?.views || b.metrics?.impressions || 0)
-        return vb - va
-      }
-      return 0
-    })
-  }
+  list = [...list].sort((a, b) => {
+    if (sortBy.value === 'newest') {
+      const da = new Date(a.scheduled_at || a.published_at || a.created_at || 0).getTime()
+      const db = new Date(b.scheduled_at || b.published_at || b.created_at || 0).getTime()
+      return db - da
+    }
+    if (sortBy.value === 'oldest') {
+      const da = new Date(a.published_at || a.scheduled_at || a.created_at || 0).getTime()
+      const db = new Date(b.published_at || b.scheduled_at || b.created_at || 0).getTime()
+      return da - db
+    }
+    if (sortBy.value === 'engagement') {
+      return Number(b.metrics?.engagement_rate || 0) - Number(a.metrics?.engagement_rate || 0)
+    }
+    if (sortBy.value === 'likes') {
+      return Number(b.metrics?.likes || 0) - Number(a.metrics?.likes || 0)
+    }
+    if (sortBy.value === 'views') {
+      const va = Number(a.metrics?.views || a.metrics?.impressions || 0)
+      const vb = Number(b.metrics?.views || b.metrics?.impressions || 0)
+      return vb - va
+    }
+    return 0
+  })
 
   return list
 })
@@ -1066,12 +1083,8 @@ onMounted(() => {
   window.addEventListener('message', handleOAuthWindowMessage)
   window.addEventListener('open-social-composer', handleExternalOpenComposer)
   if (store.token) {
-    if (!store.socialAccounts || !store.socialAccounts.length) {
-      store.loadSocialAccounts(true)
-    }
-    if (!store.socialPosts || !store.socialPosts.length) {
-      store.loadSocialPosts(true)
-    }
+    store.loadSocialAccounts(true)
+    store.loadSocialPosts(true)
     if (typeof store.loadSocialAnalytics === 'function') {
       store.loadSocialAnalytics('all')
     }
@@ -1449,6 +1462,22 @@ onUnmounted(() => {
             <span v-if="acc.followers_count" class="text-slate-500 dark:text-slate-400 font-bold">
               {{ Number(acc.followers_count).toLocaleString() }} متابع
             </span>
+          </div>
+
+          <div
+            v-if="acc.metadata && acc.metadata.sync_warnings && Object.keys(acc.metadata.sync_warnings).length"
+            class="mt-2 pt-2 border-t border-amber-200/70 dark:border-amber-800/40 flex items-center justify-between gap-2 text-[10px] text-amber-700 dark:text-amber-300"
+          >
+            <span class="truncate" :title="Object.values(acc.metadata.sync_warnings)[0]">
+              ⚠️ {{ Object.values(acc.metadata.sync_warnings)[0] }}
+            </span>
+            <button
+              type="button"
+              @click.stop="openConnectModal(acc.platform)"
+              class="shrink-0 px-2 py-0.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 font-black cursor-pointer"
+            >
+              إعادة الربط
+            </button>
           </div>
         </div>
 

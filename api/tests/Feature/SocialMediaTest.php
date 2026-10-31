@@ -316,7 +316,10 @@ class SocialMediaTest extends TestCase
         Sanctum::actingAs($this->userA);
 
         \Illuminate\Support\Facades\Http::fake([
-            'https://graph.facebook.com/v21.0/fb_page_empty_1/*' => \Illuminate\Support\Facades\Http::response([
+            'https://graph.facebook.com/v21.0/fb_page_empty_1*' => \Illuminate\Support\Facades\Http::response([
+                'data' => []
+            ], 200),
+            'graph.facebook.com/*' => \Illuminate\Support\Facades\Http::response([
                 'data' => []
             ], 200),
         ]);
@@ -446,6 +449,9 @@ class SocialMediaTest extends TestCase
                         ]
                     ]
                 ]
+            ], 200),
+            'https://www.googleapis.com/youtube/v3/*' => \Illuminate\Support\Facades\Http::response([
+                'items' => []
             ], 200),
         ]);
 
@@ -601,11 +607,6 @@ XML, 200),
         $futureDate = now()->addDays(2)->setMicrosecond(0);
 
         \Illuminate\Support\Facades\Http::fake([
-            // FB published posts: empty
-            'graph.facebook.com/v21.0/fb_page_100/published_posts*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
-            'graph.facebook.com/v21.0/fb_page_100/posts*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
-            'graph.facebook.com/v21.0/fb_page_100/videos*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
-            'graph.facebook.com/v21.0/fb_page_100' => \Illuminate\Support\Facades\Http::response(['id' => 'fb_page_100', 'followers_count' => 500], 200),
             // FB scheduled posts: 1 scheduled post
             'graph.facebook.com/v21.0/fb_page_100/scheduled_posts*' => \Illuminate\Support\Facades\Http::response([
                 'data' => [
@@ -619,6 +620,13 @@ XML, 200),
                     ],
                 ]
             ], 200),
+            'graph.facebook.com/v21.0/fb_page_100/published_posts*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
+            'graph.facebook.com/v21.0/fb_page_100/posts*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
+            'graph.facebook.com/v21.0/fb_page_100/videos*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
+            'graph.facebook.com/v21.0/fb_page_100/video_reels*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
+            'graph.facebook.com/v21.0/fb_page_100/promotable_posts*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
+            'graph.facebook.com/v21.0/fb_page_100*' => \Illuminate\Support\Facades\Http::response(['id' => 'fb_page_100', 'followers_count' => 500], 200),
+            'graph.facebook.com/*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
         ]);
 
         SocialAccount::create([
@@ -714,6 +722,88 @@ XML, 200),
         $this->assertEquals('yt_sched_vid_777', $ytSchedPost['platform_post_ids']['youtube']['id']);
         $this->assertEquals('scheduled', $ytSchedPost['status']);
         $this->assertStringContainsString('عرض أول مجدول على يوتيوب', $ytSchedPost['content']);
+    }
+
+    public function test_syncing_instagram_reels_populates_exact_views_and_scheduled_posts()
+    {
+        Sanctum::actingAs($this->userA);
+
+        $futureDate = now()->addDays(1)->setMicrosecond(0);
+
+        \Illuminate\Support\Facades\Http::fake([
+            'graph.facebook.com/v21.0/ig_biz_444/media*' => \Illuminate\Support\Facades\Http::response([
+                'data' => [
+                    [
+                        'id' => 'ig_reel_101',
+                        'caption' => 'تمرين من البيت هيخسّسك الكرش 🔥',
+                        'media_type' => 'VIDEO',
+                        'media_product_type' => 'REELS',
+                        'media_url' => 'https://example.com/reel101.mp4',
+                        'thumbnail_url' => 'https://example.com/reel101.jpg',
+                        'permalink' => 'https://www.instagram.com/reel/C101/',
+                        'timestamp' => now()->subHours(6)->toIso8601String(),
+                        'like_count' => 11,
+                        'comments_count' => 3,
+                    ],
+                ],
+            ], 200),
+            'graph.facebook.com/v21.0/ig_reel_101/insights*' => \Illuminate\Support\Facades\Http::response([
+                'data' => [
+                    ['name' => 'views', 'values' => [['value' => 115]]],
+                    ['name' => 'reach', 'values' => [['value' => 98]]],
+                    ['name' => 'shares', 'values' => [['value' => 7]]],
+                    ['name' => 'saved', 'values' => [['value' => 4]]],
+                    ['name' => 'total_interactions', 'values' => [['value' => 25]]],
+                ],
+            ], 200),
+            'graph.facebook.com/v21.0/fb_linked_page_1/scheduled_posts*' => \Illuminate\Support\Facades\Http::response([
+                'data' => [
+                    [
+                        'id' => 'ig_meta_sched_55',
+                        'message' => 'ريلز مجدول على إنستجرام عبر ميتا',
+                        'created_time' => now()->toIso8601String(),
+                        'scheduled_publish_time' => $futureDate->timestamp,
+                        'full_picture' => 'https://example.com/ig_sched.jpg',
+                        'permalink_url' => 'https://instagram.com/p/sched55',
+                    ],
+                ],
+            ], 200),
+            'graph.facebook.com/v21.0/ig_biz_444*' => \Illuminate\Support\Facades\Http::response([
+                'id' => 'ig_biz_444',
+                'username' => 'form_aar',
+                'followers_count' => 1000,
+                'media_count' => 10,
+            ], 200),
+            'graph.facebook.com/*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
+        ]);
+
+        SocialAccount::create([
+            'user_id' => $this->userA->id,
+            'platform' => 'instagram',
+            'account_id' => 'ig_biz_444',
+            'account_name' => 'form_aar',
+            'account_username' => 'form_aar',
+            'followers_count' => 1000,
+            'access_token' => 'real_ig_token_444',
+            'metadata' => ['page_id' => 'fb_linked_page_1'],
+        ]);
+
+        $res = $this->postJson('/api/social/sync-posts?platform=instagram');
+        $res->assertStatus(200)
+            ->assertJsonPath('synced_accounts', 1)
+            ->assertJsonPath('synced_posts', 2);
+
+        $published = $this->getJson('/api/social/posts?platform=instagram&status=published')->json();
+        $this->assertCount(1, $published);
+        $this->assertEquals(115, $published[0]['metrics']['views']);
+        $this->assertEquals(11, $published[0]['metrics']['likes']);
+        $this->assertEquals(3, $published[0]['metrics']['comments']);
+        $this->assertEquals(7, $published[0]['metrics']['shares']);
+
+        $scheduled = $this->getJson('/api/social/posts?platform=instagram&status=scheduled')->json();
+        $this->assertCount(1, $scheduled);
+        $this->assertEquals('scheduled', $scheduled[0]['status']);
+        $this->assertStringContainsString('ريلز مجدول على إنستجرام عبر ميتا', $scheduled[0]['content']);
     }
 }
 

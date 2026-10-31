@@ -3775,6 +3775,9 @@ export const store = reactive({
           this.socialPosts = Array.from(existingMap.values())
           this.saveSocialPostsLocal()
         }
+        if ((!platform || platform === 'all') && (!accountId || accountId === 'all')) {
+          this.loadSocialPosts(true)
+        }
         return data
       }
     } catch (e) {
@@ -3797,7 +3800,7 @@ export const store = reactive({
 
       const res = await fetch(`${this.apiBase}/social/sync-posts${queryStr}`, {
         method: 'POST',
-        headers: this.getAuthHeaders(),
+        headers: this.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           platform: platform || 'all',
           account_id: accountId || 'all'
@@ -3809,6 +3812,10 @@ export const store = reactive({
         if (Array.isArray(result.accounts)) {
           this.socialAccounts = result.accounts
           this.saveSocialAccountsLocal()
+        }
+        if (Array.isArray(result.posts)) {
+          this.socialPosts = result.posts
+          this.saveSocialPostsLocal()
         }
         await this.loadSocialAccounts(true)
         await this.loadSocialPosts(true)

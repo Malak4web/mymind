@@ -30,8 +30,14 @@ class SocialOAuthController extends Controller
             'platform' => $platform,
         ]);
 
-        $appId     = $setting->app_id ?: env(strtoupper($platform) . '_CLIENT_ID');
-        $appSecret = $setting->app_secret ?: env(strtoupper($platform) . '_CLIENT_SECRET');
+        $appId     = $setting->app_id ?: config("services.{$platform}.client_id") ?: env(strtoupper($platform) . '_CLIENT_ID');
+        $appSecret = $setting->app_secret ?: config("services.{$platform}.client_secret") ?: env(strtoupper($platform) . '_CLIENT_SECRET');
+
+        if ((!$appId || !$appSecret) && $platform === 'instagram') {
+            $fbSetting = SocialSetting::where('user_id', $setting->user_id)->where('platform', 'facebook')->first();
+            $appId = $appId ?: ($fbSetting->app_id ?? null) ?: config('services.facebook.client_id') ?: env('FACEBOOK_CLIENT_ID');
+            $appSecret = $appSecret ?: ($fbSetting->app_secret ?? null) ?: config('services.facebook.client_secret') ?: env('FACEBOOK_CLIENT_SECRET');
+        }
 
         if (!$appId || !$appSecret) {
             return response()->json([
@@ -96,8 +102,14 @@ class SocialOAuthController extends Controller
 
         $callbackUrl = url("/api/social/oauth/{$platform}/callback");
 
-        $appId     = $setting->app_id ?: env(strtoupper($platform) . '_CLIENT_ID');
-        $appSecret = $setting->app_secret ?: env(strtoupper($platform) . '_CLIENT_SECRET');
+        $appId     = $setting->app_id ?: config("services.{$platform}.client_id") ?: env(strtoupper($platform) . '_CLIENT_ID');
+        $appSecret = $setting->app_secret ?: config("services.{$platform}.client_secret") ?: env(strtoupper($platform) . '_CLIENT_SECRET');
+
+        if ((!$appId || !$appSecret) && $platform === 'instagram') {
+            $fbSetting = SocialSetting::where('user_id', $setting->user_id)->where('platform', 'facebook')->first();
+            $appId = $appId ?: ($fbSetting->app_id ?? null) ?: config('services.facebook.client_id') ?: env('FACEBOOK_CLIENT_ID');
+            $appSecret = $appSecret ?: ($fbSetting->app_secret ?? null) ?: config('services.facebook.client_secret') ?: env('FACEBOOK_CLIENT_SECRET');
+        }
 
         // Exchange code for token
         $tokenData = $this->exchangeCodeForToken(
@@ -115,6 +127,13 @@ class SocialOAuthController extends Controller
 
         $accessToken = $tokenData['access_token'] ?? null;
         $refreshToken = $tokenData['refresh_token'] ?? null;
+
+        // Meta returns a short-lived user token (~1-2 hours). Exchange it for a long-lived one
+        // (~60 days); Page tokens derived from a long-lived user token do not expire.
+        if ($accessToken && in_array($platform, ['facebook', 'instagram'])) {
+            $accessToken = $this->exchangeForLongLivedMetaToken($accessToken, $appId, $appSecret) ?? $accessToken;
+        }
+
         if ($accessToken) {
             $setting->update([
                 'access_token' => $accessToken,
@@ -122,17 +141,56 @@ class SocialOAuthController extends Controller
                 'is_active' => true,
             ]);
 
-            // Immediately update all connected accounts for this user & platform with the fresh token
+            // Facebook page endpoints require a Page Access Token, not the user token.
+            $isMeta = in_array($platform, ['facebook', 'instagram'], true);
+            $pageTokens = [];
+            if ($isMeta) {
+                $pageTokens = $this->fetchPageTokenMap($accessToken);
+
+                // Keep shared Meta user token in sync across facebook & instagram settings
+                $otherPlatform = $platform === 'facebook' ? 'instagram' : 'facebook';
+                $otherSetting = SocialSetting::where('user_id', $setting->user_id)
+                    ->where('platform', $otherPlatform)
+                    ->first();
+                if ($otherSetting) {
+                    $otherSetting->update([
+                        'access_token' => $accessToken,
+                        'is_active' => true,
+                    ]);
+                }
+            }
+
+            // Immediately update all connected accounts for this user & platform (and sibling Meta platform) with the fresh token
+            $targetPlatforms = $isMeta ? ['facebook', 'instagram'] : [$platform];
             $existingAccounts = SocialAccount::where('user_id', $setting->user_id)
-                ->where('platform', $platform)
+                ->whereIn('platform', $targetPlatforms)
                 ->get();
             foreach ($existingAccounts as $acc) {
                 $meta = is_array($acc->metadata) ? $acc->metadata : [];
                 if ($refreshToken) {
                     $meta['refresh_token'] = $refreshToken;
                 }
+                unset($meta['sync_warnings']);
+
+                $newToken = $accessToken;
+                if ($acc->platform === 'facebook') {
+                    $pt = $pageTokens[(string)$acc->account_id] ?? null;
+                    if (!$pt) {
+                        try {
+                            $ptRes = Http::timeout(10)->get("https://graph.facebook.com/v21.0/{$acc->account_id}", [
+                                'access_token' => $accessToken,
+                                'fields' => 'access_token',
+                            ]);
+                            if ($ptRes->ok() && $ptRes->json('access_token')) {
+                                $pt = (string)$ptRes->json('access_token');
+                            }
+                        } catch (\Throwable $e) {}
+                    }
+                    $newToken = $pt ?: ($acc->access_token ?: $accessToken);
+                }
+
                 $acc->update([
-                    'access_token' => $accessToken,
+                    'access_token' => $newToken,
                     'metadata' => $meta,
                     'status' => 'connected',
                 ]);
@@ -333,21 +391,12 @@ class SocialOAuthController extends Controller
     {
         switch ($platform) {
             case 'facebook':
-                return 'https://www.facebook.com/v21.0/dialog/oauth?' . http_build_query([
-                    'client_id'     => $appId,
-                    'redirect_uri'  => $callbackUrl,
-                    'state'         => $state,
-                    'scope'         => 'public_profile,pages_show_list,pages_read_engagement,pages_read_user_content,pages_manage_posts,pages_manage_metadata,business_management',
-                    'response_type' => 'code',
-                    'auth_type'     => 'rerequest',
-                ]);
-
             case 'instagram':
                 return 'https://www.facebook.com/v21.0/dialog/oauth?' . http_build_query([
                     'client_id'     => $appId,
                     'redirect_uri'  => $callbackUrl,
                     'state'         => $state,
-                    'scope'         => 'public_profile,instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,business_management',
+                    'scope'         => 'public_profile,pages_show_list,pages_read_engagement,pages_read_user_content,pages_manage_posts,pages_manage_metadata,read_insights,instagram_basic,instagram_content_publish,instagram_manage_insights,business_management',
                     'response_type' => 'code',
                     'auth_type'     => 'rerequest',
                 ]);
@@ -417,6 +466,60 @@ class SocialOAuthController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Exchange a short-lived Meta user token for a long-lived (~60 day) token.
+     */
+    private function exchangeForLongLivedMetaToken(string $shortToken, ?string $appId, ?string $appSecret): ?string
+    {
+        if (!$appId || !$appSecret) {
+            return null;
+        }
+        try {
+            $res = Http::timeout(15)->get('https://graph.facebook.com/v21.0/oauth/access_token', [
+                'grant_type'        => 'fb_exchange_token',
+                'client_id'         => $appId,
+                'client_secret'     => $appSecret,
+                'fb_exchange_token' => $shortToken,
+            ]);
+            if ($res->ok() && $res->json('access_token')) {
+                return (string)$res->json('access_token');
+            }
+            Log::warning('Meta long-lived token exchange failed: ' . ($res->json('error.message') ?? $res->status()));
+        } catch (\Throwable $e) {
+            Log::warning('Meta long-lived token exchange error: ' . $e->getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Map of page_id => Page Access Token for every page the user token can manage.
+     */
+    private function fetchPageTokenMap(string $userToken): array
+    {
+        $map = [];
+        try {
+            $url = 'https://graph.facebook.com/v21.0/me/accounts';
+            $params = ['access_token' => $userToken, 'fields' => 'id,access_token', 'limit' => 100];
+            $guard = 5;
+            while ($url && $guard-- > 0) {
+                $res = Http::timeout(15)->get($url, $params);
+                if (!$res->ok()) {
+                    break;
+                }
+                foreach ($res->json('data', []) as $p) {
+                    if (!empty($p['id']) && !empty($p['access_token'])) {
+                        $map[(string)$p['id']] = (string)$p['access_token'];
+                    }
+                }
+                $url = $res->json('paging.next');
+                $params = [];
+            }
+        } catch (\Throwable $e) {
+            Log::info('fetchPageTokenMap notice: ' . $e->getMessage());
+        }
+        return $map;
     }
 
     private function fetchPagesFromPlatform(string $platform, string $accessToken, $user): array
@@ -606,6 +709,7 @@ class SocialOAuthController extends Controller
                                         'category'          => 'حساب أعمال إنستجرام',
                                         'followers_count'   => (int)($ig['followers_count'] ?? 0),
                                         'page_access_token' => $pData['access_token'] ?? $pageTokensById[$pid] ?? $accessToken,
+                                        'page_id'           => (string)$pid,
                                     ];
                                 }
                             }
@@ -705,8 +809,8 @@ class SocialOAuthController extends Controller
                     }
                 }
             }
-            $appId = ($setting->app_id ?? null) ?: env('YOUTUBE_CLIENT_ID');
-            $appSecret = ($setting->app_secret ?? null) ?: env('YOUTUBE_CLIENT_SECRET');
+            $appId = ($setting->app_id ?? null) ?: config('services.youtube.client_id') ?: env('YOUTUBE_CLIENT_ID');
+            $appSecret = ($setting->app_secret ?? null) ?: config('services.youtube.client_secret') ?: env('YOUTUBE_CLIENT_SECRET');
             if ($refreshToken && $appId && $appSecret) {
                 $tokenRes = Http::asForm()->post('https://oauth2.googleapis.com/token', [
                     'client_id'     => $appId,

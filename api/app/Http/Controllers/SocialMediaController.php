@@ -807,7 +807,7 @@ class SocialMediaController extends Controller
                 'total_interactions' => $totalInteractionsOverall,
                 'average_engagement_rate' => $avgEngagementRate,
                 'total_reach' => $totalViewsOverall,
-                'total_impressions' => (int)($totalViewsOverall * 1.35),
+                'total_impressions' => $totalViewsOverall,
                 'last_synced_at' => $latestSync,
             ],
             'pages' => $pagesAnalytics,
@@ -860,12 +860,25 @@ class SocialMediaController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
+        $connectedAccountIds = $freshAccounts->pluck('account_id')->map('strval')->toArray();
+        $freshPosts = SocialPost::where('user_id', $user->id)
+            ->orderBy('scheduled_at', 'desc')
+            ->orderBy('published_at', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->filter(function ($post) use ($connectedAccountIds) {
+                $postAccIds = array_filter(array_map('strval', $post->account_ids ?? []));
+                return empty($postAccIds) || !empty(array_intersect($postAccIds, $connectedAccountIds));
+            })
+            ->values();
+
         return response()->json([
             'message' => $message,
             'synced_accounts' => $accounts->count(),
             'synced_posts' => $syncedCount,
             'last_synced_at' => $syncedAt,
             'accounts' => $freshAccounts,
+            'posts' => $freshPosts,
         ]);
     }
 
@@ -1145,17 +1158,81 @@ class SocialMediaController extends Controller
         $this->purgeOrphanPosts($user->id);
 
         $pageAccessToken = $account->access_token;
+        $syncWarnings = [];
+        $insightsCache = [];
+        $scheduledFetchSucceeded = false;
 
-        // Auto-heal / fetch page access token from Meta Graph API if missing
-        if (!$pageAccessToken && ($account->platform === 'facebook' || $account->platform === 'instagram')) {
-            $setting = SocialSetting::where('user_id', $user->id)
-                ->where('platform', 'facebook')
-                ->first();
+        // Resolve fresh user tokens from SocialSetting for Meta (Facebook & Instagram share Meta OAuth)
+        $fbUserToken = null;
+        $igUserToken = null;
+        if ($account->platform === 'facebook' || $account->platform === 'instagram') {
+            $fbUserToken = SocialSetting::where('user_id', $user->id)->where('platform', 'facebook')->value('access_token');
+            $igUserToken = SocialSetting::where('user_id', $user->id)->where('platform', 'instagram')->value('access_token');
+            if ($fbUserToken && str_starts_with($fbUserToken, 'demo_token_')) $fbUserToken = null;
+            if ($igUserToken && str_starts_with($igUserToken, 'demo_token_')) $igUserToken = null;
+        }
 
-            $userToken = $setting->access_token ?? null;
-            if ($userToken && !str_starts_with($userToken, 'demo_token_')) {
+        // Facebook page endpoints require a Page Access Token. Re-derive from user token when available.
+        if ($account->platform === 'facebook') {
+            $metaUserToken = $fbUserToken ?: $igUserToken;
+            if ($metaUserToken) {
                 try {
-                    $accRes = Http::get('https://graph.facebook.com/v21.0/me/accounts', [
+                    $ptRes = Http::timeout(10)->get("https://graph.facebook.com/v21.0/{$account->account_id}", [
+                        'access_token' => $metaUserToken,
+                        'fields' => 'id,name,access_token,followers_count,fan_count',
+                    ]);
+                    if ($ptRes->ok()) {
+                        $freshPageToken = $ptRes->json('access_token');
+                        $freshFollowers = $ptRes->json('followers_count') ?? $ptRes->json('fan_count');
+                        $updates = [];
+                        if ($freshPageToken && $freshPageToken !== $account->access_token) {
+                            $updates['access_token'] = $freshPageToken;
+                            $pageAccessToken = $freshPageToken;
+                        } elseif ($freshPageToken) {
+                            $pageAccessToken = $freshPageToken;
+                        }
+                        if ($freshFollowers !== null && (int)$freshFollowers > 0 && (int)$freshFollowers !== (int)$account->followers_count) {
+                            $updates['followers_count'] = (int)$freshFollowers;
+                        }
+                        if (!empty($updates)) {
+                            $account->update($updates);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::info("FB page token refresh notice for {$account->account_id}: " . $e->getMessage());
+                }
+            }
+        }
+
+        // For Instagram, prefer the freshest valid token and discover the linked Facebook Page ID
+        $linkedFbPageId = is_array($account->metadata) ? ($account->metadata['page_id'] ?? null) : null;
+        $linkedFbPageToken = null;
+        if ($account->platform === 'instagram') {
+            if ((!$pageAccessToken || str_starts_with((string)$pageAccessToken, 'demo_token_')) && ($igUserToken || $fbUserToken)) {
+                $pageAccessToken = $igUserToken ?: $fbUserToken;
+                $account->update(['access_token' => $pageAccessToken]);
+            }
+            $fbAccounts = SocialAccount::where('user_id', $user->id)->where('platform', 'facebook')->get();
+            if ($linkedFbPageId) {
+                $matchedFb = $fbAccounts->firstWhere('account_id', (string)$linkedFbPageId);
+                if ($matchedFb && $matchedFb->access_token && !str_starts_with($matchedFb->access_token, 'demo_token_')) {
+                    $linkedFbPageToken = $matchedFb->access_token;
+                }
+            } elseif ($fbAccounts->count() === 1) {
+                $onlyFb = $fbAccounts->first();
+                if ($onlyFb && $onlyFb->access_token && !str_starts_with($onlyFb->access_token, 'demo_token_')) {
+                    $linkedFbPageId = (string)$onlyFb->account_id;
+                    $linkedFbPageToken = $onlyFb->access_token;
+                }
+            }
+        }
+
+        // Auto-heal / fetch page access token from Meta Graph API if still missing
+        if ((!$pageAccessToken || str_starts_with((string)$pageAccessToken, 'demo_token_')) && ($account->platform === 'facebook' || $account->platform === 'instagram')) {
+            $userToken = $fbUserToken ?: $igUserToken;
+            if ($userToken) {
+                try {
+                    $accRes = Http::timeout(10)->get('https://graph.facebook.com/v21.0/me/accounts', [
                         'access_token' => $userToken,
                         'fields' => 'id,name,access_token,fan_count,followers_count,instagram_business_account{id,name,username,followers_count}',
                         'limit' => 50,
@@ -1176,32 +1253,19 @@ class SocialMediaController extends Controller
                             if ($account->platform === 'instagram' && !empty($pData['instagram_business_account'])) {
                                 $ig = $pData['instagram_business_account'];
                                 if ((string)$ig['id'] === (string)$account->account_id) {
-                                    $pageAccessToken = $pData['access_token'] ?? null;
+                                    $pageAccessToken = $pData['access_token'] ?? $userToken;
+                                    $linkedFbPageId = (string)$pData['id'];
+                                    $linkedFbPageToken = $pData['access_token'] ?? $userToken;
                                     $realFollowers = $ig['followers_count'] ?? $account->followers_count;
+                                    $meta = is_array($account->metadata) ? $account->metadata : [];
+                                    $meta['page_id'] = $linkedFbPageId;
                                     $account->update([
                                         'access_token' => $pageAccessToken,
                                         'followers_count' => $realFollowers,
+                                        'metadata' => $meta,
                                     ]);
                                     break;
                                 }
-                            }
-                        }
-                    }
-
-                    // Direct single-node fallback for New Pages Experience / Business pages
-                    if (!$pageAccessToken && $account->platform === 'facebook') {
-                        $singlePageRes = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}", [
-                            'access_token' => $userToken,
-                            'fields' => 'id,name,access_token,fan_count,followers_count',
-                        ]);
-                        if ($singlePageRes->ok()) {
-                            $pageAccessToken = $singlePageRes->json('access_token') ?? null;
-                            $realFollowers = $singlePageRes->json('followers_count') ?? $singlePageRes->json('fan_count') ?? $account->followers_count;
-                            if ($pageAccessToken) {
-                                $account->update([
-                                    'access_token' => $pageAccessToken,
-                                    'followers_count' => $realFollowers,
-                                ]);
                             }
                         }
                     }
@@ -1225,85 +1289,129 @@ class SocialMediaController extends Controller
 
         $importedPosts = [];
 
-        // 1. Try real Facebook Graph API (Page Access Token required)
+        // 1. Real Facebook Graph API (Page Access Token required)
         if ($account->platform === 'facebook' && $pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) {
             try {
-                // Refresh live page follower / fan count from Meta Graph API
+                $graph = 'https://graph.facebook.com/v21.0';
+                $pageId = $account->account_id;
+                $nowTs = now()->timestamp;
+
+                // Live follower count + upgrade to Page Access Token if a user token was passed
                 try {
-                    $pageInfoRes = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}", [
+                    $pageInfoRes = Http::timeout(10)->get("{$graph}/{$pageId}", [
                         'access_token' => $pageAccessToken,
-                        'fields' => 'id,name,followers_count,fan_count',
+                        'fields' => 'id,name,access_token,followers_count,fan_count',
                     ]);
                     if ($pageInfoRes->ok()) {
+                        $derivedPageToken = $pageInfoRes->json('access_token');
+                        if ($derivedPageToken && $derivedPageToken !== $pageAccessToken) {
+                            $pageAccessToken = (string)$derivedPageToken;
+                            $account->update(['access_token' => $pageAccessToken]);
+                        }
                         $freshFollowers = $pageInfoRes->json('followers_count') ?? $pageInfoRes->json('fan_count');
                         if ($freshFollowers !== null && (int)$freshFollowers > 0) {
                             $account->update(['followers_count' => (int)$freshFollowers]);
                         }
+                    } else {
+                        $this->noteMetaError($syncWarnings, 'page', $pageInfoRes);
                     }
                 } catch (\Throwable $e) {
-                    Log::info("FB page stats refresh notice for {$account->account_id}: " . $e->getMessage());
+                    Log::info("FB page stats refresh notice for {$pageId}: " . $e->getMessage());
                 }
+                $followers = max(1, (int)$account->followers_count);
 
-                // Fetch videos first (videos/reels have exact views, likes, and comments without needing pages_read_user_content)
+                // Videos & Reels (published ones go to $videosMap, future-scheduled ones to $scheduledVideos)
                 $videosMap = [];
-                try {
-                    $vidRes = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/videos", [
-                        'access_token' => $pageAccessToken,
-                        'fields' => 'id,title,description,created_time,picture,permalink_url,views,likes.summary(true),comments.summary(true),shares',
-                        'limit' => 50,
-                    ]);
-                    if ($vidRes->ok() && !empty($vidRes->json('data'))) {
-                        foreach ($vidRes->json('data') as $v) {
-                            $videosMap[(string)$v['id']] = $v;
+                $scheduledVideos = [];
+                foreach (['video_reels' => true, 'videos' => false] as $edge => $isReelEdge) {
+                    $vidRes = $this->metaGetWithFallback("{$graph}/{$pageId}/{$edge}", $pageAccessToken, [
+                        'id,title,description,created_time,picture,permalink_url,published,scheduled_publish_time,views,likes.summary(true).limit(0),comments.summary(true).limit(0)',
+                        'id,title,description,created_time,picture,permalink_url,published,scheduled_publish_time,likes.summary(true).limit(0),comments.summary(true).limit(0)',
+                        'id,title,description,created_time,picture,permalink_url',
+                    ], ['limit' => 50]);
+
+                    if (!$vidRes || !$vidRes->ok()) {
+                        if ($edge === 'videos') {
+                            $this->noteMetaError($syncWarnings, 'facebook_videos', $vidRes);
                         }
+                        continue;
                     }
-                } catch (\Throwable $e) {
-                    Log::info("FB videos fetch notice for {$account->account_id}: " . $e->getMessage());
-                }
 
-                // Also check Facebook video reels edge
-                try {
-                    $reelsRes = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/video_reels", [
-                        'access_token' => $pageAccessToken,
-                        'fields' => 'id,video{id,title,description,created_time,picture,permalink_url,views,likes.summary(true),comments.summary(true)}',
-                        'limit' => 50,
-                    ]);
-                    if ($reelsRes->ok() && !empty($reelsRes->json('data'))) {
-                        foreach ($reelsRes->json('data') as $rData) {
-                            $vidObj = $rData['video'] ?? $rData;
-                            $vId = (string)($vidObj['id'] ?? $rData['id'] ?? '');
-                            if ($vId && !isset($videosMap[$vId])) {
-                                $videosMap[$vId] = $vidObj;
-                            }
+                    foreach ($vidRes->json('data', []) as $v) {
+                        $vid = (string)($v['id'] ?? '');
+                        if ($vid === '') continue;
+                        // Ignore feed post items returned by broad wildcard mocks
+                        if (isset($v['message']) && !isset($v['title']) && !isset($v['description']) && !isset($v['views']) && !isset($v['picture'])) {
+                            continue;
                         }
+                        $schedTs = $this->toUnixTimestamp($v['scheduled_publish_time'] ?? ($v['status']['publishing_phase']['publish_time'] ?? null));
+                        if ($schedTs && $schedTs > $nowTs) {
+                            $v['_scheduled_ts'] = $schedTs;
+                            $scheduledVideos[$vid] = $v;
+                            continue;
+                        }
+                        if (array_key_exists('published', $v) && $v['published'] === false) {
+                            continue; // unpublished draft
+                        }
+                        if ($isReelEdge) {
+                            $v['_is_reel'] = true;
+                        }
+                        $videosMap[$vid] = isset($videosMap[$vid]) ? array_merge($v, $videosMap[$vid]) : $v;
                     }
-                } catch (\Throwable $e) {}
-
-                // Request published posts (try with engagement summary first, then safe fallback)
-                $res = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/published_posts", [
-                    'access_token' => $pageAccessToken,
-                    'fields' => 'id,message,story,created_time,full_picture,permalink_url,shares,reactions.summary(true),comments.summary(true)',
-                    'limit' => 50,
-                ]);
-
-                if (!$res->ok() || empty($res->json('data'))) {
-                    $res = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/published_posts", [
-                        'access_token' => $pageAccessToken,
-                        'fields' => 'id,message,story,created_time,full_picture,permalink_url,shares',
-                        'limit' => 50,
-                    ]);
                 }
 
-                // Fallback to posts if published_posts returned empty or failed
-                if (!$res->ok() || empty($res->json('data'))) {
-                    $res = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/posts", [
-                        'access_token' => $pageAccessToken,
-                        'fields' => 'id,message,story,created_time,full_picture,permalink_url,shares',
-                        'limit' => 50,
-                    ]);
+                // Exact video / reel views from video_insights + Video.views field (matches Meta Business Suite)
+                $videoViews = function (string $vid) use (&$videosMap, $pageAccessToken, &$insightsCache, &$syncWarnings) {
+                    $v = $videosMap[$vid] ?? [];
+                    if (isset($v['_views'])) {
+                        return $v['_views'];
+                    }
+                    $isReel = !empty($v['_is_reel']) || str_contains((string)($v['permalink_url'] ?? ''), '/reel/');
+                    $ins = $this->fetchMetaInsights(
+                        $vid,
+                        $pageAccessToken,
+                        $isReel
+                            ? [
+                                'fb_reels_total_plays,blue_reels_play_count,total_video_views',
+                                'fb_reels_total_plays',
+                                'blue_reels_play_count',
+                                'total_video_views',
+                            ]
+                            : [
+                                'total_video_views,total_video_impressions',
+                                'total_video_views',
+                            ],
+                        'video_insights',
+                        $insightsCache,
+                        $isReel ? 'fb_reel' : 'fb_video',
+                        $syncWarnings,
+                        'facebook_video_insights'
+                    );
+                    $views = (int)($ins['fb_reels_total_plays'] ?? $ins['blue_reels_play_count'] ?? $ins['total_video_views'] ?? 0);
+                    $views = max($views, (int)($v['views'] ?? 0));
+                    $videosMap[$vid]['_views'] = $views;
+                    return $views;
+                };
+
+                // Published posts (richest field set first, falling back to safer sets)
+                $postFieldSets = [
+                    'id,message,story,created_time,full_picture,permalink_url,shares,reactions.summary(true).limit(0),comments.summary(true).limit(0),attachments{media_type,url,target{id}}',
+                    'id,message,story,created_time,full_picture,permalink_url,shares,reactions.summary(true).limit(0),comments.summary(true).limit(0)',
+                    'id,message,story,created_time,full_picture,permalink_url,shares,likes.summary(true).limit(0),comments.summary(true).limit(0)',
+                    'id,message,story,created_time,full_picture,permalink_url,shares',
+                ];
+                $res = $this->metaGetWithFallback("{$graph}/{$pageId}/published_posts", $pageAccessToken, $postFieldSets, ['limit' => 50]);
+                if (!$res || !$res->ok() || empty($res->json('data'))) {
+                    $altRes = $this->metaGetWithFallback("{$graph}/{$pageId}/posts", $pageAccessToken, $postFieldSets, ['limit' => 50]);
+                    if ($altRes && $altRes->ok()) {
+                        $res = $altRes;
+                    }
+                }
+                if ($res && !$res->ok()) {
+                    $this->noteMetaError($syncWarnings, 'facebook_posts', $res);
                 }
 
-                $rawItems = $res->ok() ? $res->json('data', []) : [];
+                $rawItems = ($res && $res->ok()) ? $res->json('data', []) : [];
                 $seenVideoIds = [];
 
                 foreach ($rawItems as $item) {
@@ -1312,63 +1420,88 @@ class SocialMediaController extends Controller
                     $shares = (int)($item['shares']['count'] ?? 0);
                     $likes = (int)($item['reactions']['summary']['total_count'] ?? $item['likes']['summary']['total_count'] ?? 0);
                     $comments = (int)($item['comments']['summary']['total_count'] ?? 0);
-                    $views = 0;
+                    $hasEngagementFields = isset($item['reactions']) || isset($item['likes']) || isset($item['comments']);
 
-                    // Check if this post is a reel or video
-                    $matchedVideo = null;
-                    if (isset($videosMap[$externalId])) {
-                        $matchedVideo = $videosMap[$externalId];
-                        $seenVideoIds[$externalId] = true;
-                    } elseif (str_contains($externalId, '_') && isset($videosMap[substr($externalId, strpos($externalId, '_') + 1)])) {
-                        $subId = substr($externalId, strpos($externalId, '_') + 1);
-                        $matchedVideo = $videosMap[$subId];
-                        $seenVideoIds[$subId] = true;
-                    } elseif (preg_match('/(?:reel|videos)\/(\d+)/i', $permalink, $matches)) {
-                        $vidId = $matches[1];
-                        if (isset($videosMap[$vidId])) {
-                            $matchedVideo = $videosMap[$vidId];
-                            $seenVideoIds[$vidId] = true;
+                    // Link the post to its video / reel, if any
+                    $candidates = [];
+                    $attachTargetId = $item['attachments']['data'][0]['target']['id'] ?? null;
+                    $attachMediaType = strtolower((string)($item['attachments']['data'][0]['media_type'] ?? ''));
+                    if ($attachTargetId) {
+                        $candidates[] = (string)$attachTargetId;
+                    }
+                    if (str_contains($externalId, '_')) {
+                        $candidates[] = substr($externalId, strpos($externalId, '_') + 1);
+                    }
+                    $candidates[] = $externalId;
+                    if (preg_match('/(?:reel|videos)\/(\d+)/i', $permalink, $pm)) {
+                        $candidates[] = $pm[1];
+                    }
+                    $matchedVideoId = null;
+                    foreach ($candidates as $c) {
+                        if (isset($videosMap[$c])) {
+                            $matchedVideoId = $c;
+                            break;
                         }
                     }
-
-                    if (!$matchedVideo && !empty($item['message'])) {
+                    if (!$matchedVideoId && !empty($item['message'])) {
                         foreach ($videosMap as $vidId => $v) {
-                            if (!empty($v['description']) && (trim($v['description']) === trim($item['message']) || str_contains($item['message'], substr($v['description'], 0, 30)))) {
-                                $matchedVideo = $v;
-                                $seenVideoIds[$vidId] = true;
+                            $desc = trim((string)($v['description'] ?? ''));
+                            if ($desc !== '' && (trim($item['message']) === $desc || str_contains($item['message'], mb_substr($desc, 0, 30)))) {
+                                $matchedVideoId = (string)$vidId;
                                 break;
                             }
                         }
                     }
 
-                    if ($matchedVideo) {
-                        $likes = (int)($matchedVideo['likes']['summary']['total_count'] ?? $likes);
-                        $comments = (int)($matchedVideo['comments']['summary']['total_count'] ?? $comments);
-                        $views = (int)($matchedVideo['views'] ?? 0);
-                    } elseif ($likes === 0 && $comments === 0) {
-                        // Standard post / photo / status: try to get likes and comments if granted
+                    if (!$hasEngagementFields) {
                         try {
-                            $singlePostRes = Http::timeout(4)->get("https://graph.facebook.com/v21.0/{$externalId}", [
+                            $singleRes = Http::timeout(8)->get("{$graph}/{$externalId}", [
                                 'access_token' => $pageAccessToken,
-                                'fields' => 'shares,reactions.summary(true),likes.summary(true),comments.summary(true)',
+                                'fields' => 'shares,reactions.summary(true).limit(0),comments.summary(true).limit(0)',
                             ]);
-                            if ($singlePostRes->ok()) {
-                                $likes = (int)($singlePostRes->json('reactions.summary.total_count', $singlePostRes->json('likes.summary.total_count', $likes)));
-                                $comments = (int)($singlePostRes->json('comments.summary.total_count', $comments));
-                                $shares = (int)($singlePostRes->json('shares.count', $shares));
+                            if ($singleRes->ok()) {
+                                $likes = (int)$singleRes->json('reactions.summary.total_count', $likes);
+                                $comments = (int)$singleRes->json('comments.summary.total_count', $comments);
+                                $shares = (int)$singleRes->json('shares.count', $shares);
                             }
                         } catch (\Throwable $e) {}
                     }
 
+                    $views = 0;
+                    if ($matchedVideoId) {
+                        $seenVideoIds[$matchedVideoId] = true;
+                        $mv = $videosMap[$matchedVideoId];
+                        $likes = max($likes, (int)($mv['likes']['summary']['total_count'] ?? 0));
+                        $comments = max($comments, (int)($mv['comments']['summary']['total_count'] ?? 0));
+                        $views = $videoViews($matchedVideoId);
+                    } else {
+                        if ($attachTargetId && ($attachMediaType === 'video' || str_contains($permalink, '/reel/') || str_contains($permalink, '/videos/'))) {
+                            $views = $videoViews((string)$attachTargetId);
+                        }
+                        if ($views === 0) {
+                            $ins = $this->fetchMetaInsights(
+                                $externalId,
+                                $pageAccessToken,
+                                [
+                                    'post_media_view,post_impressions,post_impressions_unique',
+                                    'post_impressions,post_impressions_unique',
+                                    'post_media_view',
+                                    'post_impressions',
+                                ],
+                                'insights',
+                                $insightsCache,
+                                'fb_post',
+                                $syncWarnings,
+                                'facebook_post_insights'
+                            );
+                            $views = (int)($ins['post_media_view'] ?? $ins['post_impressions'] ?? $ins['post_impressions_unique'] ?? 0);
+                        }
+                    }
+
                     $totalInteractions = $likes + $comments + $shares;
-                    $followers = max(1, (int)$account->followers_count);
-                    $engRate = $followers > 0 ? round(($totalInteractions / $followers) * 100, 2) : 0;
-
-                    $content = $item['message'] ?? $item['story'] ?? 'منشور على صفحة فيسبوك';
-
                     $importedPosts[] = [
                         'external_id' => $externalId,
-                        'content' => $content,
+                        'content' => $item['message'] ?? $item['story'] ?? 'منشور على صفحة فيسبوك',
                         'media_urls' => !empty($item['full_picture']) ? [$item['full_picture']] : [],
                         'published_at' => Carbon::parse($item['created_time']),
                         'permalink' => $permalink,
@@ -1378,326 +1511,286 @@ class SocialMediaController extends Controller
                             'shares' => $shares,
                             'views' => $views,
                             'impressions' => $views,
-                            'engagement_rate' => $engRate,
+                            'engagement_rate' => round(($totalInteractions / $followers) * 100, 2),
                         ],
                     ];
                 }
 
-                // Also include any videos from videosMap that weren't in published_posts
+                // Videos / reels that did not appear in the posts feed
                 foreach ($videosMap as $vidId => $v) {
-                    if (!isset($seenVideoIds[$vidId])) {
-                        $vLikes = (int)($v['likes']['summary']['total_count'] ?? 0);
-                        $vComments = (int)($v['comments']['summary']['total_count'] ?? 0);
-                        $vViews = (int)($v['views'] ?? 0);
-                        $vShares = (int)($v['shares']['count'] ?? 0);
+                    $vidId = (string)$vidId;
+                    if (isset($seenVideoIds[$vidId])) continue;
+                    $vLikes = (int)($v['likes']['summary']['total_count'] ?? 0);
+                    $vComments = (int)($v['comments']['summary']['total_count'] ?? 0);
+                    $vViews = $videoViews($vidId);
+                    $rawUrl = $v['permalink_url'] ?? "/reel/{$vidId}";
 
-                        // If views count on video object is 0, check video_insights
-                        if ($vViews === 0) {
-                            try {
-                                $vInsRes = Http::get("https://graph.facebook.com/v21.0/{$vidId}/video_insights", [
-                                    'access_token' => $pageAccessToken,
-                                    'metric' => 'total_video_views,total_video_views_unique',
-                                ]);
-                                if ($vInsRes->ok() && !empty($vInsRes->json('data'))) {
-                                    foreach ($vInsRes->json('data') as $vm) {
-                                        $val = (int)($vm['values'][0]['value'] ?? 0);
-                                        if ($val > $vViews) {
-                                            $vViews = $val;
-                                        }
-                                    }
-                                }
-                            } catch (\Throwable $e) {}
+                    $importedPosts[] = [
+                        'external_id' => $vidId,
+                        'content' => $v['description'] ?? $v['title'] ?? 'فيديو على فيسبوك',
+                        'media_urls' => !empty($v['picture']) ? [$v['picture']] : [],
+                        'published_at' => !empty($v['created_time']) ? Carbon::parse($v['created_time']) : now(),
+                        'permalink' => str_starts_with($rawUrl, 'http') ? $rawUrl : ('https://facebook.com' . $rawUrl),
+                        'metrics' => [
+                            'likes' => $vLikes,
+                            'comments' => $vComments,
+                            'shares' => 0,
+                            'views' => $vViews,
+                            'impressions' => $vViews,
+                            'engagement_rate' => round((($vLikes + $vComments) / $followers) * 100, 2),
+                        ],
+                    ];
+                }
+
+                // Scheduled posts created natively on Facebook / Meta Business Suite
+                $seenScheduledIds = [];
+                $markScheduledSeen = function (string $id) use (&$seenScheduledIds) {
+                    $seenScheduledIds[$id] = true;
+                    if (str_contains($id, '_')) {
+                        $seenScheduledIds[substr($id, strpos($id, '_') + 1)] = true;
+                    }
+                };
+
+                $schedRes = $this->metaGetWithFallback("{$graph}/{$pageId}/scheduled_posts", $pageAccessToken, [
+                    'id,message,story,created_time,scheduled_publish_time,full_picture,permalink_url',
+                    'id,message,created_time,scheduled_publish_time',
+                ], ['limit' => 50]);
+                if ($schedRes && $schedRes->ok()) {
+                    $scheduledFetchSucceeded = true;
+                    foreach ($schedRes->json('data', []) as $sItem) {
+                        $schedId = (string)($sItem['id'] ?? '');
+                        $schedTs = $this->toUnixTimestamp($sItem['scheduled_publish_time'] ?? null);
+                        if ($schedId === '' || $schedTs <= 0) {
+                            continue;
                         }
+                        $markScheduledSeen($schedId);
+                        $importedPosts[] = $this->buildScheduledImport(
+                            $schedId,
+                            $sItem['message'] ?? $sItem['story'] ?? 'منشور مجدول على فيسبوك',
+                            $sItem['full_picture'] ?? null,
+                            Carbon::createFromTimestamp($schedTs),
+                            $sItem['permalink_url'] ?? "https://facebook.com/{$schedId}"
+                        );
+                    }
+                } else {
+                    $this->noteMetaError($syncWarnings, 'facebook_scheduled', $schedRes);
+                }
 
-                        $vInteractions = $vLikes + $vComments + $vShares;
-                        $followers = max(1, (int)$account->followers_count);
-                        $vEngRate = $followers > 0 ? round(($vInteractions / $followers) * 100, 2) : 0;
-
-                        $rawUrl = $v['permalink_url'] ?? "/reel/{$vidId}";
-                        $vPermalink = str_starts_with($rawUrl, 'http') ? $rawUrl : ("https://facebook.com" . $rawUrl);
-
-                        $importedPosts[] = [
-                            'external_id' => (string)$vidId,
-                            'content' => $v['description'] ?? $v['title'] ?? 'فيديو على فيسبوك',
-                            'media_urls' => !empty($v['picture']) ? [$v['picture']] : [],
-                            'published_at' => Carbon::parse($v['created_time']),
-                            'permalink' => $vPermalink,
-                            'metrics' => [
-                                'likes' => $vLikes,
-                                'comments' => $vComments,
-                                'shares' => $vShares,
-                                'views' => $vViews,
-                                'impressions' => $vViews,
-                                'engagement_rate' => $vEngRate,
-                            ],
-                        ];
+                // Also check unpublished promotable_posts with a future scheduled_publish_time (Meta Business Suite)
+                $promoRes = $this->metaGetWithFallback("{$graph}/{$pageId}/promotable_posts", $pageAccessToken, [
+                    'id,message,story,created_time,scheduled_publish_time,is_published,full_picture,permalink_url',
+                    'id,message,created_time,scheduled_publish_time,is_published',
+                ], ['is_published' => 'false', 'limit' => 50]);
+                if ($promoRes && $promoRes->ok()) {
+                    $scheduledFetchSucceeded = true;
+                    foreach ($promoRes->json('data', []) as $pItem) {
+                        $pId = (string)($pItem['id'] ?? '');
+                        $schedTs = $this->toUnixTimestamp($pItem['scheduled_publish_time'] ?? null);
+                        if ($pId === '' || $schedTs <= $nowTs || isset($seenScheduledIds[$pId])) {
+                            continue;
+                        }
+                        $markScheduledSeen($pId);
+                        $importedPosts[] = $this->buildScheduledImport(
+                            $pId,
+                            $pItem['message'] ?? $pItem['story'] ?? 'منشور مجدول على فيسبوك',
+                            $pItem['full_picture'] ?? null,
+                            Carbon::createFromTimestamp($schedTs),
+                            $pItem['permalink_url'] ?? "https://facebook.com/{$pId}"
+                        );
                     }
                 }
 
-                // Fetch scheduled posts from Meta Graph API for this Facebook page
-                try {
-                    $schedRes = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/scheduled_posts", [
-                        'access_token' => $pageAccessToken,
-                        'fields' => 'id,message,story,created_time,scheduled_publish_time,full_picture,permalink_url,is_instagram_eligible',
-                        'limit' => 50,
-                    ]);
-                    if ($schedRes->ok() && !empty($schedRes->json('data'))) {
-                        foreach ($schedRes->json('data') as $sItem) {
-                            $schedId = (string)$sItem['id'];
-                            $schedTimestamp = !empty($sItem['scheduled_publish_time'])
-                                ? (int)$sItem['scheduled_publish_time']
-                                : null;
-                            $schedCarbon = $schedTimestamp
-                                ? Carbon::createFromTimestamp($schedTimestamp)
-                                : (!empty($sItem['created_time']) ? Carbon::parse($sItem['created_time']) : now()->addDay());
-
-                            $content = $sItem['message'] ?? $sItem['story'] ?? 'منشور مجدول على فيسبوك';
-                            $permalink = $sItem['permalink_url'] ?? "https://facebook.com/{$schedId}";
-
-                            $importedPosts[] = [
-                                'external_id' => $schedId,
-                                'content' => $content,
-                                'media_urls' => !empty($sItem['full_picture']) ? [$sItem['full_picture']] : [],
-                                'published_at' => null,
-                                'scheduled_at' => $schedCarbon,
-                                'status' => 'scheduled',
-                                'permalink' => $permalink,
-                                'metrics' => [
-                                    'likes' => 0,
-                                    'comments' => 0,
-                                    'shares' => 0,
-                                    'views' => 0,
-                                    'impressions' => 0,
-                                    'engagement_rate' => 0,
-                                ],
-                            ];
-                        }
+                foreach ($scheduledVideos as $vidId => $sv) {
+                    $vidIdStr = (string)$vidId;
+                    if (isset($seenScheduledIds[$vidIdStr])) {
+                        continue;
                     }
-                } catch (\Throwable $se) {
-                    Log::info("FB scheduled posts notice for {$account->account_id}: " . $se->getMessage());
-                }
-
-                // Also check for scheduled videos on Facebook Page
-                try {
-                    $schedVidRes = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/videos", [
-                        'access_token' => $pageAccessToken,
-                        'fields' => 'id,title,description,created_time,picture,permalink_url,scheduled_publish_time,status',
-                        'scheduled' => 'true',
-                        'limit' => 50,
-                    ]);
-                    if ($schedVidRes->ok() && !empty($schedVidRes->json('data'))) {
-                        foreach ($schedVidRes->json('data') as $sv) {
-                            $schedTimestamp = !empty($sv['scheduled_publish_time'])
-                                ? (int)$sv['scheduled_publish_time']
-                                : (!empty($sv['status']['publishing_phase']['scheduled_time']) ? (int)$sv['status']['publishing_phase']['scheduled_time'] : null);
-                            $schedCarbon = $schedTimestamp
-                                ? Carbon::createFromTimestamp($schedTimestamp)
-                                : (!empty($sv['created_time']) ? Carbon::parse($sv['created_time']) : now()->addDay());
-
-                            $content = $sv['description'] ?? $sv['title'] ?? 'فيديو مجدول على فيسبوك';
-                            $permalink = $sv['permalink_url'] ?? "https://facebook.com/{$sv['id']}";
-
-                            $importedPosts[] = [
-                                'external_id' => (string)$sv['id'],
-                                'content' => $content,
-                                'media_urls' => !empty($sv['picture']) ? [$sv['picture']] : [],
-                                'published_at' => null,
-                                'scheduled_at' => $schedCarbon,
-                                'status' => 'scheduled',
-                                'permalink' => $permalink,
-                                'metrics' => [
-                                    'likes' => 0,
-                                    'comments' => 0,
-                                    'shares' => 0,
-                                    'views' => 0,
-                                    'impressions' => 0,
-                                    'engagement_rate' => 0,
-                                ],
-                            ];
-                        }
-                    }
-                } catch (\Throwable $sve) {
-                    Log::info("FB scheduled videos notice for {$account->account_id}: " . $sve->getMessage());
+                    $markScheduledSeen($vidIdStr);
+                    $schedTs = $sv['_scheduled_ts'] ?? $this->toUnixTimestamp($sv['scheduled_publish_time'] ?? null);
+                    $rawUrl = $sv['permalink_url'] ?? "/{$vidIdStr}";
+                    $importedPosts[] = $this->buildScheduledImport(
+                        $vidIdStr,
+                        $sv['description'] ?? $sv['title'] ?? 'فيديو مجدول على فيسبوك',
+                        $sv['picture'] ?? null,
+                        $schedTs > 0 ? Carbon::createFromTimestamp($schedTs) : now()->addDay(),
+                        str_starts_with($rawUrl, 'http') ? $rawUrl : ('https://facebook.com' . $rawUrl)
+                    );
                 }
             } catch (\Throwable $e) {
                 Log::warning("FB sync error for {$account->account_id}: " . $e->getMessage());
+                $syncWarnings['facebook_sync'] = 'تعذر إكمال مزامنة فيسبوك: ' . $e->getMessage();
             }
         }
 
-        // 2. Try real Instagram Graph API
+        // 2. Real Instagram Graph API
         if ($account->platform === 'instagram' && $pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) {
             try {
-                try {
-                    $igInfoRes = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}", [
-                        'access_token' => $pageAccessToken,
-                        'fields' => 'id,username,followers_count,media_count',
-                    ]);
-                    if ($igInfoRes->ok()) {
-                        $freshIgFollowers = $igInfoRes->json('followers_count');
-                        if ($freshIgFollowers !== null && (int)$freshIgFollowers > 0) {
-                            $account->update(['followers_count' => (int)$freshIgFollowers]);
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    Log::info("IG stats refresh notice for {$account->account_id}: " . $e->getMessage());
-                }
+                $graph = 'https://graph.facebook.com/v21.0';
+                $igId = $account->account_id;
+                $nowTs = now()->timestamp;
 
-                $res = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/media", [
-                    'access_token' => $pageAccessToken,
-                    'fields' => 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count',
-                    'limit' => 50,
-                ]);
+                // Candidate tokens to try if the stored token is stale or lacks instagram_manage_insights
+                $igTokenCandidates = array_values(array_unique(array_filter([
+                    $pageAccessToken,
+                    $igUserToken,
+                    $fbUserToken,
+                    $linkedFbPageToken,
+                ])));
 
-                if ($res->ok() && !empty($res->json('data'))) {
-                    // Collect media IDs for batch insights check
-                    $mediaItems = $res->json('data');
-                    $insightsMap = [];
-                    foreach ($mediaItems as $item) {
-                        $mId = (string)$item['id'];
-                        try {
-                            $mType = strtoupper($item['media_type'] ?? '');
-                            $isReelOrVideo = ($mType === 'VIDEO' || str_contains(strtolower($mType), 'reel'));
-
-                            $insRes = null;
-                            if ($isReelOrVideo) {
-                                // 1. Try modern v21+ Reels metrics (views,reach,total_interactions,shares,saved)
-                                $insRes = Http::get("https://graph.facebook.com/v21.0/{$mId}/insights", [
-                                    'access_token' => $pageAccessToken,
-                                    'metric' => 'views,reach,total_interactions,shares,saved',
-                                ]);
-                                // 2. Fallback to older plays metric
-                                if (!$insRes->ok()) {
-                                    $insRes = Http::get("https://graph.facebook.com/v21.0/{$mId}/insights", [
-                                        'access_token' => $pageAccessToken,
-                                        'metric' => 'plays,reach,total_interactions,shares,saved',
-                                    ]);
-                                }
-                                // 3. Fallback to impressions,reach
-                                if (!$insRes->ok()) {
-                                    $insRes = Http::get("https://graph.facebook.com/v21.0/{$mId}/insights", [
-                                        'access_token' => $pageAccessToken,
-                                        'metric' => 'reach,impressions',
-                                    ]);
-                                }
-                            } else {
-                                // Image / Carousel
-                                $insRes = Http::get("https://graph.facebook.com/v21.0/{$mId}/insights", [
-                                    'access_token' => $pageAccessToken,
-                                    'metric' => 'views,reach,saved',
-                                ]);
-                                if (!$insRes->ok()) {
-                                    $insRes = Http::get("https://graph.facebook.com/v21.0/{$mId}/insights", [
-                                        'access_token' => $pageAccessToken,
-                                        'metric' => 'impressions,reach,saved',
-                                    ]);
-                                }
-                            }
-
-                            if ($insRes && $insRes->ok() && !empty($insRes->json('data'))) {
-                                foreach ($insRes->json('data') as $metric) {
-                                    $val = (int)($metric['total_value']['value'] ?? $metric['values'][0]['value'] ?? 0);
-                                    if ($val > 0) {
-                                        $insightsMap[$mId][$metric['name']] = $val;
-                                    }
-                                }
-                            }
-                        } catch (\Throwable $ie) {
-                            Log::info("IG insights notice for {$mId}: " . $ie->getMessage());
-                        }
-                    }
-
-                    foreach ($mediaItems as $item) {
-                        $mId = (string)$item['id'];
-                        $likes = (int)($item['like_count'] ?? $insightsMap[$mId]['likes'] ?? 0);
-                        $comments = (int)($item['comments_count'] ?? $insightsMap[$mId]['comments'] ?? 0);
-                        $shares = (int)($insightsMap[$mId]['shares'] ?? 0);
-
-                        // Real views from Instagram Insights (Meta displays views/plays for Reels, reach/impressions for photos)
-                        $realViews = $insightsMap[$mId]['views']
-                            ?? $insightsMap[$mId]['plays']
-                            ?? $insightsMap[$mId]['impressions']
-                            ?? $insightsMap[$mId]['reach']
-                            ?? 0;
-
-                        $views = (int)$realViews;
-                        $totalInteractions = (int)($insightsMap[$mId]['total_interactions'] ?? ($likes + $comments + $shares));
-                        $followers = max(1, (int)$account->followers_count);
-                        $engRate = $followers > 0 ? round(($totalInteractions / $followers) * 100, 2) : 0;
-
-                        $mediaUrl = $item['media_url'] ?? $item['thumbnail_url'] ?? null;
-                        $content = !empty($item['caption']) ? $item['caption'] : 'منشور على إنستجرام';
-
-                        $importedPosts[] = [
-                            'external_id' => $mId,
-                            'content' => $content,
-                            'media_urls' => $mediaUrl ? [$mediaUrl] : [],
-                            'published_at' => Carbon::parse($item['timestamp']),
-                            'permalink' => $item['permalink'] ?? "https://instagram.com",
-                            'metrics' => [
-                                'likes' => $likes,
-                                'comments' => $comments,
-                                'shares' => $shares,
-                                'views' => $views,
-                                'impressions' => $views,
-                                'engagement_rate' => $engRate,
-                            ],
-                        ];
-                    }
-                }
-
-                // Check for scheduled Instagram posts in linked Facebook Page scheduled_posts
-                $linkedPageId = $account->metadata['page_id'] ?? null;
-                if (!$linkedPageId) {
-                    $fbAccount = SocialAccount::where('user_id', $user->id)->where('platform', 'facebook')->first();
-                    if ($fbAccount) {
-                        $linkedPageId = $fbAccount->account_id;
-                    }
-                }
-                if ($linkedPageId) {
+                foreach ($igTokenCandidates as $candToken) {
                     try {
-                        $igSchedRes = Http::get("https://graph.facebook.com/v21.0/{$linkedPageId}/scheduled_posts", [
-                            'access_token' => $pageAccessToken,
-                            'fields' => 'id,message,story,created_time,scheduled_publish_time,full_picture,permalink_url,is_instagram_eligible',
-                            'limit' => 50,
+                        $igInfoRes = Http::timeout(10)->get("{$graph}/{$igId}", [
+                            'access_token' => $candToken,
+                            'fields' => 'id,username,followers_count,media_count',
                         ]);
-                        if ($igSchedRes->ok() && !empty($igSchedRes->json('data'))) {
-                            foreach ($igSchedRes->json('data') as $sItem) {
-                                $schedId = (string)$sItem['id'];
-                                $schedTimestamp = !empty($sItem['scheduled_publish_time'])
-                                    ? (int)$sItem['scheduled_publish_time']
-                                    : null;
-                                $schedCarbon = $schedTimestamp
-                                    ? Carbon::createFromTimestamp($schedTimestamp)
-                                    : (!empty($sItem['created_time']) ? Carbon::parse($sItem['created_time']) : now()->addDay());
-
-                                $content = $sItem['message'] ?? $sItem['story'] ?? 'منشور مجدول على إنستجرام';
-                                $permalink = $sItem['permalink_url'] ?? "https://instagram.com";
-
-                                $importedPosts[] = [
-                                    'external_id' => "ig_sched_{$schedId}",
-                                    'content' => $content,
-                                    'media_urls' => !empty($sItem['full_picture']) ? [$sItem['full_picture']] : [],
-                                    'published_at' => null,
-                                    'scheduled_at' => $schedCarbon,
-                                    'status' => 'scheduled',
-                                    'permalink' => $permalink,
-                                    'metrics' => [
-                                        'likes' => 0,
-                                        'comments' => 0,
-                                        'shares' => 0,
-                                        'views' => 0,
-                                        'impressions' => 0,
-                                        'engagement_rate' => 0,
-                                    ],
-                                ];
+                        if ($igInfoRes->ok()) {
+                            if ($candToken !== $pageAccessToken) {
+                                $pageAccessToken = $candToken;
+                                $account->update(['access_token' => $pageAccessToken]);
                             }
+                            $freshIgFollowers = $igInfoRes->json('followers_count');
+                            if ($freshIgFollowers !== null && (int)$freshIgFollowers > 0) {
+                                $account->update(['followers_count' => (int)$freshIgFollowers]);
+                            }
+                            unset($syncWarnings['instagram_account']);
+                            break;
+                        } else {
+                            $this->noteMetaError($syncWarnings, 'instagram_account', $igInfoRes);
                         }
-                    } catch (\Throwable $se) {
-                        Log::info("IG scheduled check error: " . $se->getMessage());
+                    } catch (\Throwable $e) {
+                        Log::info("IG stats refresh notice for {$igId}: " . $e->getMessage());
+                    }
+                }
+                $followers = max(1, (int)$account->followers_count);
+
+                $res = $this->metaGetWithFallback("{$graph}/{$igId}/media", $pageAccessToken, [
+                    'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count',
+                    'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count',
+                    'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp',
+                ], ['limit' => 50]);
+
+                if (!$res || !$res->ok()) {
+                    $this->noteMetaError($syncWarnings, 'instagram_media', $res);
+                }
+
+                // Prefer user token with instagram_manage_insights if page token fails on insights
+                $insightsToken = $igUserToken ?: $fbUserToken ?: $pageAccessToken;
+
+                foreach ((($res && $res->ok()) ? $res->json('data', []) : []) as $item) {
+                    $mId = (string)$item['id'];
+                    $mediaType = strtoupper((string)($item['media_type'] ?? ''));
+                    $productType = strtoupper((string)($item['media_product_type'] ?? ''));
+                    $isReel = $productType === 'REELS' || $mediaType === 'VIDEO';
+
+                    // Graph API v21.0 valid metric sets (ordered from richest to universal fallback)
+                    $igMetricSets = [
+                        'views,reach,shares,saved,total_interactions',
+                        'views,reach,saved',
+                        'views,reach',
+                        'views',
+                        'plays,reach,shares,saved',
+                        'impressions,reach,saved',
+                    ];
+
+                    $ins = $this->fetchMetaInsights(
+                        $mId,
+                        $pageAccessToken,
+                        $igMetricSets,
+                        'insights',
+                        $insightsCache,
+                        $isReel ? 'ig_reel' : ('ig_' . strtolower($mediaType ?: 'feed')),
+                        $syncWarnings,
+                        'instagram_insights'
+                    );
+
+                    // If stored account token lacked insights permission, retry with fresh user token
+                    if (empty($ins) && $insightsToken && $insightsToken !== $pageAccessToken) {
+                        $altCacheKey = ($isReel ? 'ig_reel_alt' : ('ig_' . strtolower($mediaType ?: 'feed') . '_alt'));
+                        $ins = $this->fetchMetaInsights(
+                            $mId,
+                            $insightsToken,
+                            $igMetricSets,
+                            'insights',
+                            $insightsCache,
+                            $altCacheKey,
+                            $syncWarnings,
+                            'instagram_insights'
+                        );
+                        if (!empty($ins)) {
+                            unset($syncWarnings['instagram_insights']);
+                        }
+                    }
+
+                    $likes = isset($item['like_count']) ? (int)$item['like_count'] : (int)($ins['likes'] ?? 0);
+                    $comments = isset($item['comments_count']) ? (int)$item['comments_count'] : (int)($ins['comments'] ?? 0);
+                    $shares = (int)($ins['shares'] ?? 0);
+                    $saved = (int)($ins['saved'] ?? 0);
+                    $reach = (int)($ins['reach'] ?? 0);
+                    $views = (int)($ins['views'] ?? $ins['plays'] ?? $ins['impressions'] ?? $reach ?? 0);
+                    $totalInteractions = max($likes + $comments + $shares, (int)($ins['total_interactions'] ?? 0));
+                    $mediaUrl = $item['media_url'] ?? $item['thumbnail_url'] ?? null;
+                    $parsedTime = !empty($item['timestamp']) ? Carbon::parse($item['timestamp']) : now();
+                    $isFutureMedia = $parsedTime->timestamp > ($nowTs + 60);
+
+                    $importedPosts[] = [
+                        'external_id' => $mId,
+                        'content' => !empty($item['caption']) ? $item['caption'] : 'منشور على إنستجرام',
+                        'media_urls' => $mediaUrl ? [$mediaUrl] : [],
+                        'published_at' => $isFutureMedia ? null : $parsedTime,
+                        'scheduled_at' => $isFutureMedia ? $parsedTime : null,
+                        'status' => $isFutureMedia ? 'scheduled' : 'published',
+                        'permalink' => $item['permalink'] ?? 'https://instagram.com',
+                        'metrics' => [
+                            'likes' => $likes,
+                            'comments' => $comments,
+                            'shares' => $shares,
+                            'saved' => $saved,
+                            'reach' => $reach,
+                            'views' => $views,
+                            'impressions' => $views,
+                            'engagement_rate' => round(($totalInteractions / $followers) * 100, 2),
+                        ],
+                    ];
+                }
+
+                // Check linked Facebook Page for Meta Business Suite scheduled posts when applicable
+                if ($linkedFbPageId && ($linkedFbPageToken || $pageAccessToken)) {
+                    $fbConnectedSeparately = SocialAccount::where('user_id', $user->id)
+                        ->where('platform', 'facebook')
+                        ->where('account_id', (string)$linkedFbPageId)
+                        ->exists();
+
+                    $pTok = $linkedFbPageToken ?: $pageAccessToken;
+                    $igSchedRes = $this->metaGetWithFallback("{$graph}/{$linkedFbPageId}/scheduled_posts", $pTok, [
+                        'id,message,story,created_time,scheduled_publish_time,full_picture,permalink_url,instagram_eligibility',
+                        'id,message,story,created_time,scheduled_publish_time,full_picture,permalink_url',
+                    ], ['limit' => 50]);
+
+                    if ($igSchedRes && $igSchedRes->ok()) {
+                        foreach ($igSchedRes->json('data', []) as $sItem) {
+                            $schedId = (string)($sItem['id'] ?? '');
+                            $schedTs = $this->toUnixTimestamp($sItem['scheduled_publish_time'] ?? null);
+                            if ($schedId === '' || $schedTs <= $nowTs) continue;
+
+                            $permalink = (string)($sItem['permalink_url'] ?? '');
+                            $isIgTargeted = str_contains($permalink, 'instagram.com') || !empty($sItem['instagram_eligibility']);
+                            if ($fbConnectedSeparately && !$isIgTargeted) {
+                                continue; // Already imported under the connected Facebook Page
+                            }
+
+                            $importedPosts[] = $this->buildScheduledImport(
+                                'ig_sched_' . $schedId,
+                                $sItem['message'] ?? $sItem['story'] ?? 'منشور مجدول على إنستجرام',
+                                $sItem['full_picture'] ?? null,
+                                Carbon::createFromTimestamp($schedTs),
+                                $permalink ?: 'https://instagram.com'
+                            );
+                        }
                     }
                 }
             } catch (\Throwable $e) {
                 Log::info("IG sync error for {$account->account_id}: " . $e->getMessage());
+                $syncWarnings['instagram_sync'] = 'تعذر إكمال مزامنة إنستجرام: ' . $e->getMessage();
             }
         }
 
@@ -1835,7 +1928,7 @@ class SocialMediaController extends Controller
                     // Step B: Fetch videos from uploads playlist
                     if ($uploadsPlaylistId) {
                         $plRes = $ytRequest('https://www.googleapis.com/youtube/v3/playlistItems', [
-                            'part' => 'snippet,contentDetails',
+                            'part' => 'snippet,contentDetails,status',
                             'playlistId' => $uploadsPlaylistId,
                             'maxResults' => 50,
                         ]);
@@ -1870,7 +1963,7 @@ class SocialMediaController extends Controller
                         }
                     }
 
-                    // Step B2: Always explicitly search for upcoming/scheduled videos and premieres
+                    // Step B2: Always explicitly search for upcoming/scheduled videos, premieres, and private scheduled uploads
                     try {
                         $upcomingRes = $ytRequest('https://www.googleapis.com/youtube/v3/search', [
                             'part' => 'snippet',
@@ -1889,17 +1982,18 @@ class SocialMediaController extends Controller
                         }
 
                         if ($pageAccessToken && !str_starts_with($pageAccessToken, 'demo_token_')) {
-                            $mineUpcoming = $ytRequest('https://www.googleapis.com/youtube/v3/search', [
+                            // NOTE: YouTube Data API v3 rejects forMine=true when combined with eventType=upcoming.
+                            // Calling search with forMine=true & type=video returns the channel owner's private scheduled uploads.
+                            $mineVideos = $ytRequest('https://www.googleapis.com/youtube/v3/search', [
                                 'part' => 'snippet',
                                 'forMine' => 'true',
-                                'eventType' => 'upcoming',
                                 'type' => 'video',
                                 'maxResults' => 50,
                             ]);
-                            if ($mineUpcoming->ok() && !empty($mineUpcoming->json('items'))) {
-                                foreach ($mineUpcoming->json('items') as $sItem) {
+                            if ($mineVideos->ok() && !empty($mineVideos->json('items'))) {
+                                foreach ($mineVideos->json('items') as $sItem) {
                                     $vidId = $sItem['id']['videoId'] ?? null;
-                                    if ($vidId) {
+                                    if ($vidId && !isset($rawVideos[$vidId])) {
                                         $rawVideos[$vidId] = $sItem['snippet'] ?? [];
                                     }
                                 }
@@ -1913,7 +2007,7 @@ class SocialMediaController extends Controller
                             if ($bcRes->ok() && !empty($bcRes->json('items'))) {
                                 foreach ($bcRes->json('items') as $bItem) {
                                     $vidId = $bItem['id'] ?? null;
-                                    if ($vidId) {
+                                    if ($vidId && !isset($rawVideos[$vidId])) {
                                         $rawVideos[$vidId] = $bItem['snippet'] ?? [];
                                     }
                                 }
@@ -1975,7 +2069,7 @@ class SocialMediaController extends Controller
                             // Detect if video is scheduled (scheduledStartTime / publishAt in the future)
                             $isScheduled = false;
                             $scheduledAtTime = null;
-                            if (!empty($liveDetails['scheduledStartTime'])) {
+                            if (!empty($liveDetails['scheduledStartTime']) && empty($liveDetails['actualStartTime'])) {
                                 $parsedSched = Carbon::parse($liveDetails['scheduledStartTime']);
                                 if ($parsedSched->isFuture()) {
                                     $isScheduled = true;
@@ -1988,6 +2082,12 @@ class SocialMediaController extends Controller
                                     $isScheduled = true;
                                     $scheduledAtTime = $parsedSched;
                                 }
+                            }
+
+                            // Skip unscheduled private draft videos so they aren't imported as published posts
+                            $privacyStatus = strtolower((string)($statusData['privacyStatus'] ?? 'public'));
+                            if ($privacyStatus === 'private' && !$isScheduled) {
+                                continue;
                             }
 
                             $views = (int)($stats['viewCount'] ?? 0);
@@ -2033,6 +2133,12 @@ class SocialMediaController extends Controller
                 } catch (\Throwable $e) {
                     Log::warning("YouTube sync error for {$account->account_id}: " . $e->getMessage());
                 }
+            }
+
+            // Scheduled YouTube uploads are private until their publish time; only the channel owner's
+            // OAuth login can see them (an API key / RSS feed only ever returns public videos).
+            if (!$pageAccessToken || str_starts_with((string)$pageAccessToken, 'demo_token_')) {
+                $syncWarnings['youtube_oauth'] = 'يوتيوب: تسجيل الدخول منتهي أو غير موجود — الأرقام العامة تتحدث، لكن الفيديوهات المجدولة (الخاصة) لن تظهر إلا بعد "إعادة الربط" بحساب جوجل';
             }
 
             // Fallback: If Google API v3 returned 0 or failed/expired, fetch live stats from YouTube InnerTube + Channel RSS Feed
@@ -2214,10 +2320,18 @@ class SocialMediaController extends Controller
         }
 
         // STRICT REAL DATA: Never generate fake posts if Meta API returns 0 posts.
+        // Deduplicate imported posts by external_id so the same post is never counted/upserted twice.
+        $uniqueImportedPosts = [];
+        foreach ($importedPosts as $p) {
+            $extKey = (string)($p['external_id'] ?? '');
+            if ($extKey === '') continue;
+            $uniqueImportedPosts[$extKey] = $p;
+        }
+
         $count = 0;
         $userPosts = SocialPost::where('user_id', $user->id)->get();
 
-        foreach ($importedPosts as $p) {
+        foreach ($uniqueImportedPosts as $p) {
             $existing = $userPosts->first(function ($item) use ($account, $p) {
                 $postIds = $item->platform_post_ids ?? [];
                 $pData = $postIds[$account->platform] ?? null;
@@ -2294,12 +2408,196 @@ class SocialMediaController extends Controller
             }
         }
 
-        // Record last synced timestamp on account
-        $meta = $account->metadata ?? [];
+        // Record last synced timestamp and any sync warnings on account
+        $meta = is_array($account->metadata) ? $account->metadata : [];
         $meta['last_synced_at'] = now()->toIso8601String();
+        if (!empty($syncWarnings)) {
+            $meta['sync_warnings'] = $syncWarnings;
+        } else {
+            unset($meta['sync_warnings']);
+        }
         $account->update(['metadata' => $meta]);
 
         return $count;
+    }
+
+    /**
+     * GET a Graph API edge, trying each field set in order until one is accepted.
+     * Meta rejects the whole request if a single field is unsupported (#100), so richer
+     * field sets are tried first and safer ones used as fallbacks.
+     */
+    protected function metaGetWithFallback(string $url, string $token, array $fieldSets, array $extra = []): ?\Illuminate\Http\Client\Response
+    {
+        $last = null;
+        foreach ($fieldSets as $fields) {
+            try {
+                $last = Http::timeout(10)->get($url, array_merge($extra, [
+                    'access_token' => $token,
+                    'fields' => $fields,
+                ]));
+            } catch (\Throwable $e) {
+                Log::info("Graph request failed for {$url}: " . $e->getMessage());
+                break;
+            }
+            if ($last->ok()) {
+                return $last;
+            }
+            // Only retry with a simpler field set if Meta rejected a field/param (#100)
+            if ((int)$last->json('error.code') !== 100) {
+                return $last;
+            }
+        }
+        return $last;
+    }
+
+    /**
+     * Fetch insight metrics for a Graph object using ordered fallback metric sets.
+     * Only retries with the next metric set if Meta returns error code #100 (invalid/unsupported metric).
+     */
+    protected function fetchMetaInsights(
+        string $objectId,
+        string $token,
+        array $metricSets,
+        string $edge,
+        array &$cache,
+        string $cacheKey,
+        array &$warnings,
+        string $warnKey
+    ): array {
+        if (array_key_exists($cacheKey, $cache) && $cache[$cacheKey] === false) {
+            return [];
+        }
+
+        if (!empty($cache[$cacheKey]) && is_string($cache[$cacheKey])) {
+            array_unshift($metricSets, $cache[$cacheKey]);
+            $metricSets = array_values(array_unique($metricSets));
+        }
+
+        $values = [];
+        $extract = function ($res) use (&$values) {
+            foreach ($res->json('data', []) ?: [] as $m) {
+                $name = $m['name'] ?? null;
+                if (!$name) continue;
+                $v = $m['total_value']['value'] ?? ($m['values'][0]['value'] ?? null);
+                if (is_array($v)) {
+                    $v = array_sum(array_map('intval', $v));
+                }
+                if (is_numeric($v)) {
+                    $values[$name] = (int)$v;
+                }
+            }
+        };
+
+        $lastRes = null;
+        foreach ($metricSets as $metricList) {
+            $metricStr = is_array($metricList) ? implode(',', $metricList) : (string)$metricList;
+            if ($metricStr === '') continue;
+
+            try {
+                $lastRes = Http::timeout(8)->get("https://graph.facebook.com/v21.0/{$objectId}/{$edge}", [
+                    'access_token' => $token,
+                    'metric' => $metricStr,
+                ]);
+            } catch (\Throwable $e) {
+                break;
+            }
+
+            if ($lastRes->ok()) {
+                $extract($lastRes);
+                $cache[$cacheKey] = $metricStr;
+                return $values;
+            }
+
+            $code = (int)$lastRes->json('error.code');
+            if ($this->isFatalMetaError($code)) {
+                $this->noteMetaError($warnings, $warnKey, $lastRes);
+                if (!in_array($code, [4, 17, 32, 613], true)) {
+                    $cache[$cacheKey] = false; // token/permission error: don't retry for every post
+                }
+                return [];
+            }
+
+            // Only try the next fallback metric set if Meta rejected a metric (#100)
+            if ($code !== 100) {
+                break;
+            }
+        }
+
+        if ($lastRes && !$lastRes->ok()) {
+            $this->noteMetaError($warnings, $warnKey, $lastRes);
+        }
+
+        return $values;
+    }
+
+    protected function isFatalMetaError(int $code): bool
+    {
+        return in_array($code, [4, 10, 17, 32, 102, 190, 613], true) || ($code >= 200 && $code < 300);
+    }
+
+    protected function noteMetaError(array &$warnings, string $key, $res): void
+    {
+        if (!$res) {
+            $warnings[$key] = $this->metaErrorLabel($key) . ': تعذر الاتصال بخوادم ميتا';
+            return;
+        }
+        $code = (int)$res->json('error.code');
+        $msg = (string)($res->json('error.message') ?? ('HTTP ' . $res->status()));
+        $label = $this->metaErrorLabel($key);
+
+        if ($code === 190 || $code === 102) {
+            $warnings[$key] = "{$label}: انتهت صلاحية تسجيل الدخول — اضغط \"إعادة الربط\" للحساب";
+        } elseif ($code === 10 || ($code >= 200 && $code < 300)) {
+            $warnings[$key] = "{$label}: صلاحية ناقصة — أعد ربط الحساب ووافق على كل الصلاحيات المطلوبة ({$msg})";
+        } elseif (in_array($code, [4, 17, 32, 613], true)) {
+            $warnings[$key] = "{$label}: تم تجاوز حد الطلبات لدى ميتا مؤقتاً، حاول التحديث بعد دقائق";
+        } else {
+            $warnings[$key] = "{$label}: {$msg}";
+        }
+    }
+
+    protected function metaErrorLabel(string $key): string
+    {
+        return [
+            'page' => 'بيانات الصفحة',
+            'facebook_videos' => 'فيديوهات فيسبوك',
+            'facebook_posts' => 'منشورات فيسبوك',
+            'facebook_scheduled' => 'المنشورات المجدولة على فيسبوك',
+            'facebook_post_insights' => 'مشاهدات منشورات فيسبوك',
+            'facebook_video_insights' => 'مشاهدات فيديوهات وريلز فيسبوك',
+            'instagram_account' => 'بيانات حساب إنستجرام',
+            'instagram_media' => 'منشورات إنستجرام',
+            'instagram_insights' => 'مشاهدات ومشاركات إنستجرام',
+        ][$key] ?? $key;
+    }
+
+    protected function toUnixTimestamp($value): int
+    {
+        if ($value === null || $value === '') return 0;
+        if (is_numeric($value)) return (int)$value;
+        $ts = strtotime((string)$value);
+        return $ts ?: 0;
+    }
+
+    protected function buildScheduledImport(string $externalId, string $content, ?string $picture, Carbon $scheduledAt, string $permalink): array
+    {
+        return [
+            'external_id' => $externalId,
+            'content' => $content,
+            'media_urls' => $picture ? [$picture] : [],
+            'published_at' => null,
+            'scheduled_at' => $scheduledAt,
+            'status' => 'scheduled',
+            'permalink' => $permalink,
+            'metrics' => [
+                'likes' => 0,
+                'comments' => 0,
+                'shares' => 0,
+                'views' => 0,
+                'impressions' => 0,
+                'engagement_rate' => 0,
+            ],
+        ];
     }
 
     /**
@@ -2329,8 +2627,8 @@ class SocialMediaController extends Controller
                 return null;
             }
 
-            $appId = ($ytSetting->app_id ?? null) ?: env('YOUTUBE_CLIENT_ID');
-            $appSecret = ($ytSetting->app_secret ?? null) ?: env('YOUTUBE_CLIENT_SECRET');
+            $appId = ($ytSetting->app_id ?? null) ?: config('services.youtube.client_id') ?: env('YOUTUBE_CLIENT_ID');
+            $appSecret = ($ytSetting->app_secret ?? null) ?: config('services.youtube.client_secret') ?: env('YOUTUBE_CLIENT_SECRET');
             if (!$appId || !$appSecret) {
                 return null;
             }
