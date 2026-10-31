@@ -229,8 +229,8 @@ jobs:
             php artisan event:cache || true
 
             # Baseline permissions: readable, not writable, never world-writable.
-            find . -type f -not -path './storage/*' -exec chmod 644 {} +
-            find . -type d -not -path './storage/*' -exec chmod 755 {} +
+            find . -type f -not -path './storage/*' -not -path './bootstrap/cache/*' -exec chmod 644 {} + 2>/dev/null || true
+            find . -type d -not -path './storage/*' -not -path './bootstrap/cache/*' -exec chmod 755 {} + 2>/dev/null || true
             chmod +x artisan
 
             # Secrets stay owner-only.
