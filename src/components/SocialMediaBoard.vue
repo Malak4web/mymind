@@ -1927,7 +1927,7 @@ onUnmounted(() => {
                 <div class="bg-white dark:bg-slate-900 rounded-xl py-1 px-1 border border-slate-100 dark:border-slate-800">
                   <span class="block text-[9px] text-slate-400 font-bold">👁️ مشاهدات</span>
                   <span class="font-black text-slate-800 dark:text-slate-200 text-xs">
-                    {{ ((post.metrics.views || post.metrics.impressions || (post.metrics.likes ? post.metrics.likes * 8 : 0))).toLocaleString() }}
+                    {{ (Number(post.metrics?.views || post.metrics?.impressions || 0)).toLocaleString() }}
                   </span>
                 </div>
               </div>

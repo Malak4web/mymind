@@ -1330,9 +1330,6 @@ class SocialMediaController extends Controller
                     $totalInteractions = $likes + $comments + $shares;
                     $followers = max(1, (int)$account->followers_count);
                     $engRate = $followers > 0 ? round(($totalInteractions / $followers) * 100, 2) : 0;
-                    if ($views === 0 && $totalInteractions > 0) {
-                        $views = (int)($likes * 10 + $comments * 5 + $shares * 15);
-                    }
 
                     $content = $item['message'] ?? $item['story'] ?? 'منشور على صفحة فيسبوك';
 
@@ -1456,20 +1453,54 @@ class SocialMediaController extends Controller
                 ]);
 
                 if ($res->ok() && !empty($res->json('data'))) {
-                    foreach ($res->json('data') as $item) {
+                    // Collect media IDs for batch insights check
+                    $mediaItems = $res->json('data');
+                    $insightsMap = [];
+                    foreach ($mediaItems as $item) {
+                        $mId = (string)$item['id'];
+                        try {
+                            $mType = $item['media_type'] ?? '';
+                            $metricName = ($mType === 'VIDEO' || str_contains(strtolower($mType), 'reel'))
+                                ? 'views,reach,plays'
+                                : 'impressions,reach';
+                            $insRes = Http::get("https://graph.facebook.com/v21.0/{$mId}/insights", [
+                                'access_token' => $pageAccessToken,
+                                'metric' => $metricName,
+                            ]);
+                            if ($insRes->ok() && !empty($insRes->json('data'))) {
+                                foreach ($insRes->json('data') as $metric) {
+                                    $val = (int)($metric['values'][0]['value'] ?? 0);
+                                    if ($val > 0) {
+                                        $insightsMap[$mId][$metric['name']] = $val;
+                                    }
+                                }
+                            }
+                        } catch (\Throwable $ie) {}
+                    }
+
+                    foreach ($mediaItems as $item) {
+                        $mId = (string)$item['id'];
                         $likes = (int)($item['like_count'] ?? 0);
                         $comments = (int)($item['comments_count'] ?? 0);
                         $shares = 0;
                         $totalInteractions = $likes + $comments;
                         $followers = max(1, (int)$account->followers_count);
                         $engRate = $followers > 0 ? round(($totalInteractions / $followers) * 100, 2) : 0;
-                        $views = $totalInteractions > 0 ? (int)($likes * 8 + $comments * 4) : 0;
+
+                        // Real views from Instagram Insights
+                        $realViews = $insightsMap[$mId]['views']
+                            ?? $insightsMap[$mId]['plays']
+                            ?? $insightsMap[$mId]['reach']
+                            ?? $insightsMap[$mId]['impressions']
+                            ?? 0;
+
+                        $views = (int)$realViews;
 
                         $mediaUrl = $item['media_url'] ?? $item['thumbnail_url'] ?? null;
                         $content = !empty($item['caption']) ? $item['caption'] : 'منشور على إنستجرام';
 
                         $importedPosts[] = [
-                            'external_id' => (string)$item['id'],
+                            'external_id' => $mId,
                             'content' => $content,
                             'media_urls' => $mediaUrl ? [$mediaUrl] : [],
                             'published_at' => Carbon::parse($item['timestamp']),
