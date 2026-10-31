@@ -263,6 +263,9 @@ class SocialMediaTest extends TestCase
             'https://graph.facebook.com/v21.0/fb_page_sync_1/videos*' => \Illuminate\Support\Facades\Http::response([
                 'data' => []
             ], 200),
+            'https://graph.facebook.com/v21.0/fb_page_sync_1/scheduled_posts*' => \Illuminate\Support\Facades\Http::response([
+                'data' => []
+            ], 200),
             'https://graph.facebook.com/v21.0/fb_page_sync_1/*' => \Illuminate\Support\Facades\Http::response([
                 'data' => [
                     [
