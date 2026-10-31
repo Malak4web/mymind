@@ -263,10 +263,13 @@ class SocialMediaTest extends TestCase
             'https://graph.facebook.com/v21.0/fb_page_sync_1/videos*' => \Illuminate\Support\Facades\Http::response([
                 'data' => []
             ], 200),
+            'https://graph.facebook.com/v21.0/fb_page_sync_1/video_reels*' => \Illuminate\Support\Facades\Http::response([
+                'data' => []
+            ], 200),
             'https://graph.facebook.com/v21.0/fb_page_sync_1/scheduled_posts*' => \Illuminate\Support\Facades\Http::response([
                 'data' => []
             ], 200),
-            'https://graph.facebook.com/v21.0/fb_page_sync_1/*' => \Illuminate\Support\Facades\Http::response([
+            'https://graph.facebook.com/v21.0/*' => \Illuminate\Support\Facades\Http::response([
                 'data' => [
                     [
                         'id' => 'fb_page_sync_1_post_1001',
@@ -640,6 +643,77 @@ XML, 200),
         $this->assertEquals('scheduled', $schedPost['status']);
         $this->assertStringContainsString('منشور مجدول على فيسبوك من المنصة مباشرة', $schedPost['content']);
         $this->assertNotNull($schedPost['scheduled_at']);
+
+        // Test YouTube scheduled premiere / video sync
+        \Illuminate\Support\Facades\Http::fake([
+            'https://www.googleapis.com/youtube/v3/channels*' => \Illuminate\Support\Facades\Http::response([
+                'items' => [
+                    [
+                        'id' => 'UC_sched_yt_1',
+                        'contentDetails' => ['relatedPlaylists' => ['uploads' => 'UU_sched_yt_1']],
+                        'statistics' => ['subscriberCount' => 1200],
+                    ]
+                ]
+            ], 200),
+            'https://www.googleapis.com/youtube/v3/playlistItems*' => \Illuminate\Support\Facades\Http::response([
+                'items' => [] // Uploads playlist is empty of scheduled videos
+            ], 200),
+            'https://www.googleapis.com/youtube/v3/search*eventType=upcoming*' => \Illuminate\Support\Facades\Http::response([
+                'items' => [
+                    [
+                        'id' => ['videoId' => 'yt_sched_vid_777'],
+                        'snippet' => [
+                            'title' => 'عرض أول مجدول على يوتيوب',
+                            'description' => 'شرح مفصل سيتم عرضه قريباً',
+                            'publishedAt' => $futureDate->toIso8601String(),
+                        ]
+                    ]
+                ]
+            ], 200),
+            'https://www.googleapis.com/youtube/v3/videos*' => \Illuminate\Support\Facades\Http::response([
+                'items' => [
+                    [
+                        'id' => 'yt_sched_vid_777',
+                        'snippet' => [
+                            'title' => 'عرض أول مجدول على يوتيوب',
+                            'description' => 'شرح مفصل سيتم عرضه قريباً',
+                            'publishedAt' => $futureDate->toIso8601String(),
+                        ],
+                        'statistics' => ['viewCount' => 0, 'likeCount' => 0, 'commentCount' => 0],
+                        'liveStreamingDetails' => [
+                            'scheduledStartTime' => $futureDate->toIso8601String(),
+                        ],
+                        'status' => [
+                            'privacyStatus' => 'public',
+                            'uploadStatus' => 'uploaded',
+                        ]
+                    ]
+                ]
+            ], 200),
+            'https://www.googleapis.com/youtube/v3/*' => \Illuminate\Support\Facades\Http::response(['items' => []], 200),
+        ]);
+
+        SocialAccount::create([
+            'user_id' => $this->userA->id,
+            'platform' => 'youtube',
+            'account_id' => 'UC_sched_yt_1',
+            'account_name' => 'قناة يوتيوب مع فيديوهات مجدولة',
+            'followers_count' => 1200,
+            'access_token' => 'real_yt_token_sched',
+        ]);
+
+        $ytSyncRes = $this->postJson('/api/social/sync-posts?platform=youtube');
+        $ytSyncRes->assertStatus(200);
+
+        $schedPostsRes2 = $this->getJson('/api/social/posts?status=scheduled');
+        $schedPostsRes2->assertStatus(200);
+        $this->assertCount(2, $schedPostsRes2->json());
+
+        $ytSchedPost = collect($schedPostsRes2->json())->firstWhere('platforms.0', 'youtube');
+        $this->assertNotNull($ytSchedPost);
+        $this->assertEquals('yt_sched_vid_777', $ytSchedPost['platform_post_ids']['youtube']['id']);
+        $this->assertEquals('scheduled', $ytSchedPost['status']);
+        $this->assertStringContainsString('عرض أول مجدول على يوتيوب', $ytSchedPost['content']);
     }
 }
 
