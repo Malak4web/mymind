@@ -880,14 +880,19 @@ class SocialMediaController extends Controller
     {
         $duePosts = SocialPost::where('user_id', $userId)
             ->where('status', 'scheduled')
+            ->whereNotNull('scheduled_at')
             ->where('scheduled_at', '<=', now())
             ->get();
 
         foreach ($duePosts as $post) {
+            $postLinks = $post->platform_post_ids;
+            if (empty($postLinks) || !is_array($postLinks)) {
+                $postLinks = $this->generatePlatformPostLinks($post->platforms ?? []);
+            }
             $post->update([
                 'status' => 'published',
                 'published_at' => $post->scheduled_at ?? now(),
-                'platform_post_ids' => $this->generatePlatformPostLinks($post->platforms ?? []),
+                'platform_post_ids' => $postLinks,
             ]);
         }
     }
@@ -1378,6 +1383,49 @@ class SocialMediaController extends Controller
                         ];
                     }
                 }
+
+                // Fetch scheduled posts from Meta Graph API for this Facebook page
+                try {
+                    $schedRes = Http::get("https://graph.facebook.com/v21.0/{$account->account_id}/scheduled_posts", [
+                        'access_token' => $pageAccessToken,
+                        'fields' => 'id,message,story,created_time,scheduled_publish_time,full_picture,permalink_url',
+                        'limit' => 50,
+                    ]);
+                    if ($schedRes->ok() && !empty($schedRes->json('data'))) {
+                        foreach ($schedRes->json('data') as $sItem) {
+                            $schedId = (string)$sItem['id'];
+                            $schedTimestamp = !empty($sItem['scheduled_publish_time'])
+                                ? (int)$sItem['scheduled_publish_time']
+                                : null;
+                            $schedCarbon = $schedTimestamp
+                                ? Carbon::createFromTimestamp($schedTimestamp)
+                                : (!empty($sItem['created_time']) ? Carbon::parse($sItem['created_time']) : now()->addDay());
+
+                            $content = $sItem['message'] ?? $sItem['story'] ?? 'منشور مجدول على فيسبوك';
+                            $permalink = $sItem['permalink_url'] ?? "https://facebook.com/{$schedId}";
+
+                            $importedPosts[] = [
+                                'external_id' => $schedId,
+                                'content' => $content,
+                                'media_urls' => !empty($sItem['full_picture']) ? [$sItem['full_picture']] : [],
+                                'published_at' => null,
+                                'scheduled_at' => $schedCarbon,
+                                'status' => 'scheduled',
+                                'permalink' => $permalink,
+                                'metrics' => [
+                                    'likes' => 0,
+                                    'comments' => 0,
+                                    'shares' => 0,
+                                    'views' => 0,
+                                    'impressions' => 0,
+                                    'engagement_rate' => 0,
+                                ],
+                            ];
+                        }
+                    }
+                } catch (\Throwable $se) {
+                    Log::info("FB scheduled posts notice for {$account->account_id}: " . $se->getMessage());
+                }
             } catch (\Throwable $e) {
                 Log::warning("FB sync error for {$account->account_id}: " . $e->getMessage());
             }
@@ -1621,14 +1669,14 @@ class SocialMediaController extends Controller
                         }
                     }
 
-                    // Step C: Fetch full statistics for all discovered videos in batches
+                    // Step C: Fetch full statistics for all discovered videos in batches (including liveStreamingDetails and status for scheduled premieres/videos)
                     $videoIds = array_keys($rawVideos);
                     $videoStats = [];
 
                     if (!empty($videoIds)) {
                         foreach (array_chunk($videoIds, 50) as $chunk) {
                             $statsRes = $ytRequest('https://www.googleapis.com/youtube/v3/videos', [
-                                'part' => 'snippet,statistics',
+                                'part' => 'snippet,statistics,liveStreamingDetails,status',
                                 'id' => implode(',', $chunk),
                             ]);
 
@@ -1650,12 +1698,32 @@ class SocialMediaController extends Controller
                             }
                             $stats = $vData['statistics'] ?? [];
                             $snippetData = $vData['snippet'] ?? $snippet;
+                            $liveDetails = $vData['liveStreamingDetails'] ?? [];
+                            $statusData = $vData['status'] ?? [];
 
                             $title = $snippetData['title'] ?? '';
                             $description = $snippetData['description'] ?? '';
                             $content = trim($title . ($description ? "\n\n" . $description : ''));
                             if (empty($content)) {
                                 $content = 'فيديو على يوتيوب';
+                            }
+
+                            // Detect if video is scheduled (scheduledStartTime / publishAt in the future)
+                            $isScheduled = false;
+                            $scheduledAtTime = null;
+                            if (!empty($liveDetails['scheduledStartTime'])) {
+                                $parsedSched = Carbon::parse($liveDetails['scheduledStartTime']);
+                                if ($parsedSched->isFuture()) {
+                                    $isScheduled = true;
+                                    $scheduledAtTime = $parsedSched;
+                                }
+                            }
+                            if (!$isScheduled && !empty($statusData['publishAt'])) {
+                                $parsedSched = Carbon::parse($statusData['publishAt']);
+                                if ($parsedSched->isFuture()) {
+                                    $isScheduled = true;
+                                    $scheduledAtTime = $parsedSched;
+                                }
                             }
 
                             $views = (int)($stats['viewCount'] ?? 0);
@@ -1675,15 +1743,17 @@ class SocialMediaController extends Controller
                                 ?? $thumbs['default']['url']
                                 ?? ($existingYtPostsById[$vidId]->media_urls[0] ?? null);
 
-                            $publishedAt = !empty($snippetData['publishedAt'])
+                            $publishedAt = (!$isScheduled && !empty($snippetData['publishedAt']))
                                 ? Carbon::parse($snippetData['publishedAt'])
-                                : now();
+                                : ($isScheduled ? null : now());
 
                             $importedPosts[] = [
                                 'external_id' => (string)$vidId,
                                 'content' => $content,
                                 'media_urls' => $thumbnailUrl ? [$thumbnailUrl] : [],
                                 'published_at' => $publishedAt,
+                                'scheduled_at' => $scheduledAtTime,
+                                'status' => $isScheduled ? 'scheduled' : 'published',
                                 'permalink' => "https://www.youtube.com/watch?v={$vidId}",
                                 'metrics' => [
                                     'likes' => $likes,
@@ -1890,6 +1960,10 @@ class SocialMediaController extends Controller
                 return is_array($pData) && ($pData['id'] ?? null) === (string)$p['external_id'];
             });
 
+            $postStatus = $p['status'] ?? 'published';
+            $scheduledAt = $p['scheduled_at'] ?? null;
+            $publishedAt = $p['published_at'] ?? ($postStatus === 'published' ? now() : null);
+
             if ($existing) {
                 $mergedPlatforms = array_values(array_unique(array_merge($existing->platforms ?? [], [$account->platform])));
                 $mergedAccounts = array_values(array_unique(array_merge(array_map('strval', $existing->account_ids ?? []), [(string)$account->account_id])));
@@ -1904,8 +1978,9 @@ class SocialMediaController extends Controller
                     'media_urls' => $p['media_urls'],
                     'platforms' => $mergedPlatforms,
                     'account_ids' => $mergedAccounts,
-                    'status' => 'published',
-                    'published_at' => $p['published_at'],
+                    'status' => $postStatus,
+                    'scheduled_at' => $scheduledAt ?? $existing->scheduled_at,
+                    'published_at' => $publishedAt,
                     'platform_post_ids' => $mergedPostIds,
                     'metrics' => $p['metrics'],
                 ]);
@@ -1916,9 +1991,9 @@ class SocialMediaController extends Controller
                     'media_urls' => $p['media_urls'],
                     'platforms' => [$account->platform],
                     'account_ids' => [(string)$account->account_id],
-                    'status' => 'published',
-                    'scheduled_at' => null,
-                    'published_at' => $p['published_at'],
+                    'status' => $postStatus,
+                    'scheduled_at' => $scheduledAt,
+                    'published_at' => $publishedAt,
                     'platform_post_ids' => [
                         $account->platform => [
                             'id' => $p['external_id'],

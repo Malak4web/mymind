@@ -587,5 +587,56 @@ XML, 200),
         $this->assertEquals(1420, $updatedPost['metrics']['likes']);
         $this->assertEquals(165, $updatedPost['metrics']['comments']);
     }
+
+    public function test_syncing_facebook_and_youtube_imports_scheduled_posts()
+    {
+        Sanctum::actingAs($this->userA);
+
+        $futureDate = now()->addDays(2)->setMicrosecond(0);
+
+        \Illuminate\Support\Facades\Http::fake([
+            // FB published posts: empty
+            'graph.facebook.com/v21.0/fb_page_100/published_posts*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
+            'graph.facebook.com/v21.0/fb_page_100/posts*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
+            'graph.facebook.com/v21.0/fb_page_100/videos*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200),
+            'graph.facebook.com/v21.0/fb_page_100' => \Illuminate\Support\Facades\Http::response(['id' => 'fb_page_100', 'followers_count' => 500], 200),
+            // FB scheduled posts: 1 scheduled post
+            'graph.facebook.com/v21.0/fb_page_100/scheduled_posts*' => \Illuminate\Support\Facades\Http::response([
+                'data' => [
+                    [
+                        'id' => 'fb_sched_999',
+                        'message' => 'منشور مجدول على فيسبوك من المنصة مباشرة',
+                        'created_time' => now()->toIso8601String(),
+                        'scheduled_publish_time' => $futureDate->timestamp,
+                        'full_picture' => 'https://example.com/sched.jpg',
+                        'permalink_url' => 'https://facebook.com/fb_sched_999',
+                    ],
+                ]
+            ], 200),
+        ]);
+
+        SocialAccount::create([
+            'user_id' => $this->userA->id,
+            'platform' => 'facebook',
+            'account_id' => 'fb_page_100',
+            'account_name' => 'صفحة فيسبوك تجريبية',
+            'followers_count' => 500,
+            'access_token' => 'real_fb_token_123',
+        ]);
+
+        $syncRes = $this->postJson('/api/social/sync-posts?platform=facebook');
+        $syncRes->assertStatus(200);
+
+        // Check posts in scheduled tab/filter
+        $schedPostsRes = $this->getJson('/api/social/posts?status=scheduled');
+        $schedPostsRes->assertStatus(200);
+        $this->assertCount(1, $schedPostsRes->json());
+
+        $schedPost = $schedPostsRes->json('0');
+        $this->assertEquals('fb_sched_999', $schedPost['platform_post_ids']['facebook']['id']);
+        $this->assertEquals('scheduled', $schedPost['status']);
+        $this->assertStringContainsString('منشور مجدول على فيسبوك من المنصة مباشرة', $schedPost['content']);
+        $this->assertNotNull($schedPost['scheduled_at']);
+    }
 }
 
